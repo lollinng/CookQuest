@@ -34,7 +34,7 @@
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "redis": "^4.6.10",
-    "sharp": "^0.33.0",
+    "sharp": "^0.34.5",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
