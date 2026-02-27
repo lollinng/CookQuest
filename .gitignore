@@ -87,3 +87,4 @@ uploads/
 
 # Local environment variables
 .env.local
+.vercel

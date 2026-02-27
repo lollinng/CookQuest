@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import type { StringValue } from 'ms'
 import { body } from 'express-validator'
 import rateLimit from 'express-rate-limit'
 import { DatabaseService } from '../services/database'
@@ -57,7 +58,7 @@ const generateToken = (user: { id: number; email: string; username: string }): s
   }
 
   const options: jwt.SignOptions = {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as StringValue,
     issuer: 'cookquest-api',
     audience: 'cookquest-web',
     algorithm: 'HS256',

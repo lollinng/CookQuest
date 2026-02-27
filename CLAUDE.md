@@ -51,7 +51,7 @@ For these keywords, use **normal workflow** instead (ONLY these):
 
 **Step 3: Test Engineer** - Write Tests First (TDD)
 - Write tests BEFORE implementation
-- Create unit tests (Jest/Vitest), integration tests (Testing Library), E2E tests (Playwright)
+- integration tests (Testing Library), E2E tests (Playwright)
 - Cover edge cases and error scenarios
 - Target 90%+ coverage
 - Output: test files
