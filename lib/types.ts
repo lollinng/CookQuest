@@ -1,0 +1,66 @@
+export interface Recipe {
+  id: string
+  title: string
+  description: string
+  skill: SkillType
+  difficulty: 'beginner' | 'intermediate' | 'advanced'
+  time: string
+  imageUrl: string
+  emoji?: string
+  xpReward: number
+  ingredients: string[]
+  instructions: string[]
+  tips?: string[]
+  nutritionFacts?: {
+    calories: number
+    protein: string
+    carbs: string
+    fat: string
+  }
+}
+
+export type SkillType = 'basic-cooking' | 'heat-control' | 'flavor-building' | 'air-fryer' | 'indian-cuisine'
+
+export interface Skill {
+  id: SkillType
+  name: string
+  description: string
+  icon: string
+  recipes: string[] // Recipe IDs
+  color: string
+}
+
+export interface SkillProgress {
+  completed: number
+  total: number
+  percentage: number
+}
+
+export interface RecipeStore {
+  completedRecipes: Set<string>
+  completionDates: Record<string, string> // recipeId → ISO date string
+  toggleRecipeCompletion: (recipeId: string) => void
+  completeRecipe: (recipeId: string) => void
+  uncompleteRecipe: (recipeId: string) => void
+  isRecipeCompleted: (recipeId: string) => boolean
+  getSkillProgress: (skillId: SkillType) => SkillProgress
+  getOverallProgress: () => SkillProgress
+  getStreak: () => number
+  completedToday: () => boolean
+}
+
+export interface CookingTip {
+  id: string
+  title: string
+  description: string
+  category: 'technique' | 'ingredient' | 'tool' | 'safety'
+  difficulty: 'beginner' | 'intermediate' | 'advanced'
+}
+
+export interface UserStats {
+  level: number
+  experience: number
+  streak: number
+  totalRecipesCompleted: number
+  skillsMastered: number
+}

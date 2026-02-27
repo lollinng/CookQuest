@@ -1,0 +1,388 @@
+[
+  {
+    "id": "task_026",
+    "title": "Enable TypeScript strict mode and fix all type errors",
+    "status": "todo",
+    "priority": 10,
+    "type": "security",
+    "description": "## CRITICAL \u2014 TypeScript strict mode is disabled\n\n### What's wrong\n`tsconfig.json:11` has `\"strict\": false`. This disables ALL type safety features:\n- Allows implicit `any` types\n- No strict null checks\n- No strict property initialization\n- Unvalidated user input flows can't be caught at compile time\n\nThis is a production blocker \u2014 type errors WILL slip through and cause runtime crashes.\n\n### What to fix\n1. Change `tsconfig.json` \u2192 `\"strict\": true`\n2. Run `npx tsc --noEmit` to find all type errors\n3. Fix each error \u2014 expect errors in:\n   - Components using `any` for event handlers\n   - API client response types\n   - Store hydration code\n   - Missing null checks on optional values\n4. Focus on fixing, not suppressing with `// @ts-ignore`\n5. Add `\"noUncheckedIndexedAccess\": true` for extra safety\n\n### Why this matters\nStrict mode catches entire categories of bugs: null pointer exceptions, type confusion, missing error handling. Every major production Next.js app uses strict mode.\n\n### Files to modify\n- `tsconfig.json` \u2014 enable strict\n- Multiple component/lib files \u2014 fix resulting type errors\n- Likely high-impact files: `lib/api/client.ts`, `lib/auth-context.tsx`, `hooks/use-recipes.ts`, `components/photo-node.tsx`",
+    "files": [
+      "tsconfig.json",
+      "lib/api/client.ts",
+      "lib/auth-context.tsx",
+      "hooks/use-recipes.ts"
+    ],
+    "createdAt": "2026-02-27T12:00:02.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_031",
+    "title": "Switch auth tokens from localStorage to httpOnly secure cookies",
+    "status": "done",
+    "priority": 9,
+    "type": "security",
+    "description": "## HIGH \u2014 JWT stored in localStorage is vulnerable to XSS\n\n### What's wrong\n`lib/api/client.ts:19-34` stores the JWT in localStorage:\n```typescript\nconst TOKEN_KEY = 'cookquest_token';\nexport function getToken(): string | null {\n  return localStorage.getItem(TOKEN_KEY);\n}\n```\n\nAny XSS vulnerability (in app code OR any dependency) gives attackers full access to the JWT token, enabling account takeover.\n\n`lib/api/auth.ts:46-67` also stores full user profile in localStorage, exposing PII (email, username).\n\n### What to fix\n\n**Backend changes:**\n1. Set JWT as httpOnly, secure, SameSite cookie on login/register:\n```typescript\nres.cookie('cookquest_token', token, {\n  httpOnly: true,\n  secure: process.env.NODE_ENV === 'production',\n  sameSite: 'strict',\n  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days\n  path: '/',\n});\n```\n2. Add `GET /api/v1/auth/me` endpoint to fetch current user from cookie\n3. Clear cookie on logout: `res.clearCookie('cookquest_token')`\n4. Read token from cookie in auth middleware instead of Authorization header (support both during migration)\n\n**Frontend changes:**\n1. Remove `localStorage.setItem(TOKEN_KEY, token)` from auth.ts\n2. Remove `getToken()`/`setToken()` functions\n3. Add `credentials: 'include'` to all fetch calls in `lib/api/client.ts`\n4. Only store non-sensitive data in localStorage (user ID for hydration hint)\n5. Fetch full user profile from `/api/v1/auth/me` on app load\n\n### Files to modify\n- `backend/node-services/api-server/src/routes/auth.ts` \u2014 set cookies instead of returning token in body\n- `backend/node-services/api-server/src/middleware/auth.ts` \u2014 read from cookie OR header\n- `lib/api/client.ts` \u2014 add `credentials: 'include'`, remove localStorage token logic\n- `lib/api/auth.ts` \u2014 remove localStorage user caching, add /auth/me fetch\n- `lib/auth-context.tsx` \u2014 update to use cookie-based auth flow",
+    "files": [
+      "backend/node-services/api-server/src/routes/auth.ts",
+      "backend/node-services/api-server/src/middleware/auth.ts",
+      "lib/api/client.ts",
+      "lib/api/auth.ts",
+      "lib/auth-context.tsx"
+    ],
+    "createdAt": "2026-02-27T12:00:07.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_036",
+    "title": "Fix broken recipe images on dashboard \u2014 hero images show gray/broken alt text",
+    "status": "done",
+    "priority": 8,
+    "type": "bug-fix",
+    "description": "## HIGH \u2014 Recipe images broken across the app\n\n### What's wrong (from Playwright screenshots)\n\n1. **Dashboard recipe cards** \u2014 'Perfect Boiled Egg' card shows broken image icon with alt text `Perfect Boiled Egg` visible as text. The image URL is failing to load from Unsplash.\n\n2. **Recipe detail page** \u2014 Hero section shows a GRAY BOX (~300px tall) with no image. Only the title text overlay is visible. This is the first thing users see \u2014 looks broken/unprofessional.\n\n3. **All recipe cards** have small circular emoji overlays (top-left) that appear but the main card images are inconsistent \u2014 some load, some don't.\n\n### Root cause investigation\n- Check if Unsplash image URLs in seed data are still valid\n- Check if `next.config.ts` image remotePatterns are correct\n- Check if images use Next.js `<Image>` component with proper error fallbacks\n- Check `?w=800&fit=crop&q=80` query params work with current Unsplash URLs\n\n### What to fix\n1. Verify/update all Unsplash image URLs in `backend/shared/seed-data-pg.sql`\n2. Add proper error fallback UI in recipe cards \u2014 gradient background with large emoji, not broken image icon\n3. Add `onError` handler to all `<Image>` and `<img>` tags:\n```tsx\n<Image\n  src={recipe.imageUrl}\n  alt={recipe.title}\n  onError={(e) => {\n    e.currentTarget.style.display = 'none';\n    // Show fallback gradient + emoji\n  }}\n/>\n```\n4. Recipe detail hero should use gradient fallback matching skill color, not gray box\n5. Consider downloading and self-hosting recipe images for reliability\n\n### Files to modify\n- `backend/shared/seed-data-pg.sql` \u2014 verify/update image URLs\n- `components/recipe-card.tsx` \u2014 add image error fallback\n- `app/recipe/[recipeId]/page.tsx` \u2014 fix hero image fallback\n- `next.config.ts` \u2014 verify remotePatterns configuration",
+    "files": [
+      "backend/shared/seed-data-pg.sql",
+      "components/recipe-card.tsx",
+      "app/recipe/[recipeId]/page.tsx",
+      "next.config.ts"
+    ],
+    "createdAt": "2026-02-27T12:00:12.000Z",
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-02-27T16:40:00.000Z",
+    "completedAt": "2026-02-27T16:45:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_051",
+    "title": "[Phase 1] Add xp_reward column to recipes table and update seed data",
+    "status": "in_progress",
+    "priority": 10,
+    "type": "enhancement",
+    "description": "## CRITICAL \u2014 Recipes have no XP reward value defined\n\n### What's wrong\nThe `recipes` table in `backend/shared/schema-pg.sql` has no `xp_reward` column. The core loop requires every recipe to grant XP on completion (e.g., 100 XP for beginner, 150 for intermediate, 200 for advanced). Without this, we cannot show \"+100 XP\" on recipe cards or in the completion toast.\n\n### What to fix\n1. **Add migration `005_add_xp_reward.sql`** to add `xp_reward INTEGER DEFAULT 100` column to `recipes` table\n2. **Update `backend/shared/schema-pg.sql`** with the new column for fresh installs\n3. **Update `backend/shared/seed-data-pg.sql`** to set XP values per recipe:\n   - beginner recipes: 100 XP (boiled-egg, make-rice, chop-onion)\n   - intermediate recipes: 150 XP (sear-steak, simmer-soup, etc.)\n   - advanced recipes: 200 XP\n4. **Update `backend/node-services/api-server/src/services/database.ts`** to run the new migration\n5. **Update recipe API responses** to include `xp_reward` in the JSON payload\n6. **Update `lib/types.ts`** to add `xpReward: number` to the Recipe interface\n7. **Update `hooks/use-recipes.ts` `mapRecipe()`** to map `xp_reward` \u2192 `xpReward`\n\n### Acceptance criteria\n- `GET /api/v1/recipes` returns `xp_reward` for each recipe\n- `GET /api/v1/recipes/:id` returns `xp_reward`\n- Frontend Recipe type includes `xpReward`\n- Migration is idempotent (can run multiple times safely)\n\n### Files to create/modify\n- `backend/shared/schema-pg.sql` \u2014 add column\n- `backend/shared/seed-data-pg.sql` \u2014 add XP values\n- `backend/node-services/api-server/src/services/database.ts` \u2014 add migration 005\n- `lib/types.ts` \u2014 add xpReward to Recipe interface\n- `hooks/use-recipes.ts` \u2014 update mapRecipe()",
+    "files": [
+      "backend/shared/schema-pg.sql",
+      "backend/shared/seed-data-pg.sql",
+      "backend/node-services/api-server/src/services/database.ts",
+      "lib/types.ts",
+      "hooks/use-recipes.ts"
+    ],
+    "createdAt": "2026-02-27T14:00:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-27T16:17:35.286421Z",
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_052",
+    "title": "[Phase 1] Create unified POST /recipes/:id/complete endpoint",
+    "status": "in_progress",
+    "priority": 10,
+    "type": "enhancement",
+    "description": "## CRITICAL \u2014 No single endpoint to complete a recipe and return all updated state\n\n### What's wrong\nCurrently recipe completion is handled entirely in the frontend Zustand store (localStorage). The backend has `POST /recipes/:id/progress` but it only updates a single row \u2014 it doesn't:\n- Calculate XP gained\n- Update streak\n- Return skill progress\n- Detect skill unlocks\n- Detect level-ups\n\nThe core loop requires ONE endpoint that does everything and returns a rich payload.\n\n### What to fix\nCreate `POST /api/v1/recipes/:id/complete` that:\n\n1. **Marks recipe as completed** in `user_recipe_progress` (idempotent \u2014 if already completed, return current state with `already_completed: true`)\n2. **Calculates XP gained** from recipe's `xp_reward` value\n3. **Updates user's total XP** (add `current_xp` and `total_recipes_completed` columns to users table if not present)\n4. **Calculates streak**: query `user_recipe_progress` for the user, check if they completed a recipe yesterday (streak continues) or today (already counted). Update `streak_days` and `last_activity_date` on users table.\n5. **Computes skill progress**: count completed recipes in the recipe's skill\n6. **Detects skill unlocks**: if skill is `basic-cooking` and completed_count == total (3), flag `skills_unlocked: ['heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine']`\n7. **Detects level-up**: if `current_xp >= xp_to_next_level`, increment level\n8. **Returns unified payload**:\n```json\n{\n  \"success\": true,\n  \"data\": {\n    \"recipe_id\": \"boiled-egg\",\n    \"already_completed\": false,\n    \"xp_gained\": 100,\n    \"user\": {\n      \"level\": 1,\n      \"current_xp\": 100,\n      \"xp_to_next_level\": 1000,\n      \"streak_days\": 4,\n      \"total_recipes_completed\": 1\n    },\n    \"skill_progress\": {\n      \"skill_id\": \"basic-cooking\",\n      \"completed\": 1,\n      \"total\": 3,\n      \"percentage\": 33\n    },\n    \"level_up\": null,\n    \"skills_unlocked\": [],\n    \"streak_updated\": true\n  }\n}\n```\n\n### Subtasks\n- Add `current_xp`, `streak_days`, `last_activity_date`, `total_recipes_completed` columns to `users` table (migration 006)\n- Create the route handler in a new file or extend `backend/node-services/api-server/src/routes/progress.ts`\n- Use a database transaction to ensure atomicity\n- Add authentication middleware (require login)\n- Handle edge cases: recipe doesn't exist (404), user not found, already completed\n\n### Depends on\n- task_051 (xp_reward column must exist)\n\n### Files to create/modify\n- `backend/node-services/api-server/src/routes/progress.ts` \u2014 add complete endpoint\n- `backend/node-services/api-server/src/services/database.ts` \u2014 add migration 006, helper queries\n- `backend/node-services/api-server/src/index.ts` \u2014 register route if not already\n- `backend/shared/schema-pg.sql` \u2014 add user XP/streak columns",
+    "files": [
+      "backend/node-services/api-server/src/routes/progress.ts",
+      "backend/node-services/api-server/src/services/database.ts",
+      "backend/node-services/api-server/src/index.ts",
+      "backend/shared/schema-pg.sql"
+    ],
+    "createdAt": "2026-02-27T14:00:01.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-27T16:20:10.116588+00:00",
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_053",
+    "title": "[Phase 1] Implement real streak calculation from completion dates",
+    "status": "in_progress",
+    "priority": 10,
+    "type": "bug-fix",
+    "description": "## CRITICAL \u2014 Streak is hardcoded to 3 days\n\n### What's wrong\n`app/page.tsx:34` has:\n```typescript\nconst streak = 3 // TODO: Calculate actual streak from completion dates\n```\nThis means every user always sees 'Streak: 3 days' regardless of activity.\n\n### What to fix\n\n**Option A (Server-side, preferred for logged-in users):**\nThe `POST /recipes/:id/complete` endpoint (task_052) already calculates streak. Create a `GET /api/v1/users/me/stats` endpoint that returns:\n```json\n{\n  \"level\": 1,\n  \"current_xp\": 0,\n  \"xp_to_next_level\": 1000,\n  \"streak_days\": 0,\n  \"total_recipes_completed\": 0,\n  \"last_activity_date\": null\n}\n```\n\n**Option B (Client-side, for anonymous users):**\nCalculate streak from the Zustand store. Add `completionDates` to the store:\n```typescript\n// In recipe-store.ts\ncompletionDates: Map<string, string>, // recipeId \u2192 ISO date string\n\ntoggleRecipeCompletion: (recipeId) => {\n  // ... existing logic ...\n  // Also track: completionDates.set(recipeId, new Date().toISOString())\n}\n\ngetStreak: () => {\n  const dates = [...get().completionDates.values()]\n    .map(d => new Date(d).toDateString())\n  const uniqueDays = [...new Set(dates)].sort().reverse()\n  // Walk backwards from today, counting consecutive days\n  let streak = 0\n  const today = new Date()\n  for (let i = 0; i < uniqueDays.length; i++) {\n    const expected = new Date(today)\n    expected.setDate(today.getDate() - i)\n    if (uniqueDays[i] === expected.toDateString()) streak++\n    else break\n  }\n  return streak\n}\n```\n\n**Implementation**: Use Option B for anonymous users + Option A for logged-in users. The dashboard should prefer server data when available.\n\n### Subtasks\n1. Add `completionDates` to Zustand store with proper serialization\n2. Add `getStreak()` method to store\n3. Create `GET /api/v1/users/me/stats` backend endpoint\n4. Create `useUserStats()` TanStack Query hook\n5. Update `app/page.tsx` to use real streak (server if logged in, store if anonymous)\n\n### Depends on\n- task_052 (unified complete endpoint handles streak server-side)\n\n### Files to modify\n- `lib/stores/recipe-store.ts` \u2014 add completionDates, getStreak()\n- `app/page.tsx` \u2014 replace hardcoded streak\n- `hooks/use-recipes.ts` \u2014 add useUserStats() hook\n- `backend/node-services/api-server/src/routes/progress.ts` \u2014 add /users/me/stats endpoint",
+    "files": [
+      "lib/stores/recipe-store.ts",
+      "app/page.tsx",
+      "hooks/use-recipes.ts",
+      "backend/node-services/api-server/src/routes/progress.ts"
+    ],
+    "createdAt": "2026-02-27T14:00:02.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-27T16:17:35.286421Z",
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_054",
+    "title": "[Phase 1] Create CoreLoopHeroCard component with Start/Continue CTA",
+    "status": "in_progress",
+    "priority": 10,
+    "type": "enhancement",
+    "description": "## CRITICAL \u2014 New users have no clear 'Start here' guidance\n\n### What's wrong\nThe dashboard shows 5 skill cards and 3 recipe cards but no prominent CTA telling users what to do next. The bottom 'Ready for your next challenge?' card is too generic and buried below the fold.\n\n### What to build\nCreate `components/core-loop-hero-card.tsx` \u2014 a prominent card placed **immediately below the Level/Streak/XP header** and **above the Cooking Skills section**.\n\n**States:**\n\n1. **New user (0 recipes completed overall)**:\n   - Title: \"Start with Basic Cooking\"\n   - Subtitle: \"Complete 3 quick recipes to unlock more skills.\"\n   - Button: \"Start Basic Cooking\" \u2192 navigates to `/recipe/boiled-egg` (first Basic Cooking recipe)\n   - Visual: warm gradient background (amber \u2192 orange), chef hat icon\n\n2. **Returning user (incomplete Basic Cooking, 1-2 of 3 done)**:\n   - Title: \"Continue Basic Cooking\"\n   - Subtitle: \"You've completed X of 3 recipes.\"\n   - Button: \"Resume last recipe\" \u2192 navigates to the next incomplete Basic Cooking recipe\n   - Progress bar showing X/3\n   - Visual: same gradient, progress indicator\n\n3. **Basic Cooking complete (3/3), other skills available**:\n   - Title: \"New skills unlocked!\"\n   - Subtitle: \"Explore Heat Control, Flavor Building, and more.\"\n   - Button: \"Explore Heat Control\" (primary), \"Browse all skills\" (secondary)\n   - Visual: celebration gradient (green \u2192 emerald)\n\n4. **All recipes completed (hide card or show mastery)**:\n   - Don't render the card\n\n### Props interface\n```typescript\ninterface CoreLoopHeroCardProps {\n  totalCompleted: number;\n  basicCookingProgress: { completed: number; total: number; percentage: number };\n  nextRecipeId: string | null; // ID of next incomplete recipe in Basic Cooking\n  hasUnlockedSkills: boolean; // true if Basic Cooking is 100%\n}\n```\n\n### Subtasks\n1. Create the component with all 4 states\n2. Add helper function to determine `nextRecipeId` (find first incomplete Basic Cooking recipe)\n3. Integrate into `app/page.tsx` between the header Card and the grid\n4. Add entrance animation (slide-up with delay)\n5. Mobile responsive (full-width, stacked layout)\n\n### Acceptance criteria\n- Given a new user with 0 completed recipes, when they load the dashboard, then they see \"Start with Basic Cooking\" with a prominent orange CTA button\n- Given a user with 1/3 Basic Cooking done, when they load the dashboard, then they see \"Continue Basic Cooking\" with progress 1/3 and button linking to next incomplete recipe\n- Given a user with 3/3 Basic Cooking done, then they see \"New skills unlocked!\" with link to Heat Control\n- Card is responsive (looks good on 390px mobile and 1440px desktop)\n- Card has smooth entrance animation\n\n### Files to create/modify\n- `components/core-loop-hero-card.tsx` \u2014 NEW component\n- `app/page.tsx` \u2014 integrate between header and grid",
+    "files": [
+      "components/core-loop-hero-card.tsx",
+      "app/page.tsx"
+    ],
+    "createdAt": "2026-02-27T14:00:03.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-27T16:17:35.286421Z",
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_055",
+    "title": "[Phase 1] Create CompletionToast component with XP, streak, and skill progress feedback",
+    "status": "in_progress",
+    "priority": 9,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Users get no reward feedback on recipe completion\n\n### What's wrong\nCurrently `app/recipe/[recipeId]/page.tsx:30-35` shows a basic toast:\n```typescript\ntoast.success(isCompleted ? 'marked as incomplete' : '\ud83c\udf89 completed!')\n```\nThis gives zero information about XP earned, streak impact, or skill progress. The core loop requires instant, satisfying feedback.\n\n### What to build\nCreate `components/completion-toast.tsx` \u2014 a rich toast/notification that appears when a recipe is marked as completed.\n\n**Content (all in one toast, stacked vertically):**\n1. \"Nice work! +{xp} XP\" (e.g., +100 XP) \u2014 with XP icon\n2. \"Basic Cooking: {x}/3 recipes completed\" \u2014 with progress bar\n3. \"Streak: Day {n}!\" (ONLY if this is the first recipe completed today) \u2014 with flame icon\n4. If skill just completed (3/3): \"You've mastered Basic Cooking!\" bonus line\n5. If level-up: \"Level up! You're now Level {n}!\" bonus line\n\n**Design:**\n- Use sonner custom toast (already in project) with a custom React component\n- Warm background (orange/amber gradient or white with orange accent)\n- Auto-dismiss after 5 seconds\n- Celebratory emoji/icon\n- Slide-in from top-right (default sonner behavior)\n\n### Props interface\n```typescript\ninterface CompletionToastProps {\n  recipeName: string;\n  xpGained: number;\n  skillProgress: { skillName: string; completed: number; total: number };\n  streakUpdated: boolean;\n  streakDays: number;\n  levelUp: { newLevel: number } | null;\n  skillMastered: boolean;\n}\n```\n\n### Integration\n- Replace the simple `toast.success()` in `app/recipe/[recipeId]/page.tsx`\n- Also integrate into `components/recipe-card.tsx` completion toggle\n- For anonymous users: compute values from Zustand store\n- For logged-in users: use response from `POST /recipes/:id/complete`\n\n### Acceptance criteria\n- Given a user completes 'Perfect Boiled Egg', then a rich toast appears showing \"+100 XP\", \"Basic Cooking: 1/3\", and streak info\n- Toast auto-dismisses after 5 seconds\n- Toast is beautiful and on-brand (warm colors, emojis)\n- If user uncompletes a recipe, show a simple \"Recipe marked as incomplete\" (no XP toast)\n\n### Depends on\n- task_051 (xp_reward on recipes)\n\n### Files to create/modify\n- `components/completion-toast.tsx` \u2014 NEW component\n- `app/recipe/[recipeId]/page.tsx` \u2014 replace toast.success()\n- `components/recipe-card.tsx` \u2014 update completion handler",
+    "files": [
+      "components/completion-toast.tsx",
+      "app/recipe/[recipeId]/page.tsx",
+      "components/recipe-card.tsx"
+    ],
+    "createdAt": "2026-02-27T14:00:04.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-27T16:20:10.116588+00:00",
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_056",
+    "title": "[Phase 1] Update RecipeCard to show XP reward badge and improved completed state",
+    "status": "in_progress",
+    "priority": 9,
+    "type": "ui-fix",
+    "description": "## HIGH \u2014 Recipe cards don't show XP reward or clear completed state\n\n### What's wrong\n`components/recipe-card.tsx` shows recipe image, title, time, difficulty, and a small completion toggle (circle icon top-right). But:\n1. No XP reward displayed (e.g., \"+100 XP\" badge)\n2. Completed state is just a green circle \u2014 not visually satisfying\n3. No disabled/already-completed button state\n\n### What to fix\n\n1. **Add XP badge**: Show a small badge on the card (e.g., bottom-right or near the title) with \"+{xp} XP\" in orange text. Only show if recipe has `xpReward` property.\n\n2. **Improve completed state**:\n   - Show a green checkmark overlay on the card image\n   - Change completion button text to \"Completed \u2713\" (not just a circle icon)\n   - Add subtle green border/glow to completed cards\n   - Disable the completion button (or show \"Already completed\" tooltip) \u2014 but still allow uncomplete on click\n\n3. **Show skill association** more prominently if not already visible\n\n### Design guidance\n- XP badge: small pill/chip, `bg-orange-100 text-orange-700 text-xs font-semibold px-2 py-0.5 rounded-full`\n- Completed overlay: `bg-green-500/20` with centered `CheckCircle2` icon\n- Completed card border: `ring-2 ring-green-400`\n\n### Acceptance criteria\n- Given a recipe card for 'Perfect Boiled Egg' (beginner, 100 XP), then the card shows \"+100 XP\" badge\n- Given a completed recipe, the card has a green overlay, checkmark, and completed text\n- Given an incomplete recipe, the card shows the standard completion button\n- XP badge is visible on both compact and full card layouts\n\n### Depends on\n- task_051 (xpReward in Recipe type)\n\n### Files to modify\n- `components/recipe-card.tsx` \u2014 add XP badge, improve completed state",
+    "files": [
+      "components/recipe-card.tsx"
+    ],
+    "createdAt": "2026-02-27T14:00:05.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-27T16:20:10.116588+00:00",
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_057",
+    "title": "[Phase 1] Create getUserCoreLoopState hook for determining next user action",
+    "status": "in_progress",
+    "priority": 9,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 No centralized logic to determine user's position in the core loop\n\n### What's wrong\nMultiple components need to know the user's current state in the core loop (what to show, what CTA to display, what's next). This logic is currently scattered or non-existent. We need a single source of truth.\n\n### What to build\nCreate `hooks/use-core-loop.ts` with a `useCoreLoopState()` hook that returns:\n\n```typescript\ninterface CoreLoopState {\n  // Next action determination\n  nextActionType: 'start_basic_cooking' | 'continue_basic_cooking' | 'explore_unlocked_skills' | 'all_complete';\n  primaryCtaLabel: string; // e.g., 'Start Basic Cooking'\n  primaryCtaRoute: string; // e.g., '/recipe/boiled-egg'\n  secondaryActions: Array<{ label: string; route: string }>;\n\n  // Progress data\n  basicCookingProgress: { completed: number; total: number; percentage: number };\n  overallProgress: { completed: number; total: number; percentage: number };\n  currentLevel: number;\n  currentXp: number;\n  xpToNextLevel: number;\n  streak: number;\n  totalRecipesCompleted: number;\n\n  // Unlock state\n  unlockedSkills: string[]; // skill IDs that are currently unlocked\n  newlyUnlockedSkills: string[]; // skills unlocked in this session (for 'New!' badge)\n  isBasicCookingComplete: boolean;\n\n  // Next recipe helpers\n  nextIncompleteRecipeId: string | null; // in Basic Cooking\n  nextIncompleteRecipeTitle: string | null;\n}\n```\n\n### Logic\n```typescript\nfunction getUserCoreLoopState(store, recipes): CoreLoopState {\n  const bcProgress = store.getSkillProgress('basic-cooking')\n  const overall = store.getOverallProgress()\n  \n  if (overall.completed === 0) {\n    return { nextActionType: 'start_basic_cooking', ... }\n  } else if (bcProgress.percentage < 100) {\n    return { nextActionType: 'continue_basic_cooking', ... }\n  } else if (overall.percentage < 100) {\n    return { nextActionType: 'explore_unlocked_skills', ... }\n  } else {\n    return { nextActionType: 'all_complete', ... }\n  }\n}\n```\n\n### Integration points\n- `CoreLoopHeroCard` (task_054) uses this to determine what to show\n- `app/page.tsx` uses this for streak, level, XP values\n- `CompletionToast` (task_055) uses this to compute skill progress after completion\n- `SkillUnlockBanner` (task_059) uses this to detect unlocks\n\n### Acceptance criteria\n- Hook returns correct state for all 4 nextActionTypes\n- `nextIncompleteRecipeId` correctly identifies the first incomplete Basic Cooking recipe\n- Works for both anonymous (Zustand) and logged-in (server data) users\n- Memoized to prevent unnecessary re-renders\n\n### Files to create\n- `hooks/use-core-loop.ts` \u2014 NEW file with useCoreLoopState() hook",
+    "files": [
+      "hooks/use-core-loop.ts"
+    ],
+    "createdAt": "2026-02-27T14:00:06.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-27T16:17:35.286421Z",
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_058",
+    "title": "[Phase 1] Wire the full completion flow: recipe complete \u2192 API \u2192 toast \u2192 real-time UI updates",
+    "status": "in_progress",
+    "priority": 9,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Completion flow doesn't update XP bar, recipe count, or skill progress in real-time\n\n### What's wrong\nWhen a user clicks 'Mark as completed':\n1. Zustand store toggles the recipe in a Set (localStorage only)\n2. A basic toast appears\n3. The XP bar, recipe count, and skill progress DO update reactively (Zustand re-renders) but with NO animation\n4. No server call is made (progress is ephemeral)\n\n### What to fix\nWire the complete flow end-to-end:\n\n**For logged-in users:**\n1. User clicks 'Mark as completed'\n2. Call `POST /api/v1/recipes/:id/complete` (from task_052)\n3. On success response, update Zustand store AND show CompletionToast (task_055)\n4. Animate XP bar fill from old value to new value\n5. Update recipe count in header (e.g., '1 of 28 recipes completed')\n6. If `skills_unlocked` in response, trigger SkillUnlockBanner (task_059)\n7. If `level_up` in response, trigger level-up celebration (task_061)\n\n**For anonymous users (no auth):**\n1. User clicks 'Mark as completed'\n2. Update Zustand store (existing behavior)\n3. Calculate XP/streak/progress from store\n4. Show CompletionToast with computed values\n5. Animate XP bar\n\n### Implementation\nCreate a `useCompleteRecipe()` mutation hook in `hooks/use-recipes.ts`:\n```typescript\nexport function useCompleteRecipe() {\n  const store = useRecipeStore()\n  const { user } = useAuth() // check if logged in\n  \n  return useMutation({\n    mutationFn: async (recipeId: string) => {\n      if (user) {\n        // Server call\n        return await completeRecipe(recipeId)\n      } else {\n        // Local-only\n        store.toggleRecipeCompletion(recipeId)\n        return computeLocalCompletionResult(recipeId, store)\n      }\n    },\n    onSuccess: (data) => {\n      // Show CompletionToast\n      // Invalidate queries\n      // Trigger unlock/level-up if applicable\n    }\n  })\n}\n```\n\n### Subtasks\n1. Create `useCompleteRecipe()` mutation hook\n2. Create `lib/api/progress.ts` with `completeRecipe(recipeId)` API call\n3. Update `app/recipe/[recipeId]/page.tsx` to use the new hook\n4. Update `components/recipe-card.tsx` to use the new hook\n5. Add XP bar animation (CSS transition on Progress component value)\n6. Add optimistic update for instant feedback\n\n### Depends on\n- task_052 (backend endpoint)\n- task_055 (CompletionToast component)\n- task_057 (core loop state hook)\n\n### Acceptance criteria\n- Given a logged-in user completing a recipe, the server is called and toast shows server-returned XP/streak/progress\n- Given an anonymous user completing a recipe, the local store is updated and toast shows computed values\n- XP bar animates smoothly from old to new value\n- Recipe count updates in real-time in the header\n- Skill progress updates in real-time on skill cards\n\n### Files to create/modify\n- `hooks/use-recipes.ts` \u2014 add useCompleteRecipe()\n- `lib/api/progress.ts` \u2014 NEW file with completeRecipe() API call\n- `app/recipe/[recipeId]/page.tsx` \u2014 use new hook\n- `components/recipe-card.tsx` \u2014 use new hook",
+    "files": [
+      "hooks/use-recipes.ts",
+      "lib/api/progress.ts",
+      "app/recipe/[recipeId]/page.tsx",
+      "components/recipe-card.tsx"
+    ],
+    "createdAt": "2026-02-27T14:00:07.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-27T16:20:10.116588+00:00",
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_059",
+    "title": "[Phase 2] Create SkillUnlockBanner component for Basic Cooking mastery",
+    "status": "todo",
+    "priority": 8,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 No celebration when users unlock new skills\n\n### What's wrong\nWhen Basic Cooking reaches 3/3, skills silently become clickable. There's a 'Trophy Skill Mastered!' card at the bottom of the dashboard (page.tsx:218-230) but it's:\n1. At the very bottom \u2014 users won't see it\n2. Static \u2014 no animation or celebration\n3. Doesn't name the newly unlocked skills\n4. Doesn't direct users to try them\n\n### What to build\nCreate `components/skill-unlock-banner.tsx` \u2014 a full-width celebration banner that appears when Basic Cooking goes from <3 to 3 completed recipes.\n\n**Trigger:** When the completion flow (task_058) detects `skills_unlocked` is non-empty, OR when the Zustand store's basic-cooking progress reaches 100% for the first time in this session.\n\n**Design:**\n- Full-width banner, overlaid or inserted at top of dashboard\n- Confetti animation (use CSS or a lightweight library like `canvas-confetti`)\n- Title: \"You've mastered Basic Cooking!\" with trophy emoji\n- Subtitle: \"You've unlocked new skills: Heat Control, Flavor Building, Air Fryer Mastery, Indian Cuisine.\"\n- Two buttons:\n  - Primary: \"Explore Heat Control\" \u2192 `/skill/heat-control`\n  - Secondary: \"Browse all skills\" \u2192 scroll to skills section\n- Auto-dismiss after 10 seconds OR on button click\n- Store dismissal in sessionStorage so it doesn't re-show on page reload\n\n### Props interface\n```typescript\ninterface SkillUnlockBannerProps {\n  masteredSkillName: string;\n  unlockedSkills: Array<{ id: string; name: string }>;\n  onDismiss: () => void;\n  onExploreSkill: (skillId: string) => void;\n}\n```\n\n### Acceptance criteria\n- Given a user who just completed the 3rd Basic Cooking recipe, when the dashboard renders, then a celebration banner appears with confetti\n- Banner names all 4 newly unlocked skills\n- Primary CTA navigates to Heat Control skill page\n- Banner can be dismissed and doesn't re-appear on reload\n- Banner is responsive (stacked layout on mobile)\n- Animation is smooth and doesn't jank\n\n### Depends on\n- task_058 (completion flow that detects unlocks)\n\n### Files to create/modify\n- `components/skill-unlock-banner.tsx` \u2014 NEW component\n- `app/page.tsx` \u2014 integrate banner trigger logic",
+    "files": [
+      "components/skill-unlock-banner.tsx",
+      "app/page.tsx"
+    ],
+    "createdAt": "2026-02-27T14:00:08.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_060",
+    "title": "[Phase 2] Implement skill card unlock state transitions with 'New!' badges",
+    "status": "todo",
+    "priority": 8,
+    "type": "ui-fix",
+    "description": "## HIGH \u2014 Locked skills transition silently when unlocked\n\n### What's wrong\n`components/skill-card.tsx` handles locked state well (grayed out, 'Locked' badge, 'Complete Basic Cooking to unlock this skill' message). But when Basic Cooking is completed:\n1. Skills just become clickable \u2014 no 'New!' badge\n2. No visual transition or animation\n3. No 'just unlocked' state to draw attention\n4. Per-skill progress label missing (e.g., '0 / 5 recipes completed' for Heat Control)\n\n### What to fix\n\n1. **Add 'New!' badge** to freshly unlocked skills:\n   - Track `newlyUnlockedSkills` in sessionStorage (set when Basic Cooking completes, cleared after first visit)\n   - Show pulsing green 'New!' badge on skill cards that are in the newly-unlocked list\n   - Badge: `bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full animate-pulse`\n\n2. **Add entrance animation** for unlocked skills:\n   - When a skill transitions from locked \u2192 unlocked, use a scale-up + glow animation\n   - CSS: `@keyframes unlock { 0% { transform: scale(0.95); opacity: 0.5 } 100% { transform: scale(1); opacity: 1 } }`\n\n3. **Add progress label per skill**:\n   - Below the progress bar: \"0 / 5 recipes completed\" (not just \"0/5 completed\")\n   - This already partially exists but should be more prominent\n\n4. **Update skill card colors** when unlocked:\n   - Remove gray overlay\n   - Show skill's native color border/accent\n   - Show 'Start Learning' and 'View recipes' links (same as Basic Cooking)\n\n### Acceptance criteria\n- Given a user who just unlocked skills, when they see the dashboard, then Heat Control, Flavor Building, Air Fryer, and Indian Cuisine show 'New!' badges\n- Badges pulse gently to attract attention\n- After user clicks on a newly unlocked skill, the 'New!' badge disappears on next dashboard visit\n- Each skill shows 'X / Y recipes completed' progress text\n- Unlocked skills show their native color accent (not gray)\n\n### Depends on\n- task_059 (skill unlock detection)\n\n### Files to modify\n- `components/skill-card.tsx` \u2014 add New! badge, progress text, unlock animation\n- `app/page.tsx` \u2014 pass newlyUnlocked prop to SkillCard",
+    "files": [
+      "components/skill-card.tsx",
+      "app/page.tsx"
+    ],
+    "createdAt": "2026-02-27T14:00:09.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_061",
+    "title": "[Phase 2] Create level-up celebration modal when XP threshold is crossed",
+    "status": "todo",
+    "priority": 7,
+    "type": "enhancement",
+    "description": "## MEDIUM-HIGH \u2014 No celebration when user levels up\n\n### What's wrong\nThe header shows 'Level 1 \u2014 Beginner' and '0/1000 XP', but when the XP bar fills to 1000 and the user reaches Level 2, nothing happens. The level number just increments silently.\n\n### What to build\nCreate `components/level-up-modal.tsx` \u2014 a modal/dialog that appears when a level-up is detected.\n\n**Design:**\n- Center-screen modal with overlay\n- Large level number with scale-up animation (e.g., '2' zooming in)\n- Title: \"Level Up!\"\n- Subtitle: \"You're now Level 2 \u2014 Beginner\" (or Intermediate at level 4+)\n- Show new XP threshold: \"Next level: 0 / 2000 XP\"\n- Celebratory animation (confetti or sparkle effect)\n- Single button: \"Keep Cooking!\" \u2192 dismisses modal\n- Optional: show total recipes completed, total XP earned as stats\n\n### Trigger\nWhen `POST /recipes/:id/complete` returns `level_up: { newLevel: 2 }`, or when client-side calculation detects level change after recipe completion.\n\n**Level thresholds** (from `lib/utils.ts` `calculateLevel()`):\n- Level 1: 0 XP\n- Level 2: 1000 XP\n- Level 3: 2500 XP\n- etc.\n\n### Implementation\n- Use shadcn/ui `Dialog` component for the modal\n- Trigger from the completion flow (task_058)\n- Only show once per level-up (use state flag)\n\n### Acceptance criteria\n- Given a user at 900 XP who completes a 100 XP recipe, when the completion response returns, then a level-up modal appears showing 'Level 2'\n- Modal has animation and is visually celebratory\n- Modal dismisses on button click\n- Does not re-appear after dismissal\n\n### Depends on\n- task_058 (completion flow detects level-up)\n\n### Files to create/modify\n- `components/level-up-modal.tsx` \u2014 NEW component\n- `app/page.tsx` or completion flow \u2014 trigger modal",
+    "files": [
+      "components/level-up-modal.tsx",
+      "app/page.tsx"
+    ],
+    "createdAt": "2026-02-27T14:00:10.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_062",
+    "title": "[Phase 2] Add skill unlock computation to backend progress service",
+    "status": "todo",
+    "priority": 8,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Backend doesn't know about skill dependencies or unlock logic\n\n### What's wrong\nThe frontend currently handles skill locking/unlocking in `app/page.tsx:120-121`:\n```typescript\nconst isLocked = skill.id !== 'basic-cooking' && basicCookingProgress.percentage < 100\n```\nThis is client-only logic. The backend has no concept of:\n- Which skills depend on which other skills\n- When a skill should unlock\n- What the skill dependency tree looks like\n\nFor the `POST /recipes/:id/complete` endpoint to return `skills_unlocked`, the backend needs this logic.\n\n### What to fix\n\n1. **Add `required_skill_id` and `required_recipes_completed` columns to `skills` table:**\n```sql\nALTER TABLE skills ADD COLUMN required_skill_id TEXT REFERENCES skills(id);\nALTER TABLE skills ADD COLUMN required_recipes_completed INTEGER DEFAULT 0;\n```\n\n2. **Update seed data** for skills:\n```sql\n-- basic-cooking: no requirements (always unlocked)\nUPDATE skills SET required_skill_id = NULL, required_recipes_completed = 0 WHERE id = 'basic-cooking';\n-- All others: require basic-cooking 3/3\nUPDATE skills SET required_skill_id = 'basic-cooking', required_recipes_completed = 3 WHERE id IN ('heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine');\n```\n\n3. **Add unlock check function in database service:**\n```typescript\nasync getNewlyUnlockedSkills(userId: number, completedSkillId: string): Promise<Skill[]> {\n  // Query skills where required_skill_id = completedSkillId\n  // AND user has completed >= required_recipes_completed in that skill\n  // AND skill is not already 'unlocked' for this user\n}\n```\n\n4. **Integrate into complete endpoint** (task_052):\n   - After marking recipe complete, check if the skill is now fully completed\n   - If so, query for skills that this skill unlocks\n   - Return them in `skills_unlocked` array\n\n### Acceptance criteria\n- When a user completes the 3rd Basic Cooking recipe, the complete endpoint returns `skills_unlocked: ['heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine']`\n- When a user completes the 1st or 2nd Basic Cooking recipe, `skills_unlocked` is empty\n- Skill dependencies are stored in DB, not hardcoded in backend logic\n\n### Depends on\n- task_052 (complete endpoint structure)\n\n### Files to modify\n- `backend/shared/schema-pg.sql` \u2014 add columns to skills table\n- `backend/shared/seed-data-pg.sql` \u2014 set dependency data\n- `backend/node-services/api-server/src/services/database.ts` \u2014 add migration + unlock query\n- `backend/node-services/api-server/src/routes/progress.ts` \u2014 integrate unlock check",
+    "files": [
+      "backend/shared/schema-pg.sql",
+      "backend/shared/seed-data-pg.sql",
+      "backend/node-services/api-server/src/services/database.ts",
+      "backend/node-services/api-server/src/routes/progress.ts"
+    ],
+    "createdAt": "2026-02-27T14:00:11.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_063",
+    "title": "[Phase 1] Implement idempotent recipe completion (prevent double-complete)",
+    "status": "in_progress",
+    "priority": 9,
+    "type": "bug-fix",
+    "description": "## HIGH \u2014 Users can complete the same recipe multiple times\n\n### What's wrong\nThe current Zustand store's `toggleRecipeCompletion` is a toggle \u2014 it adds or removes from a Set. This means:\n1. Clicking 'Mark as completed' twice uncompletes the recipe (confusing UX)\n2. There's no guard against accidental double-clicks\n3. The backend endpoint (when implemented) could award duplicate XP\n\n### What to fix\n\n1. **Frontend: Separate complete and uncomplete actions**\n   - `completeRecipe(recipeId)` \u2014 only adds, never removes. Shows error toast if already completed.\n   - `uncompleteRecipe(recipeId)` \u2014 explicit uncomplete with confirmation dialog\n   - Keep `toggleRecipeCompletion` for backward compatibility but prefer explicit methods\n\n2. **Frontend: Debounce/disable button after click**\n   - After clicking 'Mark as completed', disable the button for 2 seconds\n   - Show loading spinner during API call\n   - On success, change button to 'Completed \u2713' (non-clickable unless long-press/click reveals 'Undo')\n\n3. **Backend: Idempotent endpoint**\n   - `POST /recipes/:id/complete` should check if already completed\n   - If already completed: return `{ already_completed: true, ... }` with current state but NO additional XP\n   - Use UPSERT: `INSERT INTO user_recipe_progress ... ON CONFLICT (user_id, recipe_id) DO NOTHING`\n\n4. **Show 'Already completed' state**\n   - If user tries to complete again: toast saying 'You've already completed this recipe!'\n   - Completed recipes show checkmark and green state\n\n### Acceptance criteria\n- Given a user who completed 'Perfect Boiled Egg', when they click 'Mark as completed' again, then they see 'Already completed' (no double XP)\n- Backend returns 200 with `already_completed: true` on duplicate completion\n- Button shows loading state during API call\n- Accidental double-clicks don't cause issues\n\n### Files to modify\n- `lib/stores/recipe-store.ts` \u2014 add explicit complete/uncomplete methods\n- `components/recipe-card.tsx` \u2014 debounce button, loading state\n- `app/recipe/[recipeId]/page.tsx` \u2014 update completion handler\n- `backend/node-services/api-server/src/routes/progress.ts` \u2014 idempotent logic",
+    "files": [
+      "lib/stores/recipe-store.ts",
+      "components/recipe-card.tsx",
+      "app/recipe/[recipeId]/page.tsx",
+      "backend/node-services/api-server/src/routes/progress.ts"
+    ],
+    "createdAt": "2026-02-27T14:00:12.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-27T16:20:10.116588+00:00",
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_064",
+    "title": "[Phase 1] Update ProgressSummaryHeader to show real-time XP, streak, level, and recipe count",
+    "status": "in_progress",
+    "priority": 9,
+    "type": "ui-fix",
+    "description": "## HIGH \u2014 Header progress bar and stats don't update smoothly\n\n### What's wrong\nThe dashboard header in `app/page.tsx:56-95` shows:\n- Level (computed from completed count)\n- Streak (hardcoded to 3)\n- Recipes completed count\n- XP bar\n\nBut:\n1. XP bar has no animation (jumps instantly)\n2. Streak is hardcoded (task_053 fixes the data, this task fixes the display)\n3. No visual feedback when values change\n4. Level label doesn't animate on level-up\n\n### What to fix\n\n1. **Animate XP bar**: Add CSS transition to the Progress component value:\n```css\n.progress-bar-fill {\n  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);\n}\n```\nThe shadcn/ui Progress component uses `style={{ transform: translateX(-${100-value}%) }}`. Override or extend to add transition.\n\n2. **Animate recipe count**: When count changes, briefly highlight the number (e.g., scale-up + color flash)\n\n3. **Animate streak**: When streak increments, briefly show flame icon pulsing\n\n4. **Update header to use real data**:\n   - Use `useCoreLoopState()` hook (task_057) for all values\n   - Display: Level N \u2014 {title}, Streak: {n} days, {completed} of {total} recipes, {xp}/{nextLevelXp} XP\n\n5. **Mobile layout improvement**: Ensure streak flame badge shows current streak count (not hardcoded 3)\n\n### Acceptance criteria\n- XP bar smoothly animates from old value to new value over ~0.8 seconds\n- Recipe count briefly highlights when incremented\n- Streak displays real calculated value (not hardcoded 3)\n- All values update in real-time when recipes are completed (no page reload needed)\n- Mobile layout shows streak correctly\n\n### Depends on\n- task_053 (real streak data)\n- task_057 (core loop state hook)\n\n### Files to modify\n- `app/page.tsx` \u2014 update header to use real data + animations\n- `components/ui/progress.tsx` \u2014 add transition to progress bar fill (if needed)",
+    "files": [
+      "app/page.tsx",
+      "components/ui/progress.tsx"
+    ],
+    "createdAt": "2026-02-27T14:00:13.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-27T16:20:10.116588+00:00",
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_065",
+    "title": "[Phase 3] Refine all core loop microcopy for warmth and encouragement",
+    "status": "todo",
+    "priority": 6,
+    "type": "enhancement",
+    "description": "## MEDIUM \u2014 Copy is functional but not warm/encouraging (Strava + Duolingo vibe missing)\n\n### What's wrong\nCurrent copy is generic:\n- 'Ready for your next challenge?' (bottom CTA) \u2014 too vague\n- 'Mark as completed' \u2014 no excitement\n- 'Recipe completed!' toast \u2014 no personality\n- No encouraging microcopy throughout the journey\n\n### What to fix\nUpdate copy across all core loop touchpoints to be warm, encouraging, and personality-driven:\n\n**CoreLoopHeroCard (task_054):**\n- New user: \"Start your cooking journey\" / \"Complete 3 Basic Cooking recipes to unlock more skills.\"\n- Returning: \"Welcome back, chef!\" / \"You're {X}/3 through Basic Cooking. Keep going!\"\n- Unlocked: \"New skills unlocked!\" / \"You've opened up Heat Control, Flavor Building, Air Fryer Mastery, and Indian Cuisine.\"\n\n**CompletionToast (task_055):**\n- \"Nice work! +100 XP earned.\"\n- \"Basic Cooking: {x}/3 recipes done.\"\n- \"Streak updated: Day {n}! Keep the fire going!\"\n\n**SkillUnlockBanner (task_059):**\n- \"You've mastered Basic Cooking!\"\n- \"Your kitchen just got bigger. Explore 4 new skill tracks.\"\n\n**Level-up modal (task_061):**\n- \"Level {n}! You're becoming a real chef.\"\n\n**Recipe detail page:**\n- Completed state: \"Great job, chef! This one's in the bag.\"\n- CTA: \"I made this!\" instead of \"Mark as completed\"\n\n**Dashboard CTA (replace existing):**\n- \"Your kitchen awaits! Pick a skill and keep leveling up.\" \u2192 \"Every recipe brings you closer to mastery. What's cooking today?\"\n\n### Acceptance criteria\n- All user-facing strings are warm, encouraging, and on-brand\n- No generic/placeholder copy remains\n- Copy is consistent across components\n- Microcopy drives action (not just informs)\n\n### Files to modify\n- `components/core-loop-hero-card.tsx`\n- `components/completion-toast.tsx`\n- `components/skill-unlock-banner.tsx`\n- `components/level-up-modal.tsx`\n- `app/recipe/[recipeId]/page.tsx`\n- `app/page.tsx`",
+    "files": [
+      "components/core-loop-hero-card.tsx",
+      "components/completion-toast.tsx",
+      "components/skill-unlock-banner.tsx",
+      "components/level-up-modal.tsx",
+      "app/recipe/[recipeId]/page.tsx",
+      "app/page.tsx"
+    ],
+    "createdAt": "2026-02-27T14:00:14.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_066",
+    "title": "[Phase 3] Add entrance animations and micro-interactions for core loop elements",
+    "status": "todo",
+    "priority": 6,
+    "type": "enhancement",
+    "description": "## MEDIUM \u2014 Core loop elements appear without animation or delight\n\n### What's wrong\nSome animations exist (slide-up on skill cards, fade-in on recipes) but the core loop elements need more polished micro-interactions:\n1. XP counter doesn't count up (just appears as final number)\n2. Streak flame doesn't animate\n3. Completion checkmarks don't animate\n4. Unlock transitions are instant\n5. Progress bars don't fill with animation\n\n### What to fix\n\n1. **XP counter animation**: When XP increases, count up from old value to new value over 1.5 seconds (like a slot machine). Use `requestAnimationFrame` or a lightweight counter library.\n\n2. **Streak flame pulse**: When streak is active (>0), the flame icon gently pulses. When streak increments, burst animation (scale up + glow).\n\n3. **Completion checkmark**: When recipe is completed, the checkmark draws itself (SVG path animation) with a satisfying green glow.\n\n4. **Skill card unlock animation**: When a skill goes from locked \u2192 unlocked, animate:\n   - Gray \u2192 color transition (0.5s)\n   - Lock icon \u2192 skill icon morph\n   - Subtle glow/shimmer effect\n\n5. **Progress bar fill**: Smooth fill animation with a slight overshoot (spring physics).\n\n6. **CoreLoopHeroCard entrance**: Slide up with spring physics, slightly delayed after header loads.\n\n### Implementation notes\n- Use CSS animations/transitions where possible (performant)\n- Use `framer-motion` only if already installed (check package.json) \u2014 otherwise pure CSS\n- Add `will-change` hints for animated elements\n- Respect `prefers-reduced-motion` media query\n\n### Acceptance criteria\n- XP counter counts up visually when XP increases\n- Flame icon pulses gently for active streaks\n- Completion creates a satisfying checkmark animation\n- All animations respect reduced-motion preferences\n- No jank or layout shifts during animations\n\n### Files to modify\n- `app/page.tsx` \u2014 XP counter, streak animations\n- `components/recipe-card.tsx` \u2014 completion animation\n- `components/skill-card.tsx` \u2014 unlock animation\n- `components/core-loop-hero-card.tsx` \u2014 entrance animation\n- `app/globals.css` or `tailwind.config.ts` \u2014 add keyframes",
+    "files": [
+      "app/page.tsx",
+      "components/recipe-card.tsx",
+      "components/skill-card.tsx",
+      "components/core-loop-hero-card.tsx",
+      "app/globals.css"
+    ],
+    "createdAt": "2026-02-27T14:00:15.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_067",
+    "title": "[Phase 3] Add daily quest suggestion card ('Complete 1 recipe today')",
+    "status": "todo",
+    "priority": 5,
+    "type": "enhancement",
+    "description": "## MEDIUM-LOW \u2014 No daily engagement hook to keep users returning\n\n### What's wrong\nThere's no 'daily quest' or 'daily goal' to encourage users to complete at least 1 recipe per day. Streaks exist but aren't tied to visible daily objectives.\n\n### What to build\nCreate `components/daily-quest-card.tsx` \u2014 a small card shown on the dashboard when the user hasn't completed a recipe today.\n\n**States:**\n1. **Not completed today**: Show a card below the CoreLoopHeroCard:\n   - Icon: target/calendar icon\n   - Title: \"Daily Quest\"\n   - Subtitle: \"Complete 1 recipe today to keep your streak alive!\"\n   - Progress: \"0/1 recipes today\"\n   - CTA: \"Start cooking\" \u2192 link to next recommended recipe\n\n2. **Completed today**: Show completed state:\n   - Icon: checkmark\n   - Title: \"Daily Quest Complete!\"\n   - Subtitle: \"You've cooked today. Streak: Day {n}!\"\n   - Optional: \"Want to do more? Try another recipe \u2192\"\n\n3. **All recipes done**: Don't show\n\n**Logic:**\n- Check if any recipe was completed with today's date\n- For anonymous users: check Zustand store completionDates\n- For logged-in users: check last_activity_date from server\n\n### Acceptance criteria\n- Given a user who hasn't completed a recipe today, they see the daily quest card\n- Given a user who completed 1+ recipes today, they see the completed state\n- Card links to the next recommended recipe\n- Card is small/compact (doesn't dominate the dashboard)\n\n### Depends on\n- task_053 (streak/completion dates in store)\n\n### Files to create/modify\n- `components/daily-quest-card.tsx` \u2014 NEW component\n- `app/page.tsx` \u2014 integrate below CoreLoopHeroCard",
+    "files": [
+      "components/daily-quest-card.tsx",
+      "app/page.tsx"
+    ],
+    "createdAt": "2026-02-27T14:00:16.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  }
+]

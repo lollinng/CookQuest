@@ -1,0 +1,23 @@
+{
+  "task": {
+    "id": "task_1772114460732_pysikdd3j",
+    "status": "done",
+    "priority": 2,
+    "createdAt": "2026-02-26T14:01:00.732Z",
+    "assignedTo": "agent_001",
+    "assignedAt": "2026-02-26T14:01:00.735Z",
+    "completedAt": "2026-02-26T14:01:00.735Z",
+    "retryCount": 0,
+    "maxRetries": 3,
+    "title": "Synthetic Task A",
+    "type": "PRODUCT_FEATURE",
+    "prompt": "Build login page",
+    "result": {
+      "success": true
+    }
+  },
+  "result": {
+    "success": true
+  },
+  "completedAt": "2026-02-26T14:01:00.736Z"
+}

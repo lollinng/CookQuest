@@ -1,0 +1,25 @@
+{
+  "task": {
+    "id": "task_1772114460749_wfwve5kb2",
+    "status": "done",
+    "priority": 2,
+    "createdAt": "2026-02-26T14:01:00.749Z",
+    "assignedTo": "sim_agent_001",
+    "assignedAt": "2026-02-26T14:01:00.750Z",
+    "completedAt": "2026-02-26T14:01:00.750Z",
+    "retryCount": 0,
+    "maxRetries": 3,
+    "title": "Feature: Search",
+    "type": "PRODUCT_FEATURE",
+    "prompt": "Build search functionality",
+    "result": {
+      "success": true,
+      "iteration": 2
+    }
+  },
+  "result": {
+    "success": true,
+    "iteration": 2
+  },
+  "completedAt": "2026-02-26T14:01:00.750Z"
+}

@@ -1,0 +1,502 @@
+'use client'
+
+import { Check, Lock, Star, Crown } from 'lucide-react'
+import type { Recipe } from '@/lib/types'
+import Link from 'next/link'
+import { useState, useEffect, useRef } from 'react'
+import { PhotoNode } from './photo-node'
+
+interface LearningPathProps {
+  recipes: Recipe[]
+  isRecipeCompleted: (id: string) => boolean
+  onToggleCompletion: (id: string) => void
+  skillColor: string
+  skillIcon: string
+  skillName: string
+  mode?: 'learn' | 'cookbook'
+  userPhotos?: Map<string, string>
+  onPhotoUpload?: (recipeId: string, file: File) => void
+  uploadingRecipeId?: string | null
+}
+
+const COLOR_MAP: Record<string, {
+  node: string
+  nodeHover: string
+  glow: string
+  shadow: string
+  ring: string
+  accent: string
+  banner: string
+}> = {
+  blue: {
+    node: 'bg-blue-500',
+    nodeHover: 'hover:bg-blue-400',
+    glow: 'shadow-[0_0_30px_rgba(59,130,246,0.5)]',
+    shadow: 'shadow-[0_8px_0_0_rgb(29,78,216)]',
+    ring: 'ring-blue-400/50',
+    accent: 'text-blue-400',
+    banner: 'from-blue-600 to-blue-500',
+  },
+  orange: {
+    node: 'bg-orange-500',
+    nodeHover: 'hover:bg-orange-400',
+    glow: 'shadow-[0_0_30px_rgba(249,115,22,0.5)]',
+    shadow: 'shadow-[0_8px_0_0_rgb(194,65,12)]',
+    ring: 'ring-orange-400/50',
+    accent: 'text-orange-400',
+    banner: 'from-orange-600 to-red-500',
+  },
+  purple: {
+    node: 'bg-purple-500',
+    nodeHover: 'hover:bg-purple-400',
+    glow: 'shadow-[0_0_30px_rgba(168,85,247,0.5)]',
+    shadow: 'shadow-[0_8px_0_0_rgb(107,33,168)]',
+    ring: 'ring-purple-400/50',
+    accent: 'text-purple-400',
+    banner: 'from-purple-600 to-purple-500',
+  },
+  emerald: {
+    node: 'bg-emerald-500',
+    nodeHover: 'hover:bg-emerald-400',
+    glow: 'shadow-[0_0_30px_rgba(16,185,129,0.5)]',
+    shadow: 'shadow-[0_8px_0_0_rgb(4,120,87)]',
+    ring: 'ring-emerald-400/50',
+    accent: 'text-emerald-400',
+    banner: 'from-emerald-600 to-emerald-500',
+  },
+  amber: {
+    node: 'bg-amber-500',
+    nodeHover: 'hover:bg-amber-400',
+    glow: 'shadow-[0_0_30px_rgba(245,158,11,0.5)]',
+    shadow: 'shadow-[0_8px_0_0_rgb(180,83,9)]',
+    ring: 'ring-amber-400/50',
+    accent: 'text-amber-400',
+    banner: 'from-amber-600 to-amber-500',
+  },
+}
+
+function useContainerWidth(ref: React.RefObject<HTMLDivElement | null>) {
+  const [width, setWidth] = useState(600)
+  useEffect(() => {
+    function update() {
+      if (ref.current) {
+        setWidth(ref.current.clientWidth)
+      } else {
+        setWidth(Math.min(window.innerWidth - 32, 672))
+      }
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [ref])
+  return width
+}
+
+const NODE_SPACING = 180
+
+function getNodePosition(index: number, containerWidth: number): { x: number } {
+  const amplitude = Math.min(containerWidth * 0.3, 200)
+  const pattern = [0, 1, -1, 0.8, -0.8, 1, -0.5, 0.7]
+  return { x: Math.round(pattern[index % pattern.length] * amplitude) }
+}
+
+function getLabelSide(x: number, index: number): 'left' | 'right' {
+  if (x > 0) return 'left'
+  if (x < 0) return 'right'
+  return index % 2 === 0 ? 'right' : 'left'
+}
+
+function PathNode({
+  recipe,
+  isCompleted,
+  isLocked,
+  isCurrent,
+  index,
+  colors,
+  onToggle,
+  labelSide,
+}: {
+  recipe: Recipe
+  isCompleted: boolean
+  isLocked: boolean
+  isCurrent: boolean
+  index: number
+  colors: typeof COLOR_MAP.blue
+  onToggle: (id: string) => void
+  labelSide: 'left' | 'right'
+}) {
+  const [isPressed, setIsPressed] = useState(false)
+  const isCheckpoint = index % 3 === 0
+
+  const nodeSize = isCheckpoint ? 'w-24 h-24' : 'w-20 h-20'
+  const innerSize = isCheckpoint ? 'w-20 h-20' : 'w-16 h-16'
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (isLocked) return
+    e.preventDefault()
+    setIsPressed(true)
+    setTimeout(() => setIsPressed(false), 200)
+  }
+
+  const nodeContent = (
+    <div className="relative">
+      {/* The node circle */}
+      <div
+        className={`
+          ${nodeSize} rounded-full flex items-center justify-center
+          transition-all duration-150 relative
+          ${isPressed ? 'scale-90' : ''}
+          ${isLocked
+            ? 'bg-gray-700 shadow-[0_8px_0_0_rgb(55,65,81)] cursor-not-allowed'
+            : isCompleted
+              ? 'bg-green-500 shadow-[0_8px_0_0_rgb(22,101,52)]'
+              : `${colors.node} ${colors.shadow} ${colors.nodeHover} cursor-pointer`
+          }
+          ${isCurrent && !isCompleted ? `${colors.glow} ring-4 ${colors.ring} animate-pulse` : ''}
+        `}
+        onMouseDown={handleClick}
+        onMouseUp={() => setIsPressed(false)}
+      >
+        <div className={`
+          ${innerSize} rounded-full flex items-center justify-center
+          ${isLocked
+            ? 'bg-gray-600'
+            : isCompleted
+              ? 'bg-green-400'
+              : 'bg-white/10'
+          }
+        `}>
+          {isLocked ? (
+            <Lock className="size-8 text-gray-400" />
+          ) : isCompleted ? (
+            <Check className="size-10 text-white stroke-[3]" />
+          ) : isCheckpoint ? (
+            <Star className="size-10 text-white/90 fill-white/20" />
+          ) : (
+            <span className="text-4xl select-none">{recipe.emoji || '🍳'}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Stars above checkpoints */}
+      {isCheckpoint && isCompleted && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex gap-1">
+          <Star className="size-5 fill-yellow-400 text-yellow-400 drop-shadow-[0_0_4px_rgba(250,204,21,0.8)]" />
+          <Star className="size-6 fill-yellow-400 text-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.8)]" />
+          <Star className="size-5 fill-yellow-400 text-yellow-400 drop-shadow-[0_0_4px_rgba(250,204,21,0.8)]" />
+        </div>
+      )}
+
+      {/* START indicator */}
+      {isCurrent && !isCompleted && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2">
+          <div className={`px-4 py-1.5 rounded-full text-xs font-bold text-white ${colors.node} animate-bounce`}>
+            START
+          </div>
+        </div>
+      )}
+
+      {/* Side label */}
+      <div className={`absolute top-1/2 -translate-y-1/2 w-[120px] ${
+        labelSide === 'right'
+          ? 'left-full ml-4 text-left'
+          : 'right-full mr-4 text-right'
+      }`}>
+        <div className={`text-sm font-semibold leading-tight ${
+          isLocked ? 'text-gray-600' : isCompleted ? 'text-green-400' : 'text-gray-300'
+        }`}>
+          {recipe.title}
+        </div>
+        <div className={`text-xs mt-0.5 ${isLocked ? 'text-gray-700' : 'text-gray-500'}`}>
+          {recipe.time}
+        </div>
+        {!isLocked && !isCompleted && (
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(recipe.id) }}
+            className={`
+              mt-1.5 px-3 py-1 rounded-full text-xs font-bold
+              ${colors.node} text-white ${colors.nodeHover}
+              transition-all hover:scale-105 active:scale-95 shadow-lg
+            `}
+          >
+            COMPLETE
+          </button>
+        )}
+        {!isLocked && isCompleted && (
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(recipe.id) }}
+            className="mt-1.5 px-3 py-1 rounded-full text-xs font-medium text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-500 transition-all"
+          >
+            UNDO
+          </button>
+        )}
+      </div>
+    </div>
+  )
+
+  if (isLocked) return <>{nodeContent}</>
+
+  return (
+    <Link href={`/recipe/${recipe.id}`}>
+      {nodeContent}
+    </Link>
+  )
+}
+
+function ChefCharacter({ position, message, size = 'md', cookbookMode = false }: { position: 'left' | 'right'; message: string; size?: 'md' | 'lg'; cookbookMode?: boolean }) {
+  const sizeClass = size === 'lg' ? 'text-7xl' : 'text-5xl'
+  const bubbleBg = cookbookMode ? 'bg-white border-amber-200' : 'bg-gray-800 border-gray-700'
+  const textColor = cookbookMode ? 'text-stone-700' : 'text-gray-200'
+  const tailLeft = cookbookMode
+    ? 'left-[-8px] border-r-[8px] border-r-white border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent'
+    : 'left-[-8px] border-r-[8px] border-r-gray-800 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent'
+  const tailRight = cookbookMode
+    ? 'right-[-8px] border-l-[8px] border-l-white border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent'
+    : 'right-[-8px] border-l-[8px] border-l-gray-800 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent'
+
+  return (
+    <div className={`flex items-end gap-3 ${position === 'right' ? 'flex-row-reverse' : ''}`}>
+      <div className={`${sizeClass} select-none drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)]`}>👨‍🍳</div>
+      <div className={`${bubbleBg} rounded-2xl px-4 py-2.5 shadow-xl border max-w-[180px] relative`}>
+        <p className={`text-sm ${textColor} font-medium`}>{message}</p>
+        <div className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 ${position === 'right' ? tailRight : tailLeft}`} />
+      </div>
+    </div>
+  )
+}
+
+export function LearningPath({
+  recipes,
+  isRecipeCompleted,
+  onToggleCompletion,
+  skillColor,
+  skillIcon,
+  skillName,
+  mode = 'learn',
+  userPhotos,
+  onPhotoUpload,
+  uploadingRecipeId,
+}: LearningPathProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const containerWidth = useContainerWidth(wrapperRef)
+  const centerX = containerWidth / 2
+  const colors = COLOR_MAP[skillColor] || COLOR_MAP.blue
+  const completedCount = recipes.filter(r => isRecipeCompleted(r.id)).length
+  const allCompleted = completedCount === recipes.length && recipes.length > 0
+  const currentIndex = recipes.findIndex(r => !isRecipeCompleted(r.id))
+  const isCookbook = mode === 'cookbook'
+
+  // Chef messages config
+  const chefMessages = [
+    { afterIndex: 0, position: 'right' as const, message: "Nice work! You're on your way!" },
+    { afterIndex: Math.floor(recipes.length / 2), position: 'left' as const, message: "Halfway there! Keep cooking!" },
+  ]
+
+  // Calculate node positions with extra space for chef messages
+  const CHEF_EXTRA = 100
+  const START_Y = 100
+  const positions: { x: number; y: number }[] = []
+  let cumulativeY = START_Y
+  for (let i = 0; i < recipes.length; i++) {
+    positions.push({ x: getNodePosition(i, containerWidth).x, y: cumulativeY })
+    cumulativeY += NODE_SPACING
+    const hasChef = chefMessages.some(cm => cm.afterIndex === i && isRecipeCompleted(recipes[i].id))
+    if (hasChef) cumulativeY += CHEF_EXTRA
+  }
+
+  const trophyPos = { x: 0, y: cumulativeY }
+  const allPoints = [...positions, trophyPos]
+  const totalHeight = trophyPos.y + 350
+
+  return (
+    <div
+      ref={wrapperRef}
+      className={`flex flex-col items-center py-10 min-h-[70vh] rounded-3xl transition-colors duration-500 ${
+        isCookbook ? 'bg-amber-50' : ''
+      }`}
+    >
+      {/* Section banner */}
+      <div className={`w-full max-w-lg rounded-2xl p-5 mb-16 shadow-2xl border ${
+        isCookbook
+          ? 'bg-gradient-to-r from-amber-400 to-orange-400 border-amber-300/50'
+          : `bg-gradient-to-r ${colors.banner} border-white/10`
+      }`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-widest text-white/60">
+              {skillName}
+            </div>
+            <div className="text-2xl font-black text-white mt-1">
+              {completedCount}/{recipes.length} Completed
+            </div>
+          </div>
+          <div className="text-4xl">{skillIcon}</div>
+        </div>
+        <div className="mt-4 w-full bg-black/20 rounded-full h-3">
+          <div
+            className="bg-white rounded-full h-3 transition-all duration-700 ease-out"
+            style={{ width: `${recipes.length > 0 ? (completedCount / recipes.length) * 100 : 0}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Path area */}
+      <div className="relative mx-auto overflow-hidden" style={{ width: containerWidth, height: totalHeight }}>
+        {/* SVG continuous path through all nodes */}
+        <svg
+          className="absolute inset-0 pointer-events-none"
+          width={containerWidth}
+          height={totalHeight}
+          style={{ overflow: 'visible' }}
+        >
+          {allPoints.map((point, i) => {
+            if (i >= allPoints.length - 1) return null
+            const next = allPoints[i + 1]
+            const isComp = i < recipes.length && isRecipeCompleted(recipes[i].id)
+            const midY = (point.y + next.y) / 2
+            return (
+              <path
+                key={i}
+                d={`M ${centerX + point.x} ${point.y} C ${centerX + point.x} ${midY}, ${centerX + next.x} ${midY}, ${centerX + next.x} ${next.y}`}
+                fill="none"
+                stroke={
+                  isCookbook
+                    ? (isComp ? '#f59e0b' : '#d97706')
+                    : (isComp ? '#4ade80' : '#374151')
+                }
+                strokeWidth={4}
+                strokeDasharray={isComp ? undefined : '8 8'}
+                strokeLinecap="round"
+              />
+            )
+          })}
+        </svg>
+
+        {/* Nodes */}
+        {recipes.map((recipe, index) => {
+          const pos = positions[index]
+          const isCompleted = isRecipeCompleted(recipe.id)
+          const isLocked = index > 0 && !isRecipeCompleted(recipes[index - 1].id) && !isCompleted
+          const isCurrent = index === currentIndex
+          const labelSide = getLabelSide(pos.x, index)
+          const isCheckpoint = index % 3 === 0
+
+          return (
+            <div
+              key={recipe.id}
+              className="absolute"
+              style={{
+                left: centerX + pos.x,
+                top: pos.y,
+                transform: 'translate(-50%, -50%)',
+              }}
+            >
+              {isCookbook ? (
+                <PhotoNode
+                  recipeId={recipe.id}
+                  photoUrl={userPhotos?.get(recipe.id)}
+                  isLocked={isLocked}
+                  isCompleted={isCompleted}
+                  isCheckpoint={isCheckpoint}
+                  onUpload={onPhotoUpload || (() => {})}
+                  isUploading={uploadingRecipeId === recipe.id}
+                  labelSide={labelSide}
+                  recipe={{ title: recipe.title, time: recipe.time }}
+                />
+              ) : (
+                <PathNode
+                  recipe={recipe}
+                  isCompleted={isCompleted}
+                  isLocked={isLocked}
+                  isCurrent={isCurrent}
+                  index={index}
+                  colors={colors}
+                  onToggle={onToggleCompletion}
+                  labelSide={labelSide}
+                />
+              )}
+            </div>
+          )
+        })}
+
+        {/* Chef messages between nodes */}
+        {chefMessages.map((cm, i) => {
+          if (cm.afterIndex >= recipes.length) return null
+          if (!isRecipeCompleted(recipes[cm.afterIndex].id)) return null
+          const pos = positions[cm.afterIndex]
+          const nextPos = cm.afterIndex + 1 < positions.length
+            ? positions[cm.afterIndex + 1]
+            : trophyPos
+          const midY = (pos.y + nextPos.y) / 2
+
+          return (
+            <div
+              key={`chef-${i}`}
+              className="absolute"
+              style={{
+                left: centerX + (cm.position === 'right' ? 80 : -80),
+                top: midY,
+                transform: 'translate(-50%, -50%)',
+              }}
+            >
+              <ChefCharacter position={cm.position} message={cm.message} cookbookMode={isCookbook} />
+            </div>
+          )
+        })}
+
+        {/* Trophy */}
+        <div
+          className="absolute"
+          style={{ left: centerX, top: trophyPos.y, transform: 'translate(-50%, -50%)' }}
+        >
+          <div className="flex flex-col items-center">
+            <div className={`
+              w-28 h-28 rounded-full flex items-center justify-center
+              transition-all duration-500
+              ${allCompleted
+                ? 'bg-gradient-to-br from-yellow-400 to-amber-500 shadow-[0_0_40px_rgba(250,204,21,0.6),0_8px_0_0_rgb(161,98,7)] animate-bounce'
+                : isCookbook ? 'bg-amber-100 shadow-[0_8px_0_0_rgb(217,119,6)]' : 'bg-gray-800 shadow-[0_8px_0_0_rgb(31,41,55)]'
+              }
+            `}>
+              <div className={`w-24 h-24 rounded-full flex items-center justify-center ${allCompleted ? 'bg-yellow-300/30' : isCookbook ? 'bg-amber-50' : 'bg-gray-700'}`}>
+                <Crown className={`size-12 ${allCompleted ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]' : isCookbook ? 'text-amber-400' : 'text-gray-500'}`} />
+              </div>
+            </div>
+
+            <div className="mt-5 text-center">
+              {allCompleted ? (
+                <div className="space-y-2">
+                  <div className="flex gap-2 justify-center">
+                    <Star className="size-6 fill-yellow-400 text-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.8)]" />
+                    <Star className="size-7 fill-yellow-400 text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]" />
+                    <Star className="size-6 fill-yellow-400 text-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.8)]" />
+                  </div>
+                  <p className="text-xl font-black text-yellow-400">SKILL MASTERED!</p>
+                  <p className={`text-sm ${isCookbook ? 'text-stone-500' : 'text-gray-400'}`}>All {recipes.length} recipes completed</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <p className={`text-sm font-bold ${isCookbook ? 'text-stone-500' : 'text-gray-500'}`}>COMPLETE ALL RECIPES</p>
+                  <p className={`text-xs ${isCookbook ? 'text-stone-400' : 'text-gray-600'}`}>to master this skill</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* End chef character */}
+        <div
+          className="absolute"
+          style={{ left: centerX, top: trophyPos.y + 220, transform: 'translate(-50%, 0)' }}
+        >
+          <ChefCharacter
+            position="left"
+            message={allCompleted ? "You're a true chef now!" : "I believe in you! Keep going!"}
+            size="lg"
+            cookbookMode={isCookbook}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}

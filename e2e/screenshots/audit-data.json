@@ -1,0 +1,16 @@
+{
+  "totalButtons": 4,
+  "totalLinks": 1,
+  "buttonTexts": [
+    "Sign In",
+    "View all",
+    "(no text)",
+    "(no text)"
+  ],
+  "linkTexts": [
+    "View all"
+  ],
+  "linkHrefs": [
+    "/recipes"
+  ]
+}

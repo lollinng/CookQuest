@@ -1,0 +1,143 @@
+{
+  "agents": {
+    "enabled": true,
+    "intentionThreshold": 1,
+    "pipelineTimeout": 1800000,
+    "logLevel": "info"
+  },
+  "productManager": {
+    "enabled": true,
+    "questionLimit": 5,
+    "requirementSources": ["prompt", "context", "codebase"],
+    "acceptanceCriteriaTemplate": "given-when-then"
+  },
+  "architect": {
+    "enabled": true,
+    "defaultArchitecture": "layered",
+    "patterns": ["repository", "service", "component"],
+    "fileNamingConvention": "kebab-case",
+    "componentNamingConvention": "PascalCase"
+  },
+  "testEngineer": {
+    "enabled": true,
+    "strategy": "TDD",
+    "frameworks": {
+      "unit": "jest",
+      "integration": "testing-library",
+      "e2e": "cypress"
+    },
+    "coverageTargets": {
+      "statements": 90,
+      "branches": 85,
+      "functions": 90,
+      "lines": 90
+    },
+    "testTypes": ["unit", "integration", "e2e"]
+  },
+  "developer": {
+    "enabled": true,
+    "codeStyle": {
+      "indentation": 2,
+      "quotes": "single",
+      "semicolons": true,
+      "trailingComma": "es5"
+    },
+    "patterns": ["DRY", "SOLID", "composition"],
+    "securityChecks": true,
+    "performanceOptimizations": true
+  },
+  "codeReviewer": {
+    "enabled": true,
+    "qualityThreshold": 8.0,
+    "strictMode": false,
+    "checks": {
+      "security": true,
+      "performance": true,
+      "accessibility": true,
+      "bestPractices": true,
+      "codeStyle": true
+    },
+    "severityLevels": ["low", "medium", "high"],
+    "autoApproveScore": 9.5
+  },
+  "devopsEngineer": {
+    "enabled": true,
+    "deploymentStrategy": "blue-green",
+    "environments": ["staging", "production"],
+    "monitoring": {
+      "metrics": true,
+      "logs": true,
+      "alerts": true
+    },
+    "rollback": {
+      "automatic": false,
+      "triggerThreshold": {
+        "errorRate": 0.05,
+        "responseTime": 5000
+      }
+    }
+  },
+  "featureKeywords": [
+    "make", "build", "create", "add", "implement", "develop",
+    "set up", "setup", "configure", "enable", "integrate",
+    "introduce", "write", "generate", "produce", "prepare", "establish",
+    "add feature", "new feature", "create feature", "feature request",
+    "enhancement", "add functionality",
+    "docker", "containerize", "deploy", "ci/cd", "pipeline",
+    "kubernetes", "compose", "dockerfile", "hosting", "server setup",
+    "user story", "as a user", "I want", "I need", "should be able to",
+    "requirements", "specification", "acceptance criteria"
+  ],
+  "conversationKeywords": [
+    "explain", "how does", "what is", "why", "help", "show me",
+    "find", "search", "debug", "fix bug", "fix error", "error",
+    "issue", "broken", "not working",
+    "refactor", "optimize", "clean up", "documentation", "rename"
+  ],
+  "pipeline": {
+    "steps": [
+      {
+        "name": "product-manager",
+        "required": true,
+        "timeout": 30000
+      },
+      {
+        "name": "architect", 
+        "required": true,
+        "timeout": 60000
+      },
+      {
+        "name": "test-engineer",
+        "required": true, 
+        "timeout": 120000
+      },
+      {
+        "name": "developer",
+        "required": true,
+        "timeout": 300000
+      },
+      {
+        "name": "code-reviewer",
+        "required": true,
+        "timeout": 60000,
+        "retryOnFailure": true,
+        "maxRetries": 2
+      },
+      {
+        "name": "devops-engineer",
+        "required": true,
+        "timeout": 90000
+      }
+    ],
+    "parallelSteps": [],
+    "skipOnError": false,
+    "continueOnWarnings": true
+  },
+  "output": {
+    "format": "detailed",
+    "includeMetrics": true,
+    "generateSummary": true,
+    "createPullRequest": true,
+    "logProgress": true
+  }
+}

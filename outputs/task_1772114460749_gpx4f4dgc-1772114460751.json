@@ -1,0 +1,25 @@
+{
+  "task": {
+    "id": "task_1772114460749_gpx4f4dgc",
+    "status": "done",
+    "priority": 1,
+    "createdAt": "2026-02-26T14:01:00.749Z",
+    "assignedTo": "sim_agent_001",
+    "assignedAt": "2026-02-26T14:01:00.751Z",
+    "completedAt": "2026-02-26T14:01:00.751Z",
+    "retryCount": 0,
+    "maxRetries": 3,
+    "title": "Feature: Notifications",
+    "type": "PRODUCT_FEATURE",
+    "prompt": "Create notification system",
+    "result": {
+      "success": true,
+      "iteration": 3
+    }
+  },
+  "result": {
+    "success": true,
+    "iteration": 3
+  },
+  "completedAt": "2026-02-26T14:01:00.751Z"
+}

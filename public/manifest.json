@@ -1,0 +1,25 @@
+{
+  "name": "CookQuest - Learn Cooking Skills",
+  "short_name": "CookQuest",
+  "description": "Level up your cooking skills through interactive recipes and gamified learning",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF7ED",
+  "theme_color": "#EA580C",
+  "orientation": "portrait-primary",
+  "categories": ["food", "education", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

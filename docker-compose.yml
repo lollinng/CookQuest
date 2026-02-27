@@ -1,0 +1,118 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cookquest-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cookquest}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cookquest}
+      POSTGRES_DB: ${POSTGRES_DB:-cookquest}
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-cookquest}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 128M
+
+  redis:
+    image: redis:7-alpine
+    container_name: cookquest-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-cookquest_redis}
+    networks:
+      - backend
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-cookquest_redis}', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+          cpus: '0.5'
+
+  cookquest-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cookquest-web
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3003/api/v1}
+    depends_on:
+      - cookquest-api
+    networks:
+      - frontend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 128M
+
+  cookquest-api:
+    build:
+      context: ./backend/node-services/api-server
+      dockerfile: Dockerfile
+    container_name: cookquest-api
+    restart: unless-stopped
+    ports:
+      - '3003:3003'
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3003
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-cookquest}:${POSTGRES_PASSWORD:-cookquest}@postgres:5432/${POSTGRES_DB:-cookquest}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-cookquest_redis}@redis:6379
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - SHARED_DIR=/shared
+    volumes:
+      - ./backend/shared:/shared:ro
+      - api_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 128M
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true  # No external access — only API can reach DB/Redis
+
+volumes:
+  pgdata:
+  api_uploads:
