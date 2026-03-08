@@ -73,7 +73,7 @@ export function UserMenu() {
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent className="w-64 bg-white shadow-lg border" align="end" sideOffset={8}>
+      <DropdownMenuContent className="w-64 bg-cq-surface shadow-lg border border-cq-border" align="end" sideOffset={8}>
         {/* User info header */}
         <DropdownMenuLabel className="font-normal">
           <div className="flex items-center gap-3 py-1">
@@ -83,28 +83,28 @@ export function UserMenu() {
               </AvatarFallback>
             </Avatar>
             <div className="flex flex-col gap-0.5">
-              <p className="text-sm font-semibold leading-none text-orange-900">
+              <p className="text-sm font-semibold leading-none text-cq-text-primary">
                 {displayName}
               </p>
-              <p className="text-xs leading-none text-muted-foreground">
+              <p className="text-xs leading-none text-cq-text-secondary">
                 {user.email}
               </p>
             </div>
           </div>
         </DropdownMenuLabel>
 
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="bg-cq-border" />
 
         {/* Profile stats */}
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-xs text-muted-foreground uppercase tracking-wider">
+          <DropdownMenuLabel className="text-xs text-cq-text-muted uppercase tracking-wider">
             Your Journey
           </DropdownMenuLabel>
           <div className="px-2 py-2">
             <div className="flex items-center gap-3 text-sm">
               <div className="flex items-center gap-1.5">
                 <ChefHatIcon className="h-4 w-4 text-orange-500" />
-                <span className="text-muted-foreground">
+                <span className="text-cq-text-secondary">
                   Level {user.profile?.skill_level || 'Beginner'}
                 </span>
               </div>
@@ -112,28 +112,28 @@ export function UserMenu() {
           </div>
         </DropdownMenuGroup>
 
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="bg-cq-border" />
 
         {/* Actions */}
         <DropdownMenuGroup>
           {isAdmin && (
-            <DropdownMenuItem asChild className="cursor-pointer">
+            <DropdownMenuItem asChild className="cursor-pointer text-cq-text-primary focus:bg-cq-surface-hover focus:text-cq-text-primary">
               <Link href="/admin">
                 <ShieldIcon className="h-4 w-4" />
                 <span>Admin Panel</span>
               </Link>
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem className="cursor-pointer">
+          <DropdownMenuItem className="cursor-pointer text-cq-text-primary focus:bg-cq-surface-hover focus:text-cq-text-primary">
             <UserIcon className="h-4 w-4" />
             <span>Profile</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
 
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="bg-cq-border" />
 
         <DropdownMenuItem
-          className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+          className="cursor-pointer text-red-400 focus:text-red-400 focus:bg-cq-surface-hover"
           onClick={handleLogout}
           disabled={isLoggingOut}
         >
