@@ -89,9 +89,20 @@ export function useFollowUser() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (userId: number) => apiFollowUser(userId),
+    mutationFn: async (userId: number) => {
+      try {
+        return await apiFollowUser(userId);
+      } catch (err: any) {
+        // 409 = already following — treat as success
+        if (err?.status === 409 || err?.message?.includes('Already following')) {
+          return { following: true };
+        }
+        throw err;
+      }
+    },
     onMutate: async (userId) => {
       await queryClient.cancelQueries({ queryKey: socialKeys.profile(userId) })
+      await queryClient.cancelQueries({ queryKey: socialKeys.all })
 
       const previousProfile = queryClient.getQueryData<UserProfile>(socialKeys.profile(userId))
 
@@ -104,18 +115,27 @@ export function useFollowUser() {
         })
       }
 
+      // Optimistic update on search results
+      queryClient.setQueriesData<FollowUser[]>(
+        { queryKey: [...socialKeys.all, 'search'] },
+        (old) => old?.map((u) => u.id === userId ? { ...u, isFollowing: true } : u)
+      )
+
       return { previousProfile }
     },
     onError: (_err, userId, context) => {
       if (context?.previousProfile) {
         queryClient.setQueryData(socialKeys.profile(userId), context.previousProfile)
       }
+      // Revert search results on real errors
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'search'] })
     },
     onSettled: (_data, _err, userId) => {
       queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
       queryClient.invalidateQueries({ queryKey: socialKeys.profile(userId) })
       queryClient.invalidateQueries({ queryKey: socialKeys.followers(userId) })
       queryClient.invalidateQueries({ queryKey: socialKeys.following(userId) })
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'search'] })
     },
   })
 }
@@ -124,9 +144,20 @@ export function useUnfollowUser() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (userId: number) => apiUnfollowUser(userId),
+    mutationFn: async (userId: number) => {
+      try {
+        return await apiUnfollowUser(userId);
+      } catch (err: any) {
+        // 404 = not following — treat as success
+        if (err?.status === 404 || err?.message?.includes('Not following')) {
+          return { following: false };
+        }
+        throw err;
+      }
+    },
     onMutate: async (userId) => {
       await queryClient.cancelQueries({ queryKey: socialKeys.profile(userId) })
+      await queryClient.cancelQueries({ queryKey: socialKeys.all })
 
       const previousProfile = queryClient.getQueryData<UserProfile>(socialKeys.profile(userId))
 
@@ -138,18 +169,26 @@ export function useUnfollowUser() {
         })
       }
 
+      // Optimistic update on search results
+      queryClient.setQueriesData<FollowUser[]>(
+        { queryKey: [...socialKeys.all, 'search'] },
+        (old) => old?.map((u) => u.id === userId ? { ...u, isFollowing: false } : u)
+      )
+
       return { previousProfile }
     },
     onError: (_err, userId, context) => {
       if (context?.previousProfile) {
         queryClient.setQueryData(socialKeys.profile(userId), context.previousProfile)
       }
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'search'] })
     },
     onSettled: (_data, _err, userId) => {
       queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
       queryClient.invalidateQueries({ queryKey: socialKeys.profile(userId) })
       queryClient.invalidateQueries({ queryKey: socialKeys.followers(userId) })
       queryClient.invalidateQueries({ queryKey: socialKeys.following(userId) })
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'search'] })
     },
   })
 }
