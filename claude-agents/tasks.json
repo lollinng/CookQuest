@@ -1395,5 +1395,59 @@
     "completedAt": "2026-03-09T18:45:00.000Z",
     "retryCount": 0,
     "maxRetries": 3
+  },
+  {
+    "id": "task_135",
+    "title": "[Backend] Seed 3 community users with posts, progress & mutual follows",
+    "status": "done",
+    "priority": 5,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 App feels empty with only admin account\n\n### What's wrong\nThe app has no seed users besides admin. The feed, profiles, and social features feel dead on first launch.\n\n### What to build\nAdd migration `014_seed_community_users` in `database.ts` that inserts:\n\n**3 Users** (all `is_allowed = TRUE`, bcrypt-hashed passwords):\n1. Maya Chen (`maya@cookquest.dev` / `Maya123!`) \u2014 Indian Cuisine + Basics focus\n2. Jake Morrison (`jake@cookquest.dev` / `Jake123!`) \u2014 Heat Control + Air Fryer focus\n3. Sophia Rodriguez (`sophia@cookquest.dev` / `Sophia123!`) \u2014 Flavor Building + Basics focus\n\n**Recipe Progress** (user_recipe_progress, status='completed'):\n- Maya: boiled-egg, make-rice, chop-onion, dal-tadka, butter-chicken, jeera-rice (6)\n- Jake: boiled-egg, make-rice, sear-steak, stir-fry, air-fryer-fries, air-fryer-chicken-wings (6)\n- Sophia: boiled-egg, chop-onion, make-rice, make-sauce, season-taste, herb-pairing, spice-blend (7)\n\n**Skill Progress** (user_skill_progress):\n- Maya: basic-cooking 3/3 proficient, indian-cuisine 3/7 developing\n- Jake: basic-cooking 2/3 developing, heat-control 2/5 developing, air-fryer 2/6 developing\n- Sophia: basic-cooking 3/3 proficient, flavor-building 4/8 developing\n\n**Posts** (user_posts, type='recipe_completed', with recipe_id + caption):\n- Maya (4): dal-tadka, jeera-rice, butter-chicken, boiled-egg posts\n- Jake (3): sear-steak, air-fryer-chicken-wings, stir-fry posts\n- Sophia (4): make-sauce, season-taste, herb-pairing, spice-blend posts\n\n**Follows** (user_follows): All 3 follow each other (6 rows)\n**Counts**: Set followers_count=2, following_count=2 for all 3\n\nUse staggered created_at/completed_at dates over past 2 weeks for realism.\nUse ON CONFLICT DO NOTHING on all inserts for idempotency.\n\n### Subtasks\n1. Generate bcrypt hashes for 3 passwords\n2. Write migration 014_seed_community_users in database.ts\n3. Insert users with display_name, avatar_url, is_allowed\n4. Insert user_recipe_progress rows\n5. Insert user_skill_progress rows\n6. Insert user_posts with captions\n7. Insert user_follows (6 rows)\n8. Update followers_count/following_count\n9. Test: docker compose down -v && docker compose up, verify data\n\n### Depends on\nnone\n\n### Acceptance criteria\n- Given a fresh DB, when migrations run, then 3 new users exist with correct passwords\n- Given Maya's profile, when visited, then shows 6 completed recipes across 2 skills\n- Given the feed page, when loaded, then shows 11 posts from 3 users\n- Given any seed user, when viewing followers, then shows 2 followers\n- Given `maya@cookquest.dev` / `Maya123!`, when logging in, then auth succeeds\n- All inserts use ON CONFLICT DO NOTHING (idempotent, re-runnable)\n\n### Files to create/modify\n- `backend/node-services/api-server/src/services/database.ts` \u2014 add migration 014",
+    "files": [
+      "backend/node-services/api-server/src/services/database.ts"
+    ],
+    "createdAt": "2026-03-09T19:00:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T20:18:41.179698+00:00",
+    "completedAt": "2026-03-08T20:20:25.370504+00:00",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_135",
+    "title": "[Backend] Add world feed endpoint",
+    "status": "done",
+    "priority": 5,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Add GET /api/v1/feed/world endpoint for global feed\n\n### What's wrong\nThe feed currently only shows posts from followed users. There is no way to browse all posts globally.\n\n### What to build\n\n**1. New DB method in `database.ts`:**\n```ts\nasync getWorldFeed(limit: number = 30): Promise<any[]> {\n  const { rows } = await this.pool.query(\n    `SELECT\n      up.id, up.user_id, u.username, u.display_name, u.avatar_url,\n      up.post_type, up.recipe_id, r.title AS recipe_title, r.image_url AS recipe_image_url,\n      up.photo_url, up.caption, COALESCE(up.comments_count, 0) AS comments_count, up.created_at\n     FROM user_posts up\n     JOIN users u ON u.id = up.user_id\n     LEFT JOIN recipes r ON r.id = up.recipe_id\n     ORDER BY up.created_at DESC\n     LIMIT $1`,\n    [limit]\n  );\n  return rows;\n}\n```\n\n**2. New route in `social.ts`:**\n```ts\n// GET /api/v1/feed/world?limit=30 \u2014 Latest posts from all users\nrouter.get('/feed/world',\n  authMiddleware,\n  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {\n    const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 30, 1), 50);\n    const posts = await DatabaseService.getWorldFeed(limit);\n    res.json({ success: true, data: posts.map(mapPost) });\n  })\n);\n```\n\n**IMPORTANT:** Register `/feed/world` BEFORE the existing `/feed` route to avoid Express treating 'world' as a route param.\n\n### Subtasks\n1. Add `getWorldFeed(limit)` method to DatabaseService in database.ts\n2. Add `GET /feed/world` route in social.ts (before `/feed`)\n3. Test with curl: `curl -H 'Authorization: Bearer <token>' http://localhost:3003/api/v1/feed/world?limit=30`\n\n### Depends on\nnone\n\n### Acceptance criteria\n- Given any authenticated user, when they GET /api/v1/feed/world, then they receive up to 30 latest posts from ALL users ordered by created_at DESC\n- Given a limit query param, when limit=10, then only 10 posts are returned\n- Given limit > 50, when the request is made, then limit is capped at 50\n- Response shape matches existing feed endpoint (same mapPost transform)\n\n### Files to create/modify\n- `backend/node-services/api-server/src/services/database.ts` (add getWorldFeed method)\n- `backend/node-services/api-server/src/routes/social.ts` (add /feed/world route)",
+    "files": [
+      "backend/node-services/api-server/src/services/database.ts",
+      "backend/node-services/api-server/src/routes/social.ts"
+    ],
+    "createdAt": "2026-03-09T00:00:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T20:20:25.370504+00:00",
+    "completedAt": "2026-03-08T20:20:25.370504+00:00",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_136",
+    "title": "[Frontend] Feed toggle UI - World vs Friends",
+    "status": "done",
+    "priority": 5,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Add Instagram Reels-style toggle between World and Friends feed\n\n### What's wrong\nThe feed page only shows posts from followed users. Users need a way to discover posts from the wider community.\n\n### What to build\n\n**1. New API function in `lib/api/social.ts`:**\n```ts\nexport async function getWorldFeed(limit?: number): Promise<UserPost[]> {\n  const params = limit ? `?limit=${limit}` : '';\n  return apiClient<UserPost[]>(`/feed/world${params}`);\n}\n```\n\n**2. New hook in `hooks/use-social.ts`:**\n```ts\nexport function useWorldFeed(limit = 30) {\n  return useQuery({\n    queryKey: ['feed', 'world', limit],\n    queryFn: () => getWorldFeed(limit),\n    staleTime: 60_000,\n    gcTime: 5 * 60_000,\n  });\n}\n```\n\n**3. Updated feed page (`app/feed/page.tsx`):**\n- Add state: `const [tab, setTab] = useState<'world' | 'friends'>('world')`\n- Default to 'world' tab (more content for new users who haven't followed anyone yet)\n- Toggle UI: two pill buttons in a rounded container between the heading and posts\n- Active pill: `bg-cq-primary text-white`\n- Inactive pill: `text-cq-text-secondary hover:text-cq-text-primary`\n- Conditionally render posts from `useWorldFeed()` or `useFeed()` based on active tab\n- Friends tab keeps existing empty state with 'Find people to follow' CTA\n- World tab shows 'No posts yet. Be the first to share!' if empty\n\n**Toggle UI:**\n```tsx\n<div className=\"flex items-center bg-cq-surface border border-cq-border rounded-full p-1\">\n  <button\n    onClick={() => setTab('world')}\n    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${\n      tab === 'world' ? 'bg-cq-primary text-white' : 'text-cq-text-secondary hover:text-cq-text-primary'\n    }`}\n  >\n    World\n  </button>\n  <button\n    onClick={() => setTab('friends')}\n    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${\n      tab === 'friends' ? 'bg-cq-primary text-white' : 'text-cq-text-secondary hover:text-cq-text-primary'\n    }`}\n  >\n    Friends\n  </button>\n</div>\n```\n\n### Subtasks\n1. Add `getWorldFeed()` function to `lib/api/social.ts`\n2. Add `useWorldFeed()` hook to `hooks/use-social.ts`\n3. Update `app/feed/page.tsx` with toggle state and conditional rendering\n4. Both hooks should be called unconditionally (React rules of hooks) \u2014 just conditionally render the results\n\n### Depends on\nnone (self-contained frontend \u2014 API contract defined, handles loading/error states independently)\n\n### Acceptance criteria\n- Given an authenticated user on /feed, when the page loads, then they see the World tab active by default with latest 30 global posts\n- Given the user clicks 'Friends', when toggled, then only posts from followed users are shown\n- Given the user toggles back to 'World', when clicked, then global posts are shown again\n- Given no posts exist in world feed, when viewed, then a friendly empty state is shown\n- Given no followed users have posts, when Friends tab is active, then the existing 'Find people to follow' CTA is shown\n- Toggle is a rounded pill design consistent with CookQuest design system\n\n### Files to create/modify\n- `lib/api/social.ts` (add getWorldFeed function)\n- `hooks/use-social.ts` (add useWorldFeed hook)\n- `app/feed/page.tsx` (add toggle UI and conditional rendering)",
+    "files": [
+      "lib/api/social.ts",
+      "hooks/use-social.ts",
+      "app/feed/page.tsx"
+    ],
+    "createdAt": "2026-03-09T00:00:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T20:20:25.370504+00:00",
+    "completedAt": "2026-03-08T20:20:25.370504+00:00",
+    "retryCount": 0,
+    "maxRetries": 3
   }
 ]

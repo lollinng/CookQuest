@@ -8,6 +8,7 @@ import {
   getUserFollowing,
   searchUsers,
   getFeed,
+  getWorldFeed,
   getUserPosts,
   getPostComments,
   addComment as apiAddComment,
@@ -20,6 +21,7 @@ import {
 export const socialKeys = {
   all: ['social'] as const,
   feed: () => [...socialKeys.all, 'feed'] as const,
+  worldFeed: () => [...socialKeys.all, 'feed', 'world'] as const,
   profile: (userId: number) => [...socialKeys.all, 'profile', userId] as const,
   followers: (userId: number) => [...socialKeys.all, 'followers', userId] as const,
   following: (userId: number) => [...socialKeys.all, 'following', userId] as const,
@@ -35,6 +37,15 @@ export function useFeed(limit: number = 30) {
   return useQuery({
     queryKey: [...socialKeys.feed(), limit],
     queryFn: () => getFeed(limit),
+    staleTime: 1 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  })
+}
+
+export function useWorldFeed(limit: number = 30) {
+  return useQuery({
+    queryKey: [...socialKeys.worldFeed(), limit],
+    queryFn: () => getWorldFeed(limit),
     staleTime: 1 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
   })
@@ -122,6 +133,7 @@ export function useAddComment() {
     onSuccess: (_data, { postId }) => {
       queryClient.invalidateQueries({ queryKey: socialKeys.comments(postId) })
       queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
+      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
       // Invalidate all user posts queries (we don't know which user's post it is)
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
     },
@@ -138,6 +150,7 @@ export function useDeleteComment() {
     onSuccess: (_data, { postId }) => {
       queryClient.invalidateQueries({ queryKey: socialKeys.comments(postId) })
       queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
+      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
     },
   })
@@ -190,6 +203,7 @@ export function useFollowUser() {
     },
     onSettled: (_data, _err, userId) => {
       queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
+      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
       queryClient.invalidateQueries({ queryKey: socialKeys.profile(userId) })
       queryClient.invalidateQueries({ queryKey: socialKeys.followers(userId) })
       queryClient.invalidateQueries({ queryKey: socialKeys.following(userId) })
@@ -243,6 +257,7 @@ export function useUnfollowUser() {
     },
     onSettled: (_data, _err, userId) => {
       queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
+      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
       queryClient.invalidateQueries({ queryKey: socialKeys.profile(userId) })
       queryClient.invalidateQueries({ queryKey: socialKeys.followers(userId) })
       queryClient.invalidateQueries({ queryKey: socialKeys.following(userId) })
@@ -259,6 +274,7 @@ export function useUploadAvatar() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'profile'] })
       queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
+      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
     },
   })

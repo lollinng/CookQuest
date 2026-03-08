@@ -33,6 +33,12 @@ export async function getFeed(limit?: number): Promise<UserPost[]> {
   })
 }
 
+export async function getWorldFeed(limit?: number): Promise<UserPost[]> {
+  return apiClient<UserPost[]>('/feed/world', {
+    params: limit ? { limit: String(limit) } : undefined,
+  })
+}
+
 export async function getUserPosts(userId: number): Promise<UserPost[]> {
   return apiClient<UserPost[]>(`/users/${userId}/posts`)
 }

@@ -255,6 +255,20 @@ function mapPost(row: any) {
   }
 }
 
+// GET /api/v1/feed/world?limit=30 — Latest posts from all users
+router.get('/feed/world',
+  authMiddleware,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 30, 1), 50)
+    const posts = await DatabaseService.getWorldFeed(limit)
+
+    res.json({
+      success: true,
+      data: posts.map(mapPost)
+    })
+  })
+)
+
 // GET /api/v1/feed?limit=30 — Activity feed from followed users
 router.get('/feed',
   authMiddleware,

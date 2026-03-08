@@ -776,6 +776,128 @@ class DatabaseServiceClass {
       logger.info('Post comments migration applied')
     }
 
+    // Seed community users with posts, progress & mutual follows (migration 014) — dev only
+    const seedUsersApplied = await this.isMigrationApplied('014_seed_community_users')
+    if (!seedUsersApplied && process.env.NODE_ENV !== 'production') {
+      // Insert 3 seed users (ON CONFLICT ensures idempotency)
+      await this.pool.query(`
+        INSERT INTO users (email, username, password_hash, display_name, is_active, email_verified, is_allowed, created_at)
+        VALUES
+          ('maya@cookquest.dev', 'maya-chen', '$2a$12$qIU65SWepwAu8JXaH8EJ6uu/Z6WvD7hmeHkO9BCWr6D1ob0wNSZKm', 'Maya Chen', TRUE, TRUE, TRUE, NOW() - INTERVAL '14 days'),
+          ('jake@cookquest.dev', 'jake-morrison', '$2a$12$zwKgxJBheNF58O7JzOEkvOun0Sh2nOlhzlwOjKGTw08bnR5M9pyK.', 'Jake Morrison', TRUE, TRUE, TRUE, NOW() - INTERVAL '12 days'),
+          ('sophia@cookquest.dev', 'sophia-rodriguez', '$2a$12$nPrdcex/t84E0oUcr4jgkOQMXk4PhLyXgeBZpIYfNEuvihMVfmsyK', 'Sophia Rodriguez', TRUE, TRUE, TRUE, NOW() - INTERVAL '13 days')
+        ON CONFLICT (email) DO NOTHING;
+      `)
+
+      // Maya's recipe progress (basic-cooking + indian-cuisine)
+      await this.pool.query(`
+        INSERT INTO user_recipe_progress (user_id, recipe_id, status, completed_at, attempts)
+        VALUES
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'boiled-egg', 'completed', NOW() - INTERVAL '13 days', 2),
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'make-rice', 'completed', NOW() - INTERVAL '12 days', 1),
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'chop-onion', 'completed', NOW() - INTERVAL '11 days', 1),
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'dal-tadka', 'completed', NOW() - INTERVAL '8 days', 2),
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'butter-chicken', 'completed', NOW() - INTERVAL '5 days', 3),
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'jeera-rice', 'completed', NOW() - INTERVAL '2 days', 1)
+        ON CONFLICT (user_id, recipe_id) DO NOTHING;
+      `)
+
+      // Jake's recipe progress (basic-cooking + heat-control + air-fryer)
+      await this.pool.query(`
+        INSERT INTO user_recipe_progress (user_id, recipe_id, status, completed_at, attempts)
+        VALUES
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'boiled-egg', 'completed', NOW() - INTERVAL '11 days', 1),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'make-rice', 'completed', NOW() - INTERVAL '10 days', 2),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'sear-steak', 'completed', NOW() - INTERVAL '8 days', 3),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'stir-fry', 'completed', NOW() - INTERVAL '5 days', 2),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'air-fryer-fries', 'completed', NOW() - INTERVAL '3 days', 1),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'air-fryer-chicken-wings', 'completed', NOW() - INTERVAL '1 day', 2)
+        ON CONFLICT (user_id, recipe_id) DO NOTHING;
+      `)
+
+      // Sophia's recipe progress (basic-cooking + flavor-building)
+      await this.pool.query(`
+        INSERT INTO user_recipe_progress (user_id, recipe_id, status, completed_at, attempts)
+        VALUES
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'boiled-egg', 'completed', NOW() - INTERVAL '12 days', 1),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'chop-onion', 'completed', NOW() - INTERVAL '11 days', 1),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'make-rice', 'completed', NOW() - INTERVAL '10 days', 1),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'make-sauce', 'completed', NOW() - INTERVAL '8 days', 2),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'season-taste', 'completed', NOW() - INTERVAL '6 days', 1),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'herb-pairing', 'completed', NOW() - INTERVAL '4 days', 2),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'spice-blend', 'completed', NOW() - INTERVAL '2 days', 1)
+        ON CONFLICT (user_id, recipe_id) DO NOTHING;
+      `)
+
+      // Skill progress for all 3 users
+      await this.pool.query(`
+        INSERT INTO user_skill_progress (user_id, skill_id, completed_recipes, total_recipes, mastery_level)
+        VALUES
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'basic-cooking', 3, 3, 'proficient'),
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'indian-cuisine', 3, 7, 'developing'),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'basic-cooking', 2, 3, 'developing'),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'heat-control', 2, 5, 'developing'),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'air-fryer', 2, 6, 'developing'),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'basic-cooking', 3, 3, 'proficient'),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'flavor-building', 4, 8, 'developing')
+        ON CONFLICT (user_id, skill_id) DO NOTHING;
+      `)
+
+      // Maya's posts (4 posts)
+      await this.pool.query(`
+        INSERT INTO user_posts (user_id, post_type, recipe_id, caption, created_at)
+        VALUES
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'recipe_completed', 'boiled-egg', 'Started with the basics — my boiled eggs are now consistently perfect! Small wins matter.', NOW() - INTERVAL '13 days'),
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'recipe_completed', 'dal-tadka', 'First time making dal tadka from scratch! The tempering was so satisfying. My kitchen smelled incredible all evening.', NOW() - INTERVAL '8 days'),
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'recipe_completed', 'butter-chicken', 'Butter chicken attempt #2 and honestly this is way better than takeout. The secret is patience with the sauce!', NOW() - INTERVAL '5 days'),
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), 'recipe_completed', 'jeera-rice', 'Finally nailed the perfect jeera rice. Toasting the cumin seeds first makes all the difference.', NOW() - INTERVAL '2 days')
+        ;
+      `)
+
+      // Jake's posts (3 posts)
+      await this.pool.query(`
+        INSERT INTO user_posts (user_id, post_type, recipe_id, caption, created_at)
+        VALUES
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'recipe_completed', 'sear-steak', 'Got the perfect sear on my steak! Medium-rare, just how I like it. Cast iron pan is the move.', NOW() - INTERVAL '8 days'),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'recipe_completed', 'stir-fry', 'Mastering the wok for stir-fry. High heat is everything — veggies come out crispy not soggy now!', NOW() - INTERVAL '5 days'),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), 'recipe_completed', 'air-fryer-chicken-wings', 'Air fryer chicken wings are a game changer. Crispy without the oil and ready in 25 minutes!', NOW() - INTERVAL '1 day')
+        ;
+      `)
+
+      // Sophia's posts (4 posts)
+      await this.pool.query(`
+        INSERT INTO user_posts (user_id, post_type, recipe_id, caption, created_at)
+        VALUES
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'recipe_completed', 'make-sauce', 'Made my first sauce from scratch — a rich tomato basil that simmered for hours. Never going back to jarred!', NOW() - INTERVAL '8 days'),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'recipe_completed', 'season-taste', 'Learning to season by taste instead of just following measurements. Total game changer for my cooking confidence.', NOW() - INTERVAL '6 days'),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'recipe_completed', 'herb-pairing', 'Herb pairing experiment: basil + thyme in a roasted veggie dish. The flavors just sing together!', NOW() - INTERVAL '4 days'),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), 'recipe_completed', 'spice-blend', 'Custom spice blend day! Made a smoky paprika mix that I have been putting on literally everything.', NOW() - INTERVAL '2 days')
+        ;
+      `)
+
+      // Mutual follows — all 3 users follow each other (6 rows)
+      await this.pool.query(`
+        INSERT INTO user_follows (follower_id, following_id, created_at)
+        VALUES
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), (SELECT id FROM users WHERE email='jake@cookquest.dev'), NOW() - INTERVAL '10 days'),
+          ((SELECT id FROM users WHERE email='maya@cookquest.dev'), (SELECT id FROM users WHERE email='sophia@cookquest.dev'), NOW() - INTERVAL '10 days'),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), (SELECT id FROM users WHERE email='maya@cookquest.dev'), NOW() - INTERVAL '9 days'),
+          ((SELECT id FROM users WHERE email='jake@cookquest.dev'), (SELECT id FROM users WHERE email='sophia@cookquest.dev'), NOW() - INTERVAL '9 days'),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), (SELECT id FROM users WHERE email='maya@cookquest.dev'), NOW() - INTERVAL '11 days'),
+          ((SELECT id FROM users WHERE email='sophia@cookquest.dev'), (SELECT id FROM users WHERE email='jake@cookquest.dev'), NOW() - INTERVAL '11 days')
+        ON CONFLICT (follower_id, following_id) DO NOTHING;
+      `)
+
+      // Update follower/following counts
+      await this.pool.query(`
+        UPDATE users SET followers_count = 2, following_count = 2
+        WHERE email IN ('maya@cookquest.dev', 'jake@cookquest.dev', 'sophia@cookquest.dev');
+      `)
+
+      await this.recordMigration('014_seed_community_users')
+      logger.info('Seeded 3 community users with posts, progress & mutual follows')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
@@ -1349,6 +1471,22 @@ class DatabaseServiceClass {
       [userId, postType, recipeId || null, photoUrl || null, caption || null]
     )
     return rows[0]
+  }
+
+  async getWorldFeed(limit: number = 30): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT
+        up.id, up.user_id, u.username, u.display_name, u.avatar_url,
+        up.post_type, up.recipe_id, r.title AS recipe_title, r.image_url AS recipe_image_url,
+        up.photo_url, up.caption, COALESCE(up.comments_count, 0) AS comments_count, up.created_at
+       FROM user_posts up
+       JOIN users u ON u.id = up.user_id
+       LEFT JOIN recipes r ON r.id = up.recipe_id
+       ORDER BY up.created_at DESC
+       LIMIT $1`,
+      [limit]
+    )
+    return rows
   }
 
   async getFeed(userId: number, limit: number = 5): Promise<any[]> {
