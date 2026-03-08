@@ -1,9 +1,12 @@
-import { Router, Response } from 'express'
+import { Router, Response, Request, NextFunction } from 'express'
 import { body, param, query } from 'express-validator'
+import multer from 'multer'
 import { DatabaseService } from '../services/database'
+import { getStorageService } from '../services/storage'
 import { authMiddleware, optionalAuth, AuthenticatedRequest } from '../middleware/auth'
 import { validateRequest } from '../middleware/validation'
 import { asyncHandler } from '../middleware/error-handler'
+import { logger } from '../services/logger'
 
 const router = Router()
 
@@ -179,6 +182,60 @@ router.get('/users/:id',
   })
 )
 
+// ── Skill Trophies ──
+
+const SKILL_META: Record<string, { name: string; icon: string; color: string }> = {
+  'basic-cooking': { name: 'Basic Cooking', icon: '🥚', color: '#F59E0B' },
+  'heat-control': { name: 'Heat Control', icon: '🔥', color: '#EF4444' },
+  'flavor-building': { name: 'Flavor Building', icon: '🧂', color: '#8B5CF6' },
+  'air-fryer': { name: 'Air Fryer', icon: '💨', color: '#3B82F6' },
+  'indian-cuisine': { name: 'Indian Cuisine', icon: '🍛', color: '#10B981' },
+}
+
+// GET /api/v1/users/:id/skill-trophies — Skill completion data for profile
+router.get('/users/:id/skill-trophies',
+  optionalAuth,
+  validateRequest([userIdValidation]),
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = parseInt(req.params.id, 10)
+
+    // Check user exists
+    const user = await DatabaseService.getUserById(userId)
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'User not found' }
+      })
+    }
+
+    const rows = await DatabaseService.getUserSkillTrophies(userId)
+
+    // Build trophies from DB rows, ensure all 5 skills are present
+    const rowMap = new Map(rows.map((r: any) => [r.skill_id, r]))
+    const trophies = Object.entries(SKILL_META).map(([skillId, meta]) => {
+      const row = rowMap.get(skillId)
+      const completed = row?.completed ?? 0
+      const total = row?.total ?? 0
+      const percentage = total > 0 ? Math.round((completed / total) * 100) : 0
+      return {
+        skillId,
+        skillName: meta.name,
+        icon: meta.icon,
+        color: meta.color,
+        completed,
+        total,
+        percentage,
+        mastered: percentage === 100 && total > 0,
+      }
+    })
+
+    res.json({
+      success: true,
+      data: trophies
+    })
+  })
+)
+
 // Helper to map DB row → UserPost shape
 function mapPost(row: any) {
   return {
@@ -198,12 +255,13 @@ function mapPost(row: any) {
   }
 }
 
-// GET /api/v1/feed — Activity feed from followed users
+// GET /api/v1/feed?limit=30 — Activity feed from followed users
 router.get('/feed',
   authMiddleware,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.id
-    const posts = await DatabaseService.getFeed(userId)
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 30, 1), 50)
+    const posts = await DatabaseService.getFeed(userId, limit)
 
     res.json({
       success: true,
@@ -362,6 +420,145 @@ router.delete('/posts/:postId/comments/:commentId',
     }
 
     res.json({ success: true })
+  })
+)
+
+// ── Avatar Upload ──
+
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
+const MAX_AVATAR_SIZE = 5 * 1024 * 1024 // 5MB
+
+const MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+}
+
+const MAGIC_BYTES: Record<string, number[][]> = {
+  'image/jpeg': [[0xFF, 0xD8, 0xFF]],
+  'image/png': [[0x89, 0x50, 0x4E, 0x47]],
+  'image/webp': [[0x52, 0x49, 0x46, 0x46]],
+}
+
+function validateBufferContent(buffer: Buffer, declaredMime: string): boolean {
+  const patterns = MAGIC_BYTES[declaredMime]
+  if (!patterns) return false
+  return patterns.some(pattern =>
+    pattern.every((byte, i) => buffer[i] === byte)
+  )
+}
+
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_AVATAR_SIZE },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype as typeof ALLOWED_MIME_TYPES[number])) {
+      cb(null, true)
+    } else {
+      cb(new Error('Only JPEG, PNG and WebP images are allowed'))
+    }
+  },
+})
+
+function buildPhotoProxyUrl(req: Request, filename: string): string {
+  const baseUrl = process.env.API_BASE_URL || `${req.protocol}://${req.get('host')}`
+  return `${baseUrl}/api/v1/photos/${filename}`
+}
+
+// PATCH /api/v1/users/me/avatar — Upload or replace avatar
+router.patch('/users/me/avatar', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
+  avatarUpload.single('avatar')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ success: false, error: { message: err.message } })
+    }
+    if (err) {
+      return res.status(400).json({ success: false, error: { message: err.message || 'Upload error' } })
+    }
+    next()
+  })
+}, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: { message: 'No avatar file provided' } })
+    }
+
+    const userId = req.user!.id
+
+    // Validate magic bytes
+    if (!validateBufferContent(req.file.buffer, req.file.mimetype)) {
+      return res.status(400).json({ success: false, error: { message: 'File content does not match declared type' } })
+    }
+
+    const safeExt = MIME_TO_EXT[req.file.mimetype] || '.jpg'
+    const filename = `avatar-${userId}-${Date.now()}${safeExt}`
+
+    // Resize with sharp
+    let finalBuffer = req.file.buffer
+    let finalFilename = filename
+    try {
+      const sharp = await import('sharp')
+      finalBuffer = await sharp.default(req.file.buffer)
+        .resize({ width: 400, height: 400, fit: 'cover' })
+        .jpeg({ quality: 85 })
+        .toBuffer()
+      finalFilename = filename.replace(/\.\w+$/, '.jpg')
+    } catch (sharpErr) {
+      logger.warn({ err: sharpErr }, 'Sharp resize failed for avatar, keeping original')
+    }
+
+    // Delete old avatar from storage if exists
+    const oldAvatarUrl = await DatabaseService.getUserAvatarUrl(userId)
+    if (oldAvatarUrl) {
+      const oldFilename = oldAvatarUrl.split('/photos/').pop()
+      if (oldFilename) {
+        try {
+          const storage = getStorageService()
+          await storage.delete(oldFilename)
+        } catch (delErr) {
+          logger.warn({ err: delErr }, 'Failed to delete old avatar from storage')
+        }
+      }
+    }
+
+    // Upload new avatar
+    const storage = getStorageService()
+    await storage.upload(finalBuffer, finalFilename, 'image/jpeg')
+
+    const avatarUrl = buildPhotoProxyUrl(req, finalFilename)
+    await DatabaseService.updateUserAvatar(userId, avatarUrl)
+
+    res.json({
+      success: true,
+      data: { avatarUrl }
+    })
+  } catch (error: any) {
+    logger.error({ err: error }, 'Avatar upload error')
+    res.status(500).json({ success: false, error: { message: 'Avatar upload failed' } })
+  }
+})
+
+// DELETE /api/v1/users/me/avatar — Remove avatar
+router.delete('/users/me/avatar', authMiddleware,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.id
+
+    // Get current avatar URL to delete from storage
+    const oldAvatarUrl = await DatabaseService.getUserAvatarUrl(userId)
+    if (oldAvatarUrl) {
+      const oldFilename = oldAvatarUrl.split('/photos/').pop()
+      if (oldFilename) {
+        try {
+          const storage = getStorageService()
+          await storage.delete(oldFilename)
+        } catch (delErr) {
+          logger.warn({ err: delErr }, 'Failed to delete avatar from storage')
+        }
+      }
+    }
+
+    await DatabaseService.clearUserAvatar(userId)
+
+    res.json({ success: true, data: { avatarUrl: null } })
   })
 )
 

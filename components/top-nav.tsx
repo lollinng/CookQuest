@@ -1,9 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { ChefHat, Heart, Users, UtensilsCrossed } from 'lucide-react';
+import { ChefHat, Heart, Newspaper, Users, UtensilsCrossed } from 'lucide-react';
 import { UserMenu } from '@/components/auth/user-menu';
-import { FriendsFeedDropdown } from '@/components/friends-feed-dropdown';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useAuth } from '@/lib/auth-context';
 import { useFavoriteRecipes } from '@/hooks/use-recipes';
@@ -80,8 +79,16 @@ export function TopNav() {
             </Link>
           )}
 
-          {/* Friends Feed (authenticated only) */}
-          {isAuthenticated && <FriendsFeedDropdown />}
+          {/* Feed (authenticated only) */}
+          {isAuthenticated && (
+            <Link
+              href="/feed"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-cq-text-primary hover:bg-cq-surface-hover transition-colors"
+            >
+              <Newspaper className="size-4" />
+              <span className="hidden sm:inline">Feed</span>
+            </Link>
+          )}
 
           {/* User Menu / Auth */}
           <UserMenu />

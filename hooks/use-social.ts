@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import type { UserProfile, UserPost, FollowUser, PostComment } from '@/lib/types'
+import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy } from '@/lib/types'
 import {
   followUser as apiFollowUser,
   unfollowUser as apiUnfollowUser,
@@ -12,6 +12,7 @@ import {
   getPostComments,
   addComment as apiAddComment,
   deleteComment as apiDeleteComment,
+  getUserSkillTrophies,
 } from '@/lib/api/social'
 
 // Query keys
@@ -24,14 +25,15 @@ export const socialKeys = {
   search: (q: string) => [...socialKeys.all, 'search', q] as const,
   userPosts: (userId: number) => [...socialKeys.all, 'posts', userId] as const,
   comments: (postId: number) => [...socialKeys.all, 'comments', postId] as const,
+  trophies: (userId: number) => [...socialKeys.all, 'trophies', userId] as const,
 }
 
 // ── Queries ──
 
-export function useFeed() {
+export function useFeed(limit: number = 30) {
   return useQuery({
-    queryKey: socialKeys.feed(),
-    queryFn: getFeed,
+    queryKey: [...socialKeys.feed(), limit],
+    queryFn: () => getFeed(limit),
     staleTime: 1 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
   })
@@ -74,6 +76,16 @@ export function useSearchUsers(query: string) {
     enabled: query.length >= 2,
     staleTime: 30 * 1000,
     gcTime: 2 * 60 * 1000,
+  })
+}
+
+export function useUserSkillTrophies(userId: number) {
+  return useQuery({
+    queryKey: socialKeys.trophies(userId),
+    queryFn: () => getUserSkillTrophies(userId),
+    enabled: userId > 0,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   })
 }
 

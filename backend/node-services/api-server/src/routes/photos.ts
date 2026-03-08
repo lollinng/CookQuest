@@ -73,7 +73,8 @@ router.get('/photos/:filename', async (req: Request, res: Response) => {
   const { filename } = req.params
 
   // Strict filename validation — prevent path traversal
-  if (!/^r?-?[a-f0-9-]+\.(jpg|jpeg|png|webp)$/.test(filename)) {
+  // Accepts: UUID-based names (r-{uuid}.ext) and avatar names (avatar-{userId}-{timestamp}.ext)
+  if (!/^(r?-?[a-f0-9-]+|avatar-\d+-\d+)\.(jpg|jpeg|png|webp)$/.test(filename)) {
     return res.status(400).json({ success: false, error: { message: 'Invalid filename' } })
   }
 

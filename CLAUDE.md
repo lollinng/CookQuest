@@ -65,29 +65,21 @@ For these keywords, use **normal workflow** instead (ONLY these):
 - Define interfaces and data models
 - Output: architecture plan, file list, interfaces
 
-**Step 3: Test Engineer** - Write Tests First (TDD)
-- Write tests BEFORE implementation
-- E2E tests with Playwright (no unit test framework installed)
-- Cover edge cases and error scenarios
-- Output: test files in `e2e/`
-
-**Step 4: Developer** - Implementation
-- Implement code to pass all tests from Step 3
+**Step 3: Developer** - Implementation
 - Follow existing code style (2-space indent, single quotes, semicolons)
 - Follow patterns: DRY, SOLID, composition over inheritance
 - Ensure security and performance
 - Output: implementation files
 
-**Step 5: Code Reviewer** - Quality Assurance
+**Step 4: Code Reviewer** - Quality Assurance
 - Review all changes for correctness, security, performance, accessibility
 - Score code quality (0-10, threshold: 8.0)
 - If score < 8.0, loop back to Step 4 with specific feedback
 - Check for OWASP vulnerabilities
 - Output: review comments, quality score, approval
 
-**Step 6: DevOps Engineer** - Deployment Prep
+**Step 5: DevOps Engineer** - Deployment Prep
 - Verify build succeeds (`npm run build`)
-- Run full test suite
 - Summarize changes for PR description
 - Output: build status, deployment notes
 
@@ -107,9 +99,7 @@ When the user asks to run a UI/UX audit, review the app visually, or create impr
 2. **Follow** the infinite loop defined there: screenshot → review → write tasks to `claude-agents/tasks.json`
 3. **Max 10 open tasks** in the queue at any time
 4. Tasks use the schema defined in `claude-agents/task-queue.js` (see `addTask()` method)
-5. **Playwright audit**: run `npx playwright test e2e/ui-audit.spec.ts --config=e2e/playwright-audit.config.ts`
-6. **Screenshots** land in `e2e/screenshots/` — read them visually (Claude is multimodal)
-7. The app's identity is **Strava + Duolingo for cooking** — never kill this vibe
+5. The app's identity is **Strava + Duolingo for cooking** — never kill this vibe
 
 **Trigger phrases:** "run UI audit", "check the UI", "UX improvements", "make it more professional", "ui/ux agent", "visual review", "screenshot audit"
 
@@ -119,9 +109,7 @@ When the user reports a bug, provides a screenshot of an issue, or asks to file 
 
 1. **Read** `claude-agents/bug-triage-agent.md` — it contains the full triage process, priority guide, and task schema
 2. **Investigate** the code to pinpoint the likely source (file paths, line numbers)
-3. **Reproduce** with Playwright — write a test at `e2e/bug-repro-{task-id}.spec.ts` that FAILS on the bug
-4. **Screenshot** evidence to `e2e/screenshots/bug-{task-id}.png`
-5. **Create ticket** in `claude-agents/tasks.json` with type `"bug-fix"` and title starting with `[Bug]`
+3. **Create ticket** in `claude-agents/tasks.json` with type `"bug-fix"` and title starting with `[Bug]`
 6. **Do NOT fix the bug** — only triage and ticket. Implementer agents handle fixes.
 
 **Trigger phrases:** "report bug", "file a bug", "bug report", "found a bug", "this is broken", "screenshot bug", "triage bug", "/report-bug"
@@ -130,7 +118,6 @@ When the user reports a bug, provides a screenshot of an issue, or asks to file 
 **Only use this workflow when the request is clearly NOT a new feature/deliverable.**
 - Read the relevant code first before making changes
 - Fix the issue directly without the full pipeline
-- Run tests after changes if test files exist
 
 ## Project Conventions
 
@@ -144,11 +131,8 @@ lib/api/          - API modules (recipes, skills, tips, auth, progress)
 lib/stores/       - Zustand stores
 hooks/            - Custom React hooks (use-recipes.ts)
 backend/          - Node.js API server + shared SQL
-e2e/              - Playwright E2E tests + screenshots
 claude-agents/    - Multi-agent pipeline system (tasks.json, configs)
 ```
-
-> **Note**: `__tests__/` is legacy — unit tests were removed. All testing is Playwright E2E only.
 
 ### Code Style
 - TypeScript strict mode
@@ -175,7 +159,6 @@ claude-agents/    - Multi-agent pipeline system (tasks.json, configs)
 3. Create TanStack Query hook in `hooks/use-{name}.ts` (or add to `hooks/use-recipes.ts`)
 4. Create component in `components/{kebab-name}.tsx`
 5. Integrate into page in `app/` directory
-6. Write Playwright E2E test in `e2e/`
 
 **Adding a backend endpoint (end-to-end checklist):**
 1. Create route in `backend/node-services/api-server/src/routes/{name}.ts`
@@ -183,7 +166,6 @@ claude-agents/    - Multi-agent pipeline system (tasks.json, configs)
 3. Add DB queries to `backend/node-services/api-server/src/services/database.ts`
 4. Add schema changes to `backend/shared/schema-pg.sql` + migration in database.ts
 5. Response format: `{ success: true, data: {} }` or `{ success: false, error: { message } }`
-6. Write Playwright API test in `e2e/`
 
 **Component template:**
 ```tsx
@@ -246,8 +228,6 @@ export async function getMyResource(): Promise<MyType[]> {
 | Client components | `'use client'` directive required on ALL components using hooks, state, or event handlers |
 | apiClient return type | Returns unwrapped `T` directly — not `{ success, data: T }` |
 | SKILL_RECIPES map | Located in `lib/stores/recipe-store.ts` — update it when adding new skills |
-| Test framework | **Playwright E2E only** — no unit test framework. `__tests__/` is legacy, don't use it |
-| Playwright baseURL | Defaults to `http://localhost:3002` (see `playwright.config.ts`) |
 | Docker DB reset | `docker compose down -v && docker compose up` (the `-v` removes volumes) |
 | Concurrent agents | Agents should only touch files listed in their task's `files` array to avoid merge conflicts |
 | Query cache times | Use `gcTime` (not `cacheTime` which is deprecated in TanStack Query v5) |
@@ -257,14 +237,6 @@ export async function getMyResource(): Promise<MyType[]> {
 ### Spawning Sub-Tasks
 
 Use the Task tool with `subagent_type: "general-purpose"` to delegate specialized work:
-
-**Test engineer sub-task:**
-```
-Write Playwright E2E tests for {feature}. Test file: e2e/{name}.spec.ts.
-The app runs on http://localhost:3002 (frontend) and http://localhost:3003/api/v1 (backend).
-Cover: happy path, error cases, edge cases. Use request fixture for API tests.
-Read existing tests in e2e/ for patterns.
-```
 
 **Code reviewer sub-task:**
 ```
@@ -285,7 +257,6 @@ These commands are available via `/command-name` in Claude Code:
 | `/task-status` | Show queue summary — open, in-progress, done, blockers |
 | `/scaffold-component` | Generate a React component following CookQuest patterns |
 | `/scaffold-api-route` | Generate backend route + frontend API module + hook |
-| `/run-e2e` | Run Playwright tests with pre-flight checks and failure analysis |
 | `/verify-build` | TypeScript type-check + Next.js build + lint |
 | `/deploy` | Deploy to production — Frontend (Vercel) + Backend (GCP Cloud Run) |
 | `/ui-audit` | Run UI/UX auditor workflow (screenshots, review, create tasks) |

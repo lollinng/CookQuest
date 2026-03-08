@@ -7,54 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
 import { usePostComments, useAddComment, useDeleteComment } from '@/hooks/use-social';
+import { getAvatarColor, getInitials, formatRelativeTime } from '@/lib/social-helpers';
 import type { PostComment } from '@/lib/types';
-
-// ── Helpers ──
-
-const AVATAR_COLORS = [
-  'bg-orange-500',
-  'bg-emerald-500',
-  'bg-violet-500',
-  'bg-sky-500',
-  'bg-rose-500',
-  'bg-amber-500',
-  'bg-teal-500',
-  'bg-indigo-500',
-];
-
-function getAvatarColor(username: string): string {
-  let hash = 0;
-  for (let i = 0; i < username.length; i++) {
-    hash = username.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase();
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const now = Date.now();
-  const date = new Date(dateStr).getTime();
-  const diffSeconds = Math.floor((now - date) / 1000);
-
-  if (diffSeconds < 60) return 'just now';
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  const diffWeeks = Math.floor(diffDays / 7);
-  if (diffWeeks < 4) return `${diffWeeks}w ago`;
-  const diffMonths = Math.floor(diffDays / 30);
-  return `${diffMonths}mo ago`;
-}
 
 // ── Comment Item ──
 

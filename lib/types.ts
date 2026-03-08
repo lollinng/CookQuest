@@ -120,6 +120,17 @@ export interface PostComment {
   createdAt: string
 }
 
+export interface SkillTrophy {
+  skillId: string
+  skillName: string
+  icon: string
+  color: string
+  completed: number
+  total: number
+  percentage: number
+  mastered: boolean
+}
+
 export interface FollowUser {
   id: number
   username: string

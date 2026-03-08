@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { UserProfile, UserPost, FollowUser, PostComment } from '../types'
+import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy } from '../types'
 
 export async function followUser(userId: number): Promise<{ following: boolean }> {
   return apiClient<{ following: boolean }>(`/users/${userId}/follow`, { method: 'POST' })
@@ -27,8 +27,10 @@ export async function searchUsers(query: string): Promise<FollowUser[]> {
   })
 }
 
-export async function getFeed(): Promise<UserPost[]> {
-  return apiClient<UserPost[]>('/feed')
+export async function getFeed(limit?: number): Promise<UserPost[]> {
+  return apiClient<UserPost[]>('/feed', {
+    params: limit ? { limit: String(limit) } : undefined,
+  })
 }
 
 export async function getUserPosts(userId: number): Promise<UserPost[]> {
@@ -48,4 +50,8 @@ export async function addComment(postId: number, content: string): Promise<PostC
 
 export async function deleteComment(postId: number, commentId: number): Promise<void> {
   return apiClient<void>(`/posts/${postId}/comments/${commentId}`, { method: 'DELETE' })
+}
+
+export async function getUserSkillTrophies(userId: number): Promise<SkillTrophy[]> {
+  return apiClient<SkillTrophy[]>(`/users/${userId}/skill-trophies`)
 }

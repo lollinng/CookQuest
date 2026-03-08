@@ -1315,6 +1315,30 @@ class DatabaseServiceClass {
     return rows[0] || null
   }
 
+  // ── Avatar ──
+
+  async updateUserAvatar(userId: number, avatarUrl: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE users SET avatar_url = $1 WHERE id = $2`,
+      [avatarUrl, userId]
+    )
+  }
+
+  async clearUserAvatar(userId: number): Promise<void> {
+    await this.pool.query(
+      `UPDATE users SET avatar_url = NULL WHERE id = $1`,
+      [userId]
+    )
+  }
+
+  async getUserAvatarUrl(userId: number): Promise<string | null> {
+    const { rows } = await this.pool.query(
+      `SELECT avatar_url FROM users WHERE id = $1`,
+      [userId]
+    )
+    return rows[0]?.avatar_url || null
+  }
+
   // ── Social: Posts & Feed ──
 
   async createPost(userId: number, postType: string, recipeId?: string, photoUrl?: string, caption?: string): Promise<any> {
@@ -1482,6 +1506,21 @@ class DatabaseServiceClass {
     } finally {
       client.release()
     }
+  }
+
+  // Skill trophies — completion stats per skill for a user
+  async getUserSkillTrophies(userId: number): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT r.skill_id,
+              COUNT(DISTINCT r.id)::int AS total,
+              COUNT(DISTINCT CASE WHEN urp.status = 'completed' THEN r.id END)::int AS completed
+       FROM recipes r
+       LEFT JOIN user_recipe_progress urp ON urp.recipe_id = r.id AND urp.user_id = $1
+       GROUP BY r.skill_id
+       ORDER BY r.skill_id`,
+      [userId]
+    )
+    return rows
   }
 
   // Health check — lightweight ping for readiness probes
