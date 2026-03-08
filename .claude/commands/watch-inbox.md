@@ -14,12 +14,41 @@ Show: "Vault synced."
 
 Read `claude-agents/task-inbox.md`. Find content below the `---` separator.
 
-Parse each line as an inbox item. Skip items that are already processed:
-- Lines starting with `- [x]` → already processed, skip
-- Lines with `~~strikethrough~~` → already processed, skip
-- Empty lines or comment lines (`<!-- ... -->`) → skip
+Parse each line as an inbox item. Supported formats:
+- Numbered list: `1. idea text`, `2. idea text`, `3. idea text`
+- Bullet list: `- idea text`
+- Checkbox (already processed): `- [x] idea text` or lines with `~~strikethrough~~`
+
+The inbox number (1, 2, 3) is just the user's ordering — it does NOT map to task IDs.
+Task IDs are allocated sequentially from the highest existing ID in tasks.json.
+
+Skip:
+- Lines starting with `- [x]` → already processed
+- Lines with `~~strikethrough~~` → already processed
+- Empty lines or comment lines (`<!-- ... -->`)
 
 If no unprocessed items found, show "Inbox empty — nothing to process." and skip to Step 5.
+
+## Step 2.5: Check for Deploy Trigger
+
+Scan unprocessed inbox items for deploy keywords: "deploy", "deploy-fix", "ship it", "push to prod", "release".
+
+If a deploy trigger is found:
+1. Mark that inbox item as processed:
+   - Numbered format: `1. ~~deploy-fix~~ (→ deploy-gate activated)`
+   - Bullet format: `- [x] deploy-fix (→ deploy-gate activated)`
+2. Check ALL tasks in `claude-agents/tasks.json`:
+   - If every task has status `"done"` → immediately invoke `/deploy`
+   - If any tasks are still `"todo"` or `"in_progress"` → show:
+     ```
+     Deploy gate: waiting for {N} tasks to complete before deploying.
+     Pending: task_024 (in_progress), task_025 (todo), ...
+     ```
+     Then continue with Step 3 (process remaining non-deploy inbox items normally).
+     After the pipeline completes the current task, re-check: if all tasks are now `done`, invoke `/deploy`.
+3. Push sync after deploy completes: `python3 scripts/obsidian-sync.py push 2>/dev/null || true`
+
+Continue to Step 3 for remaining non-deploy items.
 
 ## Step 3: Create Tasks from Inbox Items
 
@@ -53,7 +82,8 @@ For each unprocessed inbox item:
 ```
 
 5. **Mark inbox item as processed** in `claude-agents/task-inbox.md`:
-   - Change `- idea text` to `- [x] idea text (→ task_NNN, task_NNN)`
+   - Bullet format: `- idea text` → `- [x] idea text (→ task_NNN, task_NNN)`
+   - Numbered format: `1. idea text` → `1. ~~idea text~~ (→ task_NNN, task_NNN)`
 
 ## Step 4: Push Updates
 

@@ -4,9 +4,11 @@ Obsidian Vault Sync for CookQuest
 Syncs project docs and task queue to/from an Obsidian vault repo.
 
 Usage:
-    python3 scripts/obsidian-sync.py push   # Project → Vault + render dashboard
-    python3 scripts/obsidian-sync.py pull   # Vault → Project + check inbox
-    python3 scripts/obsidian-sync.py sync   # Full bidirectional: pull then push
+    python3 scripts/obsidian-sync.py push    # Project → Vault + render dashboard
+    python3 scripts/obsidian-sync.py pull    # Vault → Project + check inbox
+    python3 scripts/obsidian-sync.py sync    # Full bidirectional: pull then push
+    python3 scripts/obsidian-sync.py watch   # Foreground watcher (auto-push on changes)
+    python3 scripts/obsidian-sync.py watch 5 # Custom poll interval in seconds (default: 3)
 """
 
 import json
@@ -14,6 +16,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 
 # === Configuration ===
@@ -30,6 +33,7 @@ FILE_MAP = {
     'NEXT_SESSION_CONTEXT.md': 'docs/NEXT_SESSION_CONTEXT.md',
     'PROJECT_STRUCTURE.md': 'docs/PROJECT_STRUCTURE.md',
     'ATTRIBUTIONS.md': 'docs/ATTRIBUTIONS.md',
+    'WORKFLOW.md': 'docs/WORKFLOW.md',
     'guidelines/Guidelines.md': 'guidelines/Guidelines.md',
     'claude-agents/tasks.json': 'agent-system/tasks.json',
     'claude-agents/agent-config.json': 'agent-system/agent-config.json',
@@ -39,6 +43,25 @@ FILE_MAP = {
     'claude-agents/bug-triage-agent.md': 'agent-system/bug-triage-agent.md',
     'claude-agents/agent-roster.json': 'agent-system/agent-roster.json',
 }
+
+# Directories to auto-sync (all .md files inside → vault subdirectory)
+AUTO_SYNC_DIRS = {
+    '.claude/commands': 'commands',
+}
+
+# launchd auto-sync daemon
+LAUNCHD_LABEL = 'com.cookquest.vault-sync'
+LAUNCHD_PLIST = os.path.expanduser(f'~/Library/LaunchAgents/{LAUNCHD_LABEL}.plist')
+
+# Directories the daemon watches for changes
+WATCH_PATHS = [
+    'CLAUDE.md',
+    'README.md',
+    'DEPLOY.md',
+    'claude-agents',
+    '.claude/commands',
+    'guidelines',
+]
 
 INBOX_VAULT = os.path.join(VAULT_PATH, 'Task Inbox.md')
 INBOX_PROJECT = os.path.join(PROJECT_PATH, 'claude-agents', 'task-inbox.md')
@@ -80,6 +103,19 @@ def push():
             copied += 1
         else:
             print(f'  skip (not found): {proj_rel}')
+
+    # Auto-sync directories (all .md files)
+    for proj_dir, vault_dir in AUTO_SYNC_DIRS.items():
+        src_dir = os.path.join(PROJECT_PATH, proj_dir)
+        if not os.path.isdir(src_dir):
+            continue
+        for fname in sorted(os.listdir(src_dir)):
+            if fname.endswith('.md'):
+                src = os.path.join(src_dir, fname)
+                dst = os.path.join(VAULT_PATH, vault_dir, fname)
+                copy_file(src, dst)
+                copied += 1
+
     print(f'  copied {copied} files')
 
     render_dashboard()
@@ -277,14 +313,163 @@ def sync():
     print()
     push()
 
+# === Watch Mode (foreground, real-time) ===
+
+def _snapshot_mtimes():
+    """Build a dict of file path → mtime for all watched paths."""
+    state = {}
+    for rel in WATCH_PATHS:
+        full = os.path.join(PROJECT_PATH, rel)
+        if os.path.isdir(full):
+            for root, dirs, files in os.walk(full):
+                for f in files:
+                    fp = os.path.join(root, f)
+                    try:
+                        state[fp] = os.path.getmtime(fp)
+                    except OSError:
+                        pass
+        elif os.path.exists(full):
+            state[full] = os.path.getmtime(full)
+    return state
+
+
+def watch(interval=3):
+    """Watch project files and auto-sync on changes. Runs in foreground (Ctrl+C to stop)."""
+    print(f'Vault auto-sync: watching for changes every {interval}s')
+    print(f'Vault: {VAULT_PATH}')
+    print(f'Watching:')
+    for p in WATCH_PATHS:
+        print(f'  → {p}')
+    print(f'Press Ctrl+C to stop.\n')
+
+    # Initial sync
+    push()
+    prev = _snapshot_mtimes()
+
+    try:
+        while True:
+            time.sleep(interval)
+            current = _snapshot_mtimes()
+
+            if current != prev:
+                # Find what changed for a nice log line
+                changed = [
+                    os.path.relpath(k, PROJECT_PATH)
+                    for k in set(list(current.keys()) + list(prev.keys()))
+                    if current.get(k) != prev.get(k)
+                ]
+                ts = datetime.now().strftime('%H:%M:%S')
+                print(f'\n[{ts}] Changed: {", ".join(changed[:5])}')
+                push()
+                prev = _snapshot_mtimes()  # Re-snapshot after push
+    except KeyboardInterrupt:
+        print('\nStopped.')
+
+
+# === Auto-Sync Daemon (launchd) ===
+
+def install_daemon():
+    """Install a macOS launchd daemon that watches project files and auto-syncs to vault."""
+    abs_watch = [os.path.join(PROJECT_PATH, p) for p in WATCH_PATHS]
+    watch_xml = '\n'.join(f'        <string>{p}</string>' for p in abs_watch)
+
+    plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{LAUNCHD_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>{os.path.abspath(__file__)}</string>
+        <string>push</string>
+    </array>
+    <key>WatchPaths</key>
+    <array>
+{watch_xml}
+    </array>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+    <key>StandardOutPath</key>
+    <string>/tmp/cookquest-vault-sync.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/cookquest-vault-sync.log</string>
+</dict>
+</plist>"""
+
+    # Unload existing if present
+    if os.path.exists(LAUNCHD_PLIST):
+        subprocess.run(['launchctl', 'unload', LAUNCHD_PLIST], capture_output=True)
+
+    os.makedirs(os.path.dirname(LAUNCHD_PLIST), exist_ok=True)
+    with open(LAUNCHD_PLIST, 'w') as f:
+        f.write(plist)
+
+    subprocess.run(['launchctl', 'load', LAUNCHD_PLIST])
+    print(f'Installed and loaded: {LAUNCHD_LABEL}')
+    print(f'Watching {len(abs_watch)} paths (throttle: 5s)')
+    for p in abs_watch:
+        print(f'  → {os.path.relpath(p, PROJECT_PATH)}')
+    print(f'Log: /tmp/cookquest-vault-sync.log')
+    print()
+    print('Any change to watched files will auto-push to vault within 5 seconds.')
+    print('Uninstall with: python3 scripts/obsidian-sync.py uninstall')
+
+
+def uninstall_daemon():
+    """Uninstall the launchd auto-sync daemon."""
+    if os.path.exists(LAUNCHD_PLIST):
+        subprocess.run(['launchctl', 'unload', LAUNCHD_PLIST], capture_output=True)
+        os.remove(LAUNCHD_PLIST)
+        print(f'Uninstalled: {LAUNCHD_LABEL}')
+    else:
+        print(f'Not installed (no plist at {LAUNCHD_PLIST})')
+
+
+def daemon_status():
+    """Check if the auto-sync daemon is running."""
+    result = subprocess.run(
+        ['launchctl', 'list', LAUNCHD_LABEL],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        print(f'Daemon: RUNNING ({LAUNCHD_LABEL})')
+        # Parse PID from output
+        for line in result.stdout.strip().split('\n'):
+            if 'PID' in line or line.strip().startswith('"PID"'):
+                print(f'  {line.strip()}')
+        print(f'Log: /tmp/cookquest-vault-sync.log')
+    else:
+        print(f'Daemon: NOT RUNNING')
+        if os.path.exists(LAUNCHD_PLIST):
+            print(f'  Plist exists but daemon not loaded. Run: python3 scripts/obsidian-sync.py install')
+        else:
+            print(f'  Not installed. Run: python3 scripts/obsidian-sync.py install')
+
+
 # === Main ===
 
 def main():
     if len(sys.argv) < 2:
-        print('Usage: python3 scripts/obsidian-sync.py [push|pull|sync]')
+        print('Usage: python3 scripts/obsidian-sync.py [push|pull|sync|watch|install|uninstall|status]')
         sys.exit(1)
 
     mode = sys.argv[1].lower()
+
+    # Daemon management commands don't need vault to exist
+    if mode == 'install':
+        if not os.path.isdir(VAULT_PATH):
+            print(f'Error: vault not found at {VAULT_PATH}')
+            sys.exit(1)
+        install_daemon()
+        return
+    elif mode == 'uninstall':
+        uninstall_daemon()
+        return
+    elif mode == 'status':
+        daemon_status()
+        return
 
     if not os.path.isdir(VAULT_PATH):
         print(f'Error: vault not found at {VAULT_PATH}')
@@ -297,9 +482,12 @@ def main():
         pull()
     elif mode == 'sync':
         sync()
+    elif mode == 'watch':
+        interval = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+        watch(interval)
     else:
         print(f'Unknown mode: {mode}')
-        print('Usage: python3 scripts/obsidian-sync.py [push|pull|sync]')
+        print('Usage: python3 scripts/obsidian-sync.py [push|pull|sync|watch|install|uninstall|status]')
         sys.exit(1)
 
 if __name__ == '__main__':

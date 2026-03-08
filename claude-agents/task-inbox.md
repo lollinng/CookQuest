@@ -7,3 +7,5 @@
 
 <!-- Inbox items appear below this line -->
 
+1. Add a watchlist for users to shortlist their favorite recipes each users will have their favorite saved in the database which they can access from the home page
+2. ~~Deploy-fix~~ (→ deploy-gate activated)

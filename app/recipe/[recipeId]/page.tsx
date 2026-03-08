@@ -228,7 +228,7 @@ export default function RecipeDetail() {
                 <CheckCircle2 className="size-5" />
                 <span className="font-medium">Great job, chef!</span>
               </div>
-              <p className="text-green-300/80 text-sm mt-1">
+              <p className="text-green-300 text-sm mt-1">
                 This one&apos;s in the bag. Keep going — every recipe levels you up!
               </p>
             </div>
@@ -254,9 +254,9 @@ export default function RecipeDetail() {
                         {ing.amount != null && <span className="font-semibold">{formatAmount(ing.amount)}</span>}
                         {ing.unit && <span className="font-semibold"> {ing.unit}</span>}
                         {(ing.amount != null || ing.unit) && ' '}{ing.name}
-                        {ing.preparation && <span className="text-muted-foreground"> ({ing.preparation})</span>}
-                        {ing.optional && <span className="text-muted-foreground text-sm"> (optional)</span>}
-                        {ing.notes && <span className="text-muted-foreground text-sm"> — {ing.notes}</span>}
+                        {ing.preparation && <span className="text-foreground/70"> ({ing.preparation})</span>}
+                        {ing.optional && <span className="text-foreground/60 text-sm"> (optional)</span>}
+                        {ing.notes && <span className="text-foreground/70 text-sm"> — {ing.notes}</span>}
                       </span>
                     </li>
                   ))

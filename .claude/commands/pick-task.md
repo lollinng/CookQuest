@@ -52,6 +52,15 @@ If no eligible tasks found, show "No available tasks for {odd|even} queue." and 
 
 Immediately start the 6-step pipeline (PM → Architect → Test → Dev → Review → DevOps) as defined in CLAUDE.md.
 
-## Step 5: Sync Dashboard
+## Step 5: Sync Dashboard (post-assign)
 
 Run: `python3 scripts/obsidian-sync.py push 2>/dev/null || true`
+
+## Step 6: Sync Dashboard (post-completion)
+
+After the 6-step pipeline completes and the task is marked `"done"` in `claude-agents/tasks.json`:
+
+1. Set `completedAt` to current ISO timestamp
+2. Run: `python3 scripts/obsidian-sync.py push 2>/dev/null || true`
+
+This ensures the Obsidian Task Dashboard reflects the completed status immediately.

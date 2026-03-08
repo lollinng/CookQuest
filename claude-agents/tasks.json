@@ -600,7 +600,7 @@
   {
     "id": "task_093",
     "title": "[UI] Fix recipe detail page \u2014 low contrast text in dark mode",
-    "status": "todo",
+    "status": "done",
     "priority": 9,
     "type": "bug",
     "description": "## Recipe detail page text is barely readable in dark mode\n\n### What's wrong\nOn the recipe detail page (`/recipe/[recipeId]`), multiple text elements have extremely low contrast against the dark background:\n\n1. **Instructions text** \u2014 step descriptions like \"Bring a pot of water to a rolling boil\" are a dim gray, nearly invisible\n2. **Ingredient quantities** \u2014 \"2 eggs\", \"water\", \"pinch salt\", \"ice\" are low contrast\n3. **Pro Tips text** \u2014 all tip text is dim gray and hard to read\n4. **Ingredient details** \u2014 the \"\u2014 large\", \"\u2014 enough to cover eggs\", \"\u2014 ice water for cooling\" suffixes are slightly better but still too dim\n\n### What to fix\n- Instructions step text should use `text-foreground` or equivalent high-contrast color\n- Ingredient names and quantities should be clearly readable\n- Pro tips text should have proper contrast\n- Ensure all body text meets WCAG AA contrast ratio (4.5:1 minimum)\n\n### Files to modify\n- `app/recipe/[recipeId]/page.tsx` \u2014 recipe detail page component\n\n### Acceptance criteria\n- All text on the recipe page is clearly readable in dark mode\n- Ingredient names, instruction steps, and pro tips all have sufficient contrast\n- Still looks good in light mode (no regressions)",
@@ -608,9 +608,9 @@
       "app/recipe/[recipeId]/page.tsx"
     ],
     "createdAt": "2026-03-08T11:10:00.000Z",
-    "assignedTo": null,
-    "assignedAt": null,
-    "completedAt": null,
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T15:47:55.577469+00:00",
+    "completedAt": "2026-03-08T15:50:10.730879+00:00",
     "retryCount": 0,
     "maxRetries": 3
   },
