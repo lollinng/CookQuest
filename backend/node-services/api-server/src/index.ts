@@ -92,17 +92,7 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }))
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher limit in dev
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-})
-app.use('/api/', limiter)
-
-// CORS configuration
+// CORS configuration — MUST be before rate limiter so 429 responses include CORS headers
 app.use(cors({
   origin: (origin, callback) => {
     const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:3000')
@@ -122,6 +112,16 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   maxAge: 86400, // Cache preflight for 24 hours
 }))
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher limit in dev
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+app.use('/api/', limiter)
 
 // CSRF protection — validate Origin header on state-changing requests
 app.use('/api/', (req, res, next) => {

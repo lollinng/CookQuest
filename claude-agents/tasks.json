@@ -796,5 +796,276 @@
     "retryCount": 0,
     "maxRetries": 3,
     "source": "user-feedback"
+  },
+  {
+    "id": "task_103",
+    "title": "[Social] DB migration: user_follows + user_posts tables",
+    "status": "done",
+    "priority": 4,
+    "type": "enhancement",
+    "description": "## CRITICAL \u2014 No social infrastructure exists in the database\n\n### What\u2019s wrong\nCookQuest has no tables for social features. Users cannot follow each other or see activity from other users.\n\n### What to build\nAdd migration `011_social_tables` in `database.ts` that creates:\n\n#### 1. `user_follows` table\n```sql\nCREATE TABLE IF NOT EXISTS user_follows (\n  id SERIAL PRIMARY KEY,\n  follower_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  following_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  created_at TIMESTAMPTZ DEFAULT NOW(),\n  UNIQUE(follower_id, following_id),\n  CHECK (follower_id != following_id)\n);\nCREATE INDEX IF NOT EXISTS idx_user_follows_follower ON user_follows(follower_id);\nCREATE INDEX IF NOT EXISTS idx_user_follows_following ON user_follows(following_id);\n```\n\n#### 2. `user_posts` table\n```sql\nCREATE TABLE IF NOT EXISTS user_posts (\n  id SERIAL PRIMARY KEY,\n  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  post_type TEXT CHECK (post_type IN ('recipe_completed', 'photo_upload', 'milestone')) NOT NULL,\n  recipe_id TEXT REFERENCES recipes(id) ON DELETE SET NULL,\n  photo_url TEXT,\n  caption TEXT,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\nCREATE INDEX IF NOT EXISTS idx_user_posts_user ON user_posts(user_id);\nCREATE INDEX IF NOT EXISTS idx_user_posts_created ON user_posts(created_at DESC);\n```\n\n#### 3. Add denormalized counters to `users` table\n```sql\nALTER TABLE users ADD COLUMN IF NOT EXISTS followers_count INTEGER DEFAULT 0;\nALTER TABLE users ADD COLUMN IF NOT EXISTS following_count INTEGER DEFAULT 0;\n```\n\n### Subtasks\n1. Add migration `011_social_tables` to the migrations array in `database.ts`\n2. Include all CREATE TABLE, INDEX, and ALTER TABLE statements\n3. Update `backend/shared/schema-pg.sql` with the new tables and indexes for documentation\n4. Ensure migration is idempotent (IF NOT EXISTS everywhere)\n\n### Depends on\nnone\n\n### Acceptance criteria\n- Given the backend starts, when migrations run, then `user_follows` and `user_posts` tables exist\n- Given the `users` table, it has `followers_count` and `following_count` columns\n- Given a user tries to follow themselves, the CHECK constraint prevents it\n- Given a duplicate follow, the UNIQUE constraint prevents it\n- Migration is idempotent\n\n### Files to create/modify\n- `backend/node-services/api-server/src/services/database.ts` \u2014 add migration 011\n- `backend/shared/schema-pg.sql` \u2014 add table definitions for documentation",
+    "files": [
+      "backend/node-services/api-server/src/services/database.ts",
+      "backend/shared/schema-pg.sql"
+    ],
+    "createdAt": "2026-03-08T12:00:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T17:11:31.307117+00:00",
+    "completedAt": "2026-03-08T17:13:37.289410+00:00",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_104",
+    "title": "[Social] TypeScript types, API modules, and TanStack Query hooks for social features",
+    "status": "done",
+    "priority": 4,
+    "type": "enhancement",
+    "description": "## CRITICAL \u2014 No frontend types or data layer for social features\n\n### What\u2019s wrong\nThere are no TypeScript types, API client modules, or TanStack Query hooks for social features.\n\n### What to build\n\n#### 1. Types in `lib/types.ts`\n```typescript\nexport interface UserProfile {\n  id: number;\n  uuid: string;\n  username: string;\n  displayName: string | null;\n  avatarUrl: string | null;\n  followersCount: number;\n  followingCount: number;\n  isFollowing?: boolean;\n  totalRecipesCompleted: number;\n}\n\nexport interface UserPost {\n  id: number;\n  userId: number;\n  username: string;\n  displayName: string | null;\n  avatarUrl: string | null;\n  postType: 'recipe_completed' | 'photo_upload' | 'milestone';\n  recipeId: string | null;\n  recipeTitle: string | null;\n  recipeImageUrl: string | null;\n  photoUrl: string | null;\n  caption: string | null;\n  createdAt: string;\n}\n\nexport interface FollowUser {\n  id: number;\n  username: string;\n  displayName: string | null;\n  avatarUrl: string | null;\n  isFollowing?: boolean;\n}\n```\n\n#### 2. API module `lib/api/social.ts`\n```typescript\nimport { apiClient } from './client';\nimport { UserProfile, UserPost, FollowUser } from '../types';\n\nexport async function followUser(userId: number): Promise<{ success: boolean }> {\n  return apiClient<{ success: boolean }>(`/users/${userId}/follow`, { method: 'POST' });\n}\nexport async function unfollowUser(userId: number): Promise<{ success: boolean }> {\n  return apiClient<{ success: boolean }>(`/users/${userId}/follow`, { method: 'DELETE' });\n}\nexport async function getUserProfile(userId: number): Promise<UserProfile> {\n  return apiClient<UserProfile>(`/users/${userId}`);\n}\nexport async function getUserFollowers(userId: number): Promise<FollowUser[]> {\n  return apiClient<FollowUser[]>(`/users/${userId}/followers`);\n}\nexport async function getUserFollowing(userId: number): Promise<FollowUser[]> {\n  return apiClient<FollowUser[]>(`/users/${userId}/following`);\n}\nexport async function searchUsers(query: string): Promise<FollowUser[]> {\n  return apiClient<FollowUser[]>(`/users/search?q=${encodeURIComponent(query)}`);\n}\nexport async function getFeed(): Promise<UserPost[]> {\n  return apiClient<UserPost[]>('/feed');\n}\nexport async function getUserPosts(userId: number): Promise<UserPost[]> {\n  return apiClient<UserPost[]>(`/users/${userId}/posts`);\n}\n```\n\n#### 3. TanStack Query hooks `hooks/use-social.ts`\nFollow the pattern in `hooks/use-recipes.ts`:\n```typescript\nexport const socialKeys = {\n  all: ['social'] as const,\n  feed: () => [...socialKeys.all, 'feed'] as const,\n  profile: (userId: number) => [...socialKeys.all, 'profile', userId] as const,\n  followers: (userId: number) => [...socialKeys.all, 'followers', userId] as const,\n  following: (userId: number) => [...socialKeys.all, 'following', userId] as const,\n  search: (q: string) => [...socialKeys.all, 'search', q] as const,\n  userPosts: (userId: number) => [...socialKeys.all, 'posts', userId] as const,\n};\n```\nExport: `useFeed`, `useUserProfile`, `useUserFollowers`, `useUserFollowing`, `useSearchUsers` (enabled when query.length >= 2), `useUserPosts`, `useFollowUser` (mutation), `useUnfollowUser` (mutation). Mutations should invalidate feed, profile, followers, following keys on success. Use optimistic updates for follow/unfollow.\n\n### Subtasks\n1. Add `UserProfile`, `UserPost`, `FollowUser` types to `lib/types.ts`\n2. Create `lib/api/social.ts` with all API functions\n3. Create `hooks/use-social.ts` with query keys, queries, and mutations\n4. Ensure follow/unfollow mutations use optimistic updates\n\n### Depends on\nnone (builds against expected API shapes)\n\n### Acceptance criteria\n- `lib/types.ts` exports `UserProfile`, `UserPost`, `FollowUser`\n- `lib/api/social.ts` exports all 8 API functions\n- `hooks/use-social.ts` exports query keys + all hooks\n- TypeScript compiles with no errors\n\n### Files to create/modify\n- `lib/types.ts` \u2014 add social interfaces\n- `lib/api/social.ts` \u2014 NEW file\n- `hooks/use-social.ts` \u2014 NEW file",
+    "files": [
+      "lib/types.ts",
+      "lib/api/social.ts",
+      "hooks/use-social.ts"
+    ],
+    "createdAt": "2026-03-08T12:00:01.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T18:00:00.000Z",
+    "completedAt": "2026-03-08T18:05:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_105",
+    "title": "[Social] Backend follow/unfollow + user search API routes",
+    "status": "done",
+    "priority": 5,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 No API endpoints for following users or searching for people\n\n### What\u2019s wrong\nThe backend has no social routes. Users cannot follow/unfollow each other, view followers/following lists, search for users, or view public profiles.\n\n### What to build\nCreate `backend/node-services/api-server/src/routes/social.ts` with these endpoints:\n\n**`POST /users/:id/follow`** (auth required)\n- Insert into `user_follows` (follower_id = current user, following_id = :id)\n- Increment `following_count` on current user, `followers_count` on target user\n- Return `{ success: true, data: { following: true } }`\n- 409 if already following, 400 if trying to follow self\n\n**`DELETE /users/:id/follow`** (auth required)\n- Delete from `user_follows`, decrement counters\n- Return `{ success: true, data: { following: false } }`\n- 404 if not following\n\n**`GET /users/:id/followers`** (public)\n- Join `user_follows` with `users` where `following_id = :id`\n- If authenticated, include `is_following` flag for each result\n- Return `{ success: true, data: FollowUser[] }`\n\n**`GET /users/:id/following`** (public)\n- Join `user_follows` with `users` where `follower_id = :id`\n- If authenticated, include `is_following` flag\n- Return `{ success: true, data: FollowUser[] }`\n\n**`GET /users/search?q=term`** (public)\n- Search `users` by username or display_name using ILIKE `%term%`\n- Limit 20 results. If authenticated, include `is_following` flag\n- Return `{ success: true, data: FollowUser[] }`\n\n**`GET /users/:id`** (public)\n- Return user profile with stats + isFollowing flag\n- Return `{ success: true, data: UserProfile }`\n\nUse PostgreSQL `$1, $2` placeholders (NEVER `?`). Use transactions for follow/unfollow:\n```typescript\nconst client = await pool.connect();\ntry {\n  await client.query('BEGIN');\n  await client.query('INSERT INTO user_follows (follower_id, following_id) VALUES ($1, $2)', [followerId, followingId]);\n  await client.query('UPDATE users SET following_count = following_count + 1 WHERE id = $1', [followerId]);\n  await client.query('UPDATE users SET followers_count = followers_count + 1 WHERE id = $1', [followingId]);\n  await client.query('COMMIT');\n} catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }\n```\n\n### Subtasks\n1. Create `backend/node-services/api-server/src/routes/social.ts`\n2. Implement all 6 endpoints with proper auth middleware\n3. Register routes in `backend/node-services/api-server/src/routes/index.ts`\n4. Use transactions for follow/unfollow\n5. Add `is_following` subquery for authenticated requests\n\n### Depends on\ntask_103 (database tables must exist)\n\n### Acceptance criteria\n- POST /users/2/follow creates a follow relationship\n- GET /users/B/followers includes user A after A follows B\n- GET /users/search?q=admin returns matching users\n- Self-follow returns 400, double-follow returns 409\n- Counter updates are transactional\n\n### Files to create/modify\n- `backend/node-services/api-server/src/routes/social.ts` \u2014 NEW\n- `backend/node-services/api-server/src/routes/index.ts` \u2014 register routes",
+    "files": [
+      "backend/node-services/api-server/src/routes/social.ts",
+      "backend/node-services/api-server/src/routes/index.ts"
+    ],
+    "createdAt": "2026-03-08T12:00:02.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T17:19:26.101352+00:00",
+    "completedAt": "2026-03-08T17:22:39.026699+00:00",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_106",
+    "title": "[Social] Top nav friends dropdown with feed display (top 5 recent posts)",
+    "status": "done",
+    "priority": 5,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 No way to see friends cooking activity\n\n### What\u2019s wrong\nThe top nav has Recipes, Favorites, and UserMenu. There is no social/friends section.\n\n### What to build\nAdd a friends activity dropdown to `components/top-nav.tsx` between Favorites and UserMenu.\n\n#### Component: `components/friends-feed-dropdown.tsx`\n\n**Trigger button** in top nav:\n- `Users` icon from lucide-react\n- Label: \"Friends\" (hidden on mobile, shown on sm+)\n\n**Dropdown content** (use shadcn Popover or DropdownMenu):\n- Header: \"Friends Activity\"\n- List of top 5 recent posts from `useFeed()` hook\n- Each post item:\n  ```\n  [Avatar] username \u00b7 2h ago\n  Completed \"Perfect Boiled Egg\"\n  [Small recipe thumbnail]\n  ```\n- Post types:\n  - `recipe_completed`: \"{username} completed {recipeTitle}\" with recipe image\n  - `photo_upload`: \"{username} shared a photo of {recipeTitle}\" with photo\n  - `milestone`: \"{username} reached Level {n}!\"\n- Empty state (not following anyone): \"Follow people to see their cooking activity here!\" + link to `/people`\n- Empty state (following but no posts): \"Your friends haven't posted yet. Check back later!\"\n- Footer link: \"Find people to follow\" linking to `/people`\n\n#### Design guidance\n- Popover width: `w-80` (320px), max height: `max-h-96 overflow-y-auto`\n- Avatar: `size-8 rounded-full`, recipe thumbnail: `size-10 rounded-md`\n- Use relative time formatting (\"2h ago\", \"1d ago\")\n- Match existing nav styling: `text-cq-text-secondary hover:text-cq-text-primary`\n- Background: `bg-cq-surface border border-cq-border rounded-xl shadow-xl`\n\n#### Integration\nIn `components/top-nav.tsx`, add between Favorites link and UserMenu:\n```tsx\n{isAuthenticated && <FriendsFeedDropdown />}\n```\n\n### Subtasks\n1. Create `components/friends-feed-dropdown.tsx` with Popover-based dropdown\n2. Use `useFeed()` hook from `hooks/use-social.ts` (task_104)\n3. Create post item component with avatar, text, thumbnail, relative time\n4. Add empty states for no-following and no-posts\n5. Integrate into `components/top-nav.tsx`\n6. Add `formatRelativeTime` utility\n\n### Depends on\ntask_104 (types and hooks must exist)\n\n### Acceptance criteria\n- Authenticated user with following sees top 5 recent posts in dropdown\n- recipe_completed posts show \"{user} completed {recipe}\" with thumbnail\n- User following nobody sees empty state with link to /people\n- Non-authenticated user does not see the friends button\n- Dropdown is scrollable, relative timestamps display correctly\n\n### Files to create/modify\n- `components/friends-feed-dropdown.tsx` \u2014 NEW component\n- `components/top-nav.tsx` \u2014 add FriendsFeedDropdown",
+    "files": [
+      "components/friends-feed-dropdown.tsx",
+      "components/top-nav.tsx"
+    ],
+    "createdAt": "2026-03-08T12:00:03.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T18:10:00.000Z",
+    "completedAt": "2026-03-08T18:15:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_107",
+    "title": "[Social] Backend posts & feed API routes + auto-post on recipe completion",
+    "status": "done",
+    "priority": 5,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 No API for creating posts or fetching a social feed\n\n### What\u2019s wrong\nThere are no endpoints for user posts or a social feed. Recipe completions are invisible to other users.\n\n### What to build\nAdd post and feed endpoints to `backend/node-services/api-server/src/routes/social.ts` (created in task_105).\n\n#### Endpoints\n\n**`GET /feed`** (auth required)\n- Fetch top 5 most recent posts from users the current user follows\n- SQL:\n```sql\nSELECT\n  up.id, up.user_id, u.username, u.display_name, u.avatar_url,\n  up.post_type, up.recipe_id, r.title AS recipe_title, r.image_url AS recipe_image_url,\n  up.photo_url, up.caption, up.created_at\nFROM user_posts up\nJOIN user_follows uf ON uf.following_id = up.user_id AND uf.follower_id = $1\nJOIN users u ON u.id = up.user_id\nLEFT JOIN recipes r ON r.id = up.recipe_id\nORDER BY up.created_at DESC\nLIMIT 5\n```\n- Return `{ success: true, data: UserPost[] }`\n\n**`POST /posts`** (auth required)\n- Body: `{ postType: string, recipeId?: string, photoUrl?: string, caption?: string }`\n- Insert into `user_posts`\n- Return `{ success: true, data: { id, ... } }`\n\n**`GET /users/:id/posts`** (public)\n- Fetch recent posts by a specific user (for profile page)\n- Limit 10, ordered by created_at DESC\n- Return `{ success: true, data: UserPost[] }`\n\n**Auto-post on recipe completion:**\n- Modify `backend/node-services/api-server/src/routes/progress.ts`\n- After recipe is marked completed, INSERT a post:\n```sql\nINSERT INTO user_posts (user_id, post_type, recipe_id, caption)\nVALUES ($1, 'recipe_completed', $2, $3)\n```\n- Caption: \"Just completed {recipe_title}!\"\n- Guard against duplicate posts for same recipe\n\n### Subtasks\n1. Add `GET /feed` endpoint to `social.ts`\n2. Add `POST /posts` endpoint to `social.ts`\n3. Add `GET /users/:id/posts` endpoint to `social.ts`\n4. Modify `progress.ts` to auto-create a post when a recipe is completed\n5. Ensure feed query is efficient (uses indexes)\n\n### Depends on\ntask_103 (database tables), task_105 (social routes file exists)\n\n### Acceptance criteria\n- User A follows user B, B completes a recipe, GET /feed for A returns that post\n- Following nobody returns empty feed\n- Recipe completion auto-creates a post in user_posts\n- Feed returns max 5 posts ordered by most recent\n- Each post includes username, avatar, recipe title, recipe image URL\n- POST /posts creates a post successfully\n\n### Files to create/modify\n- `backend/node-services/api-server/src/routes/social.ts` \u2014 add feed + posts endpoints\n- `backend/node-services/api-server/src/routes/progress.ts` \u2014 add auto-post on recipe completion",
+    "files": [
+      "backend/node-services/api-server/src/routes/social.ts",
+      "backend/node-services/api-server/src/routes/progress.ts"
+    ],
+    "createdAt": "2026-03-08T12:00:04.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T17:23:19.430325+00:00",
+    "completedAt": "2026-03-08T17:24:59.780866+00:00",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_108",
+    "title": "[Social] User profile page with follow button and post history",
+    "status": "done",
+    "priority": 6,
+    "type": "enhancement",
+    "description": "## MEDIUM \u2014 No way to view another user profile or follow them from a dedicated page\n\n### What\u2019s wrong\nCookQuest has no user profile pages.\n\n### What to build\nCreate `app/profile/[userId]/page.tsx`.\n\n#### Layout\n```\n[Avatar]  Display Name\n          @username\n [Follow/Unfollow Button]\n\n 42 Followers  \u00b7  18 Following\n 12 Recipes Completed\n\n Recent Activity\n - Completed \"Boiled Egg\" \u00b7 2h\n - Completed \"Dal Tadka\" \u00b7 1d\n```\n\n#### Components\n- **Profile header**: Avatar (`size-20`), display name, username, follow button\n- **Stats row**: Followers, Following, Recipes completed (each clickable)\n- **Follow button**:\n  - Not following: solid primary \"Follow\"\n  - Following: outline \"Following\" that changes to \"Unfollow\" on hover\n  - Own profile: hide follow button\n- **Activity list**: Recent posts (recipe completions, photo uploads), last 10\n\n#### Data fetching\nUse hooks from `hooks/use-social.ts` (task_104):\n- `useUserProfile(userId)` for profile data\n- `useUserPosts(userId)` for activity\n- `useFollowUser()` / `useUnfollowUser()` mutations\n\n#### Design guidance\n- Card-based layout: `bg-cq-surface border border-cq-border rounded-xl`\n- Avatar fallback: initials in a colored circle\n- Follow button: `bg-cq-primary text-white` for follow, `border border-cq-border` for following\n- Stats: `text-lg font-bold` numbers, `text-sm text-cq-text-secondary` labels\n\n### Subtasks\n1. Create `app/profile/[userId]/page.tsx` with profile header, stats, and activity\n2. Create follow/unfollow button with optimistic UI\n3. Handle own-profile state (no follow button)\n4. Add loading skeleton state\n5. Handle user-not-found (404)\n6. Link to profile from friends-feed-dropdown avatar/username clicks\n\n### Depends on\ntask_104 (types and hooks)\n\n### Acceptance criteria\n- Valid userId shows avatar, name, username, stats, and activity\n- Non-self user shows Follow/Unfollow button with optimistic updates\n- Invalid userId shows \"User not found\"\n- Own profile hides the follow button\n- Followers/Following counts update after follow/unfollow\n\n### Files to create/modify\n- `app/profile/[userId]/page.tsx` \u2014 NEW page",
+    "files": [
+      "app/profile/[userId]/page.tsx"
+    ],
+    "createdAt": "2026-03-08T12:00:05.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T18:10:00.000Z",
+    "completedAt": "2026-03-08T18:15:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_109",
+    "title": "[Social] E2E Playwright tests for social features (follow, feed, profile)",
+    "status": "done",
+    "priority": 7,
+    "type": "enhancement",
+    "description": "## MEDIUM \u2014 No test coverage for social features\n\n### What\u2019s wrong\nThe new social features have no E2E test coverage.\n\n### What to build\nCreate `e2e/social.spec.ts` with Playwright tests.\n\n#### API tests (use `request` fixture)\n1. **Follow/unfollow flow:**\n   - Register two users (user A, user B)\n   - User A follows user B \u2192 200\n   - User A follows user B again \u2192 409\n   - GET /users/B/followers \u2192 includes user A\n   - GET /users/A/following \u2192 includes user B\n   - User A unfollows user B \u2192 200\n   - GET /users/B/followers \u2192 empty\n\n2. **Self-follow prevention:**\n   - User A tries to follow themselves \u2192 400\n\n3. **User search:**\n   - GET /users/search?q=admin \u2192 returns admin user\n   - GET /users/search?q=nonexistent \u2192 empty array\n\n4. **Feed:**\n   - User A follows user B\n   - User B completes a recipe (or POST /posts)\n   - User A GET /feed \u2192 includes user B post\n   - User A unfollows user B\n   - User A GET /feed \u2192 empty\n\n5. **User profile:**\n   - GET /users/:id \u2192 returns profile with counts\n\n6. **User posts:**\n   - GET /users/:id/posts \u2192 returns user posts\n\n#### Test patterns\n- Follow existing patterns in `e2e/` directory\n- Use `request` fixture for API tests\n- API base: `http://localhost:3003/api/v1`\n- Register fresh users per test to avoid state pollution\n\n### Subtasks\n1. Create `e2e/social.spec.ts`\n2. Write helpers for registering users and getting auth tokens\n3. Write API tests for follow/unfollow, search, feed, profile, posts\n4. Write basic UI smoke tests for friends dropdown and profile page\n\n### Depends on\ntask_105, task_107 (backend routes must exist)\n\n### Acceptance criteria\n- All social API tests pass\n- Tests cover: follow, unfollow, double-follow error, self-follow error, search, feed, profile\n- Tests use fresh registered users\n- Tests run with `npx playwright test e2e/social.spec.ts`\n\n### Files to create/modify\n- `e2e/social.spec.ts` \u2014 NEW test file",
+    "files": [
+      "e2e/social.spec.ts"
+    ],
+    "createdAt": "2026-03-08T12:00:06.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T17:25:29.339095+00:00",
+    "completedAt": "2026-03-08T17:26:21.390518+00:00",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_110",
+    "title": "[Social] People discovery page \u2014 search and follow users",
+    "status": "done",
+    "priority": 7,
+    "type": "enhancement",
+    "description": "## MEDIUM \u2014 No way to discover and find other users to follow\n\n### What\u2019s wrong\nUsers have no way to discover other CookQuest users.\n\n### What to build\nCreate `app/people/page.tsx`.\n\n#### Layout\n```\nFind People\n[\ud83d\udd0d Search by username...]\n\nSuggested People (or search results)\n[Avatar] @chefmike\nMike Chen \u00b7 8 recipes done      [Follow]\n\n[Avatar] @cookingqueen\nSarah Lee \u00b7 15 recipes done    [Following]\n```\n\n#### Features\n1. **Search bar**: Debounced input (300ms). Calls `useSearchUsers(query)` when query >= 2 chars.\n2. **User cards** (`components/user-card.tsx`): Avatar, username + display name, recipes completed count, Follow/Following button\n3. **Default state**: Show suggested users (most active) via `GET /users/search` with no query\n4. **Empty state**: \"No users found matching '{query}'\"\n5. **Link from top nav**: Friends dropdown empty state links here. Add \"People\" nav link.\n\n#### Design guidance\n- Search input: `bg-cq-surface border border-cq-border rounded-lg px-4 py-2` with search icon\n- User card: `bg-cq-surface border border-cq-border rounded-xl p-4 flex items-center gap-3`\n- Follow button: same as profile page\n- Page max-width: `max-w-2xl mx-auto`\n- Avatar click links to `/profile/[userId]`\n\n#### Top nav integration\nAdd \"People\" link in `components/top-nav.tsx` (only for authenticated users):\n```tsx\n<Link href=\"/people\" className=\"...\">\n  <Users className=\"size-4\" />\n  <span className=\"hidden sm:inline\">People</span>\n</Link>\n```\nPlace it after Favorites, before the FriendsFeedDropdown.\n\n### Subtasks\n1. Create `app/people/page.tsx` with search bar and user list\n2. Create `components/user-card.tsx` \u2014 reusable user card with follow button\n3. Add debounced search using `useSearchUsers(query)` hook\n4. Add \"People\" link to `components/top-nav.tsx`\n5. Handle loading, empty, and error states\n6. Link avatars/usernames to `/profile/[userId]`\n\n### Depends on\ntask_104 (types and hooks)\n\n### Acceptance criteria\n- Authenticated user navigates to /people and sees search bar + suggested users\n- Search query \"admin\" shows matching users with follow buttons\n- Follow button optimistically toggles on click\n- No results shows empty state message\n- Avatar/username clicks navigate to profile page\n- \"People\" link appears in top nav for authenticated users\n\n### Files to create/modify\n- `app/people/page.tsx` \u2014 NEW page\n- `components/user-card.tsx` \u2014 NEW reusable component\n- `components/top-nav.tsx` \u2014 add People link",
+    "files": [
+      "app/people/page.tsx",
+      "components/user-card.tsx",
+      "components/top-nav.tsx"
+    ],
+    "createdAt": "2026-03-08T12:00:07.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T18:10:00.000Z",
+    "completedAt": "2026-03-08T18:15:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_111",
+    "title": "[Backend] DB migration: add is_allowed + is_admin columns",
+    "status": "done",
+    "priority": 2,
+    "type": "enhancement",
+    "description": "## CRITICAL — Alpha access gate requires new user columns\n\n### What's wrong\nNo `is_allowed` or `is_admin` columns exist on the `users` table. CookQuest is entering alpha and needs to control who can use the app.\n\n### What to build\n\n**1. Migration `012_alpha_access` in `database.ts`** (after `011_social_tables`, ~line 744):\n```sql\nALTER TABLE users ADD COLUMN IF NOT EXISTS is_allowed BOOLEAN DEFAULT FALSE;\nALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;\nUPDATE users SET is_allowed = TRUE, is_admin = TRUE WHERE email = 'admin@cookquest.dev';\n```\n\n**2. Update `schema-pg.sql`** — add both columns to the `CREATE TABLE users` block (for fresh installs):\n```sql\nis_allowed BOOLEAN DEFAULT FALSE,\nis_admin BOOLEAN DEFAULT FALSE\n```\nPlace after `following_count`.\n\n### Subtasks\n1. Add migration 012_alpha_access in database.ts `initialize()` method\n2. Update schema-pg.sql CREATE TABLE users to include both columns\n3. Verify migration is idempotent (uses ADD COLUMN IF NOT EXISTS)\n\n### Depends on\nnone\n\n### Acceptance criteria\n- `docker compose down -v && docker compose up` creates users table with is_allowed and is_admin columns\n- Seeded admin user (admin@cookquest.dev) has is_allowed=TRUE, is_admin=TRUE\n- All other users default to is_allowed=FALSE, is_admin=FALSE\n- Migration is tracked in _migrations table as '012_alpha_access'\n\n### Files to create/modify\n- `backend/node-services/api-server/src/services/database.ts` — add migration 012\n- `backend/shared/schema-pg.sql` — add columns to CREATE TABLE users",
+    "files": [
+      "backend/node-services/api-server/src/services/database.ts",
+      "backend/shared/schema-pg.sql"
+    ],
+    "createdAt": "2026-03-08T19:00:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T19:00:00.000Z",
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_112",
+    "title": "[Backend] Update User interface + queries for alpha access",
+    "status": "done",
+    "priority": 2,
+    "type": "enhancement",
+    "description": "## CRITICAL — User interface and queries don't include alpha access fields\n\n### What's wrong\nThe `User` interface and all user SELECT queries don't include `is_allowed` or `is_admin` columns added in task_111.\n\n### What to build\n\n**1. Update `User` interface** (line ~6 in database.ts):\n```typescript\nexport interface User {\n  id: number\n  email: string\n  username: string\n  password_hash: string\n  created_at: string\n  updated_at: string\n  is_allowed: boolean\n  is_admin: boolean\n  profile?: { ... }\n}\n```\n\n**2. Update SELECT queries** — add `is_allowed, is_admin` to:\n- `getUserById` (~line 776)\n- `getUserByEmail` (~line 785)\n- `getUserByUsername` (~line 794)\n\n**3. Update `_mapUser`** (~line 803) to default booleans:\n```typescript\nprivate _mapUser(row: any): User {\n  return {\n    ...row,\n    profile: row.profile || {},\n    is_allowed: row.is_allowed ?? false,\n    is_admin: row.is_admin ?? false,\n  }\n}\n```\n\n**4. Add new methods:**\n```typescript\nasync getAllUsers(): Promise<User[]> {\n  const { rows } = await this.pool.query(\n    'SELECT id, email, username, is_allowed, is_admin, created_at FROM users ORDER BY created_at DESC'\n  )\n  return rows\n}\n\nasync setUserAllowed(userId: number, isAllowed: boolean): Promise<void> {\n  await this.pool.query('UPDATE users SET is_allowed = $1 WHERE id = $2', [isAllowed, userId])\n}\n\nasync setUserAdmin(userId: number, isAdmin: boolean): Promise<void> {\n  await this.pool.query('UPDATE users SET is_admin = $1 WHERE id = $2', [isAdmin, userId])\n}\n```\n\n### Subtasks\n1. Add is_allowed and is_admin to User interface\n2. Update getUserById, getUserByEmail, getUserByUsername SELECTs\n3. Update _mapUser to default booleans\n4. Add getAllUsers(), setUserAllowed(), setUserAdmin() methods\n\n### Depends on\ntask_111\n\n### Acceptance criteria\n- User objects returned by getUserById/ByEmail/ByUsername include is_allowed and is_admin\n- getAllUsers returns all users with id, email, username, is_allowed, is_admin, created_at\n- setUserAllowed toggles the is_allowed column\n- setUserAdmin toggles the is_admin column\n\n### Files to create/modify\n- `backend/node-services/api-server/src/services/database.ts` — update interface, queries, add methods",
+    "files": [
+      "backend/node-services/api-server/src/services/database.ts"
+    ],
+    "createdAt": "2026-03-08T19:00:01.000Z",
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-03-08T19:30:00.000Z",
+    "completedAt": "2026-03-08T19:31:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_113",
+    "title": "[Backend] Add allowedMiddleware + adminMiddleware",
+    "status": "done",
+    "priority": 2,
+    "type": "enhancement",
+    "description": "## CRITICAL — No middleware to gate alpha access or admin routes\n\n### What's wrong\nNo middleware exists to check if a user is allowed (alpha access) or is an admin. The `AuthenticatedRequest.user` type also lacks these fields.\n\n### What to build\n\n**1. Update `AuthenticatedRequest.user`** interface (line ~7 in middleware/auth.ts):\n```typescript\nexport interface AuthenticatedRequest extends Request {\n  user?: {\n    id: number\n    uuid: string\n    email: string\n    username: string\n    isActive: boolean\n    isAllowed: boolean\n    isAdmin: boolean\n  }\n}\n```\n\n**2. Update `authMiddleware`** (~line 93) — add to `req.user`:\n```typescript\nreq.user = {\n  id: user.id,\n  uuid: user.id.toString(),\n  email: user.email,\n  username: user.username,\n  isActive: true,\n  isAllowed: user.is_allowed,\n  isAdmin: user.is_admin,\n}\n```\n\n**3. Same update in `optionalAuth`** (~line 139).\n\n**4. New `allowedMiddleware`:**\n```typescript\nexport const allowedMiddleware = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {\n  if (!req.user?.isAllowed) {\n    return res.status(403).json({\n      success: false,\n      error: { message: 'Alpha access required', code: 'NOT_ALLOWED' }\n    })\n  }\n  next()\n}\n```\n\n**5. New `adminMiddleware`:**\n```typescript\nexport const adminMiddleware = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {\n  if (!req.user?.isAdmin) {\n    return res.status(403).json({\n      success: false,\n      error: { message: 'Admin access required', code: 'NOT_ADMIN' }\n    })\n  }\n  next()\n}\n```\n\n### Subtasks\n1. Add isAllowed and isAdmin to AuthenticatedRequest.user interface\n2. Update authMiddleware to populate isAllowed/isAdmin from user DB record\n3. Update optionalAuth to populate isAllowed/isAdmin\n4. Add allowedMiddleware function\n5. Add adminMiddleware function\n6. Export both new middlewares\n\n### Depends on\ntask_112\n\n### Acceptance criteria\n- AuthenticatedRequest.user includes isAllowed and isAdmin booleans\n- allowedMiddleware returns 403 with code NOT_ALLOWED when user.isAllowed is false\n- adminMiddleware returns 403 with code NOT_ADMIN when user.isAdmin is false\n- Both middlewares call next() when check passes\n\n### Files to create/modify\n- `backend/node-services/api-server/src/middleware/auth.ts` — update interface, middlewares, add new middlewares",
+    "files": [
+      "backend/node-services/api-server/src/middleware/auth.ts"
+    ],
+    "createdAt": "2026-03-08T19:00:02.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_114",
+    "title": "[Backend] Admin routes + apply allowedMiddleware to protected routes",
+    "status": "done",
+    "priority": 3,
+    "type": "enhancement",
+    "description": "## HIGH — No admin API routes and protected routes lack alpha gate\n\n### What's wrong\nNo admin routes exist to manage users. Protected routes (progress, favorites, social) don't check if the user is allowed.\n\n### What to build\n\n**1. New `routes/admin.ts`:**\n```typescript\nimport { Router } from 'express'\nimport { DatabaseService } from '../services/database'\nimport { authMiddleware, adminMiddleware, AuthenticatedRequest } from '../middleware/auth'\nimport { asyncHandler } from '../middleware/error-handler'\n\nconst router = Router()\n\n// GET /api/v1/admin/users — list all users\nrouter.get('/users',\n  authMiddleware,\n  adminMiddleware,\n  asyncHandler(async (req: AuthenticatedRequest, res) => {\n    const users = await DatabaseService.getAllUsers()\n    res.json({ success: true, data: { users } })\n  })\n)\n\n// PATCH /api/v1/admin/users/:id/allow — toggle is_allowed\nrouter.patch('/users/:id/allow',\n  authMiddleware,\n  adminMiddleware,\n  asyncHandler(async (req: AuthenticatedRequest, res) => {\n    const userId = parseInt(req.params.id)\n    const { is_allowed } = req.body\n    if (typeof is_allowed !== 'boolean') {\n      return res.status(400).json({ success: false, error: { message: 'is_allowed must be a boolean' } })\n    }\n    await DatabaseService.setUserAllowed(userId, is_allowed)\n    res.json({ success: true, data: { userId, is_allowed } })\n  })\n)\n\nexport { router as adminRoutes }\n```\n\n**2. Update `routes/index.ts`:**\n- Import `adminRoutes` and `allowedMiddleware`\n- Register: `app.use(\\`${apiPrefix}/admin\\`, adminRoutes)`\n- Add `allowedMiddleware` after `authMiddleware` on protected route groups (progress, favorites, social)\n- Auth routes (`/auth/*`) must NOT be gated\n- Public read routes (recipes, skills, tips, ingredients) also NOT gated\n\n**3. Update `routes/auth.ts`:**\n- Include `is_allowed` and `is_admin` in user response objects for `/register` (~line 150), `/login` (~line 200), `/me` (~line 248)\n- Example: `is_allowed: user.is_allowed ?? false, is_admin: user.is_admin ?? false`\n\n### Subtasks\n1. Create routes/admin.ts with GET /users and PATCH /users/:id/allow\n2. Register admin routes in routes/index.ts\n3. Apply allowedMiddleware to progress, favorites, social routes in index.ts\n4. Update auth.ts register/login/me responses to include is_allowed and is_admin\n\n### Depends on\ntask_113\n\n### Acceptance criteria\n- GET /api/v1/admin/users returns user list (admin only)\n- PATCH /api/v1/admin/users/:id/allow toggles is_allowed (admin only)\n- Non-admin gets 403 NOT_ADMIN on admin routes\n- Non-allowed user gets 403 NOT_ALLOWED on progress/favorites/social routes\n- Auth routes (login, register, me) return is_allowed and is_admin in user object\n- Public routes (recipes, skills, tips, ingredients) remain ungated\n\n### Files to create/modify\n- `backend/node-services/api-server/src/routes/admin.ts` — NEW\n- `backend/node-services/api-server/src/routes/index.ts` — register admin, apply allowedMiddleware\n- `backend/node-services/api-server/src/routes/auth.ts` — add is_allowed/is_admin to responses",
+    "files": [
+      "backend/node-services/api-server/src/routes/admin.ts",
+      "backend/node-services/api-server/src/routes/index.ts",
+      "backend/node-services/api-server/src/routes/auth.ts"
+    ],
+    "createdAt": "2026-03-08T19:00:03.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_115",
+    "title": "[Frontend] Update AuthUser type + auth context with isAllowed/isAdmin",
+    "status": "done",
+    "priority": 3,
+    "type": "enhancement",
+    "description": "## HIGH — Frontend has no concept of alpha access or admin status\n\n### What's wrong\nThe `AuthUser` interface and `AuthContextValue` don't include `is_allowed` or `is_admin` fields. Frontend can't gate access or show admin UI.\n\n### What to build\n\n**1. Update `lib/api/auth.ts` — `AuthUser` interface:**\n```typescript\nexport interface AuthUser {\n  id: number\n  email: string\n  username: string\n  profile: UserProfile\n  created_at?: string\n  is_allowed: boolean\n  is_admin: boolean\n}\n```\n\n**2. Update `lib/auth-context.tsx` — `AuthContextValue`:**\n```typescript\ninterface AuthContextValue {\n  user: AuthUser | null\n  isAuthenticated: boolean\n  isLoading: boolean\n  isAllowed: boolean\n  isAdmin: boolean\n  login: (email: string, password: string) => Promise<void>\n  register: (...) => Promise<void>\n  logout: () => Promise<void>\n}\n```\n\nCompute derived values:\n```typescript\nconst isAllowed = user?.is_allowed ?? false\nconst isAdmin = user?.is_admin ?? false\n```\n\nExpose in context provider value:\n```typescript\nvalue={{ user, isAuthenticated, isLoading, isAllowed, isAdmin, login, register, logout }}\n```\n\n### Subtasks\n1. Add is_allowed and is_admin to AuthUser interface in lib/api/auth.ts\n2. Add isAllowed and isAdmin to AuthContextValue in lib/auth-context.tsx\n3. Compute isAllowed/isAdmin from user object in AuthProvider\n4. Expose in context value\n\n### Depends on\ntask_114\n\n### Acceptance criteria\n- AuthUser includes is_allowed and is_admin booleans\n- useAuth() hook returns isAllowed and isAdmin\n- Values derived from user?.is_allowed and user?.is_admin with false defaults\n- No breaking changes to existing useAuth() consumers\n\n### Files to create/modify\n- `lib/api/auth.ts` — update AuthUser interface\n- `lib/auth-context.tsx` — update AuthContextValue, compute and expose isAllowed/isAdmin",
+    "files": [
+      "lib/api/auth.ts",
+      "lib/auth-context.tsx"
+    ],
+    "createdAt": "2026-03-08T19:00:04.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_116",
+    "title": "[Frontend] Access Blocked Screen + AuthGate in providers",
+    "status": "done",
+    "priority": 3,
+    "type": "enhancement",
+    "description": "## HIGH — Non-allowed users can access the full app\n\n### What's wrong\nNo gate exists to block users who haven't been approved for alpha access. They can browse and use all features.\n\n### What to build\n\n**1. New `components/access-blocked-screen.tsx`:**\nFull-screen overlay (`fixed inset-0 z-[100]`) with:\n- Background: `bg-cq-bg` (or `bg-background`)\n- Centered shadcn Card with:\n  - Title: \"Hang Tight, Chef!\" (with chef hat emoji or icon)\n  - Body: \"You're on the list! We're rolling out alpha access gradually. You'll get full access soon.\"\n  - Show user's email: \"Signed in as {email}\"\n  - Contact line: \"Questions? Email pratameshjadhav@gmail.com\"\n  - Logout button (shadcn Button, variant outline)\n- Use `useAuth()` to get user email and logout function\n- Design tokens: `cq-*` classes, orange accent color\n\n**2. Update `app/providers.tsx` — add AuthGate:**\n```tsx\nfunction AuthGate({ children }: { children: React.ReactNode }) {\n  const { isLoading, isAuthenticated, isAllowed } = useAuth()\n  \n  // Don't gate: loading, not logged in, or already allowed\n  if (isLoading || !isAuthenticated || isAllowed) {\n    return <>{children}</>\n  }\n  \n  // Authenticated but NOT allowed → show blocked screen\n  return <AccessBlockedScreen />\n}\n```\n\nWrap children inside AuthProvider:\n```tsx\n<AuthProvider>\n  <AuthGate>{children}</AuthGate>\n</AuthProvider>\n```\n\n**Logic:**\n- Anonymous users browse freely (no gate)\n- Approved users get full access\n- Authenticated + not allowed → see blocked screen\n\n### Subtasks\n1. Create components/access-blocked-screen.tsx with full-screen overlay\n2. Add AuthGate component to app/providers.tsx\n3. Wrap children with AuthGate inside AuthProvider\n4. Verify anonymous browsing still works (no gate)\n5. Verify allowed users pass through\n\n### Depends on\ntask_115\n\n### Acceptance criteria\n- Non-allowed authenticated user sees \"Hang Tight, Chef!\" full-screen overlay\n- Overlay shows user email and logout button\n- Logout button works and returns to normal browsing\n- Anonymous users are NOT blocked (can browse freely)\n- Allowed users pass through to normal app\n- Overlay has z-[100] to cover everything\n\n### Files to create/modify\n- `components/access-blocked-screen.tsx` — NEW component\n- `app/providers.tsx` — add AuthGate wrapper",
+    "files": [
+      "components/access-blocked-screen.tsx",
+      "app/providers.tsx"
+    ],
+    "createdAt": "2026-03-08T19:00:05.000Z",
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-03-08T19:35:00.000Z",
+    "completedAt": "2026-03-08T19:36:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_117",
+    "title": "[Frontend] Admin panel page + admin API hooks",
+    "status": "done",
+    "priority": 4,
+    "type": "enhancement",
+    "description": "## HIGH — No admin UI to manage user access\n\n### What's wrong\nAdmins have no way to view users or toggle alpha access. Need an admin panel at /admin.\n\n### What to build\n\n**1. New `lib/api/admin.ts`:**\n```typescript\nimport { apiClient } from './client'\n\nexport interface AdminUser {\n  id: number\n  email: string\n  username: string\n  is_allowed: boolean\n  is_admin: boolean\n  created_at: string\n}\n\nexport async function getAdminUsers(): Promise<AdminUser[]> {\n  const data = await apiClient<{ users: AdminUser[] }>('/admin/users')\n  return data.users\n}\n\nexport async function setUserAllowed(userId: number, isAllowed: boolean): Promise<void> {\n  await apiClient(`/admin/users/${userId}/allow`, {\n    method: 'PATCH',\n    body: { is_allowed: isAllowed },\n  })\n}\n```\n\n**2. New `hooks/use-admin.ts`:**\n```typescript\nimport { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'\nimport { getAdminUsers, setUserAllowed } from '@/lib/api/admin'\n\nexport const adminKeys = {\n  all: ['admin-users'] as const,\n}\n\nexport function useAdminUsers() {\n  return useQuery({\n    queryKey: adminKeys.all,\n    queryFn: getAdminUsers,\n    staleTime: 30 * 1000,\n    gcTime: 60 * 1000,\n  })\n}\n\nexport function useToggleUserAllowed() {\n  const queryClient = useQueryClient()\n  return useMutation({\n    mutationFn: ({ userId, isAllowed }: { userId: number; isAllowed: boolean }) =>\n      setUserAllowed(userId, isAllowed),\n    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.all }),\n  })\n}\n```\n\n**3. New `app/admin/page.tsx`:**\n- Auth guard: if not admin, show \"Access Denied\" message\n- shadcn Table with columns: Email, Username, Status (allowed/pending), Joined, Actions\n- Toggle Switch per row to flip is_allowed (uses useToggleUserAllowed mutation)\n- Loading state with skeleton\n- Uses `useAuth()` for isAdmin check and `useAdminUsers()` for data\n- Page title: \"Admin Panel — User Management\"\n\n**4. Update `components/auth/user-menu.tsx`:**\n- Import `ShieldIcon` from lucide-react\n- Add \"Admin Panel\" link in dropdown (only when `isAdmin` from useAuth):\n```tsx\n{isAdmin && (\n  <DropdownMenuItem asChild className=\"cursor-pointer\">\n    <Link href=\"/admin\">\n      <ShieldIcon className=\"h-4 w-4\" />\n      <span>Admin Panel</span>\n    </Link>\n  </DropdownMenuItem>\n)}\n```\n- Place it in the Actions group, before the Profile link\n\n### Subtasks\n1. Create lib/api/admin.ts with getAdminUsers and setUserAllowed\n2. Create hooks/use-admin.ts with useAdminUsers and useToggleUserAllowed\n3. Create app/admin/page.tsx with user table and toggle switches\n4. Add admin link to components/auth/user-menu.tsx dropdown\n\n### Depends on\ntask_115\n\n### Acceptance criteria\n- Admin navigates to /admin and sees user table\n- Non-admin sees \"Access Denied\" on /admin\n- Toggle switch flips is_allowed and refreshes the table\n- Admin Panel link appears in user menu dropdown only for admins\n- Table shows email, username, allowed status, join date\n\n### Files to create/modify\n- `lib/api/admin.ts` — NEW API module\n- `hooks/use-admin.ts` — NEW query hooks\n- `app/admin/page.tsx` — NEW admin page\n- `components/auth/user-menu.tsx` — add admin link",
+    "files": [
+      "lib/api/admin.ts",
+      "hooks/use-admin.ts",
+      "app/admin/page.tsx",
+      "components/auth/user-menu.tsx"
+    ],
+    "createdAt": "2026-03-08T19:00:06.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
   }
 ]

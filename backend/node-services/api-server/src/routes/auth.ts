@@ -151,7 +151,9 @@ router.post('/register',
           id: user.id,
           email: user.email,
           username: user.username,
-          profile: user.profile
+          profile: user.profile,
+          is_allowed: user.is_allowed ?? false,
+          is_admin: user.is_admin ?? false,
         },
         token // Still returned for backward compatibility
       }
@@ -201,7 +203,9 @@ router.post('/login',
           id: user.id,
           email: user.email,
           username: user.username,
-          profile: user.profile
+          profile: user.profile,
+          is_allowed: user.is_allowed ?? false,
+          is_admin: user.is_admin ?? false,
         },
         token // Still returned for backward compatibility
       }
@@ -250,7 +254,9 @@ router.get('/me',
           email: user.email,
           username: user.username,
           profile: user.profile,
-          created_at: user.created_at
+          created_at: user.created_at,
+          is_allowed: user.is_allowed ?? false,
+          is_admin: user.is_admin ?? false,
         }
       }
     })
@@ -292,7 +298,9 @@ router.post('/refresh',
           id: user.id,
           email: user.email,
           username: user.username,
-          profile: user.profile
+          profile: user.profile,
+          is_allowed: user.is_allowed ?? false,
+          is_admin: user.is_admin ?? false,
         }
       }
     })

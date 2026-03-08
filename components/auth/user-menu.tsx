@@ -18,11 +18,13 @@ import {
   ChefHatIcon,
   LogOutIcon,
   UserIcon,
+  ShieldIcon,
   Loader2Icon,
 } from 'lucide-react'
+import Link from 'next/link'
 
 export function UserMenu() {
-  const { user, isAuthenticated, isLoading, logout } = useAuth()
+  const { user, isAuthenticated, isLoading, isAdmin, logout } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   async function handleLogout() {
@@ -114,6 +116,14 @@ export function UserMenu() {
 
         {/* Actions */}
         <DropdownMenuGroup>
+          {isAdmin && (
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href="/admin">
+                <ShieldIcon className="h-4 w-4" />
+                <span>Admin Panel</span>
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem className="cursor-pointer">
             <UserIcon className="h-4 w-4" />
             <span>Profile</span>

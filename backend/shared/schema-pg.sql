@@ -20,7 +20,11 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at TIMESTAMP,
     is_active BOOLEAN DEFAULT TRUE,
     email_verified BOOLEAN DEFAULT FALSE,
-    preferences JSONB DEFAULT '{}'
+    preferences JSONB DEFAULT '{}',
+    followers_count INTEGER DEFAULT 0,
+    following_count INTEGER DEFAULT 0,
+    is_allowed BOOLEAN DEFAULT FALSE,
+    is_admin BOOLEAN DEFAULT FALSE
 );
 
 -- User sessions for authentication
@@ -309,6 +313,33 @@ CREATE TABLE IF NOT EXISTS recipe_ingredients (
 );
 CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe_ingredients(recipe_id);
 CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_ingredient ON recipe_ingredients(ingredient_id);
+
+-- ================================
+-- Social: Follows & Posts
+-- ================================
+
+CREATE TABLE IF NOT EXISTS user_follows (
+  id SERIAL PRIMARY KEY,
+  follower_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  following_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(follower_id, following_id),
+  CHECK (follower_id != following_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_follows_follower ON user_follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_user_follows_following ON user_follows(following_id);
+
+CREATE TABLE IF NOT EXISTS user_posts (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  post_type TEXT CHECK (post_type IN ('recipe_completed', 'photo_upload', 'milestone')) NOT NULL,
+  recipe_id TEXT REFERENCES recipes(id) ON DELETE SET NULL,
+  photo_url TEXT,
+  caption TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_user_posts_user ON user_posts(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_posts_created ON user_posts(created_at DESC);
 
 -- ================================
 -- User Favorites (Watchlist)

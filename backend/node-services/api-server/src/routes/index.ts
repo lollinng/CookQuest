@@ -1,4 +1,5 @@
 import { Express } from 'express'
+import { authMiddleware, allowedMiddleware } from '../middleware/auth'
 
 // Import route handlers
 import { authRoutes } from './auth'
@@ -9,26 +10,36 @@ import { tipRoutes } from './tips'
 import { photoRoutes } from './photos'
 import { ingredientRoutes } from './ingredients'
 import { favoriteRoutes } from './favorites'
+import { socialRoutes } from './social'
+import { adminRoutes } from './admin'
 
 export function initializeRoutes(app: Express) {
   // API version prefix
   const apiPrefix = '/api/v1'
 
-  // Public routes (no authentication required)
+  // Public routes (no authentication required, no alpha gate)
   app.use(`${apiPrefix}/auth`, authRoutes)
   app.use(`${apiPrefix}/recipes`, recipeRoutes) // Some endpoints public, some protected
   app.use(`${apiPrefix}/skills`, skillRoutes) // Public read access
   app.use(`${apiPrefix}/tips`, tipRoutes) // Public read access
   app.use(`${apiPrefix}/ingredients`, ingredientRoutes) // Public read access
 
-  // Protected routes (authentication required)
-  app.use(`${apiPrefix}/progress`, progressRoutes)
+  // Admin routes (auth + admin gate, handled inside admin.ts)
+  app.use(`${apiPrefix}/admin`, adminRoutes)
+
+  // Protected routes (authentication + alpha access required)
+  // authMiddleware runs first to populate req.user, then allowedMiddleware checks isAllowed
+  // (progress routes also apply authMiddleware internally — double-call is a safe no-op)
+  app.use(`${apiPrefix}/progress`, authMiddleware, allowedMiddleware, progressRoutes)
 
   // Photos — handles /api/v1/recipes/:id/photos and /api/v1/users/me/photos
   app.use(apiPrefix, photoRoutes)
 
   // Favorites — handles /api/v1/recipes/:id/favorite and /api/v1/users/me/favorites
   app.use(apiPrefix, favoriteRoutes)
+
+  // Social — handles /api/v1/users/:id/follow, followers, following, search, profile
+  app.use(apiPrefix, socialRoutes)
 
   // API documentation endpoint
   app.get(`${apiPrefix}`, (req, res) => {
@@ -81,6 +92,17 @@ export function initializeRoutes(app: Express) {
           'POST /recipes/:id/favorite': 'Add recipe to favorites (auth required)',
           'DELETE /recipes/:id/favorite': 'Remove recipe from favorites (auth required)',
           'GET /users/me/favorites': 'List favorited recipes (auth required)'
+        },
+        social: {
+          'POST /users/:id/follow': 'Follow a user (auth required)',
+          'DELETE /users/:id/follow': 'Unfollow a user (auth required)',
+          'GET /users/:id/followers': 'List user followers (public, auth adds isFollowing)',
+          'GET /users/:id/following': 'List who user follows (public, auth adds isFollowing)',
+          'GET /users/search?q=term': 'Search users by name/username (public)',
+          'GET /users/:id': 'Get user public profile (public, auth adds isFollowing)',
+          'GET /feed': 'Activity feed from followed users (auth required, top 5)',
+          'POST /posts': 'Create a post (auth required)',
+          'GET /users/:id/posts': 'User recent posts (public, limit 10)'
         }
       },
       documentation: `${req.protocol}://${req.get('host')}/api/docs`

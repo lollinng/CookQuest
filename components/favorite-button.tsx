@@ -2,6 +2,7 @@
 
 import { Heart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useToggleFavorite } from '@/hooks/use-recipes'
 import { useAuth } from '@/lib/auth-context'
 
@@ -15,7 +16,27 @@ export function FavoriteButton({ recipeId, isFavorited, size = 'sm' }: FavoriteB
   const { isAuthenticated } = useAuth()
   const toggleFavorite = useToggleFavorite()
 
-  if (!isAuthenticated) return null
+  const iconSize = size === 'sm' ? 'size-4' : 'size-5'
+
+  if (!isAuthenticated) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={(e) => { e.stopPropagation(); e.preventDefault() }}
+            className="rounded-full p-2 shadow-lg bg-cq-surface/60 text-cq-text-muted cursor-not-allowed opacity-60"
+          >
+            <Heart className={iconSize} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="bg-cq-surface text-cq-text-primary border border-cq-border">
+          Sign in to favorite recipes
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -39,7 +60,7 @@ export function FavoriteButton({ recipeId, isFavorited, size = 'sm' }: FavoriteB
       `}
     >
       <Heart
-        className={`${size === 'sm' ? 'size-4' : 'size-5'} transition-transform duration-200 ${
+        className={`${iconSize} transition-transform duration-200 ${
           isFavorited ? 'fill-current scale-110' : ''
         } ${toggleFavorite.isPending ? 'animate-pulse' : ''}`}
       />

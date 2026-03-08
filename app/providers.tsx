@@ -4,7 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from 'next-themes'
 import { Toaster } from 'sonner'
 import { useState, lazy, Suspense } from 'react'
-import { AuthProvider } from '@/lib/auth-context'
+import { AuthProvider, useAuth } from '@/lib/auth-context'
+import { AccessBlockedScreen } from '@/components/access-blocked-screen'
 
 const ReactQueryDevtools =
   process.env.NODE_ENV === 'development'
@@ -14,6 +15,18 @@ const ReactQueryDevtools =
         }))
       )
     : () => null
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { isLoading, isAuthenticated, isAllowed } = useAuth()
+
+  // Don't gate: loading, not logged in, or already allowed
+  if (isLoading || !isAuthenticated || isAllowed) {
+    return <>{children}</>
+  }
+
+  // Authenticated but NOT allowed -> show blocked screen
+  return <AccessBlockedScreen />
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -42,7 +55,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         disableTransitionOnChange
       >
         <AuthProvider>
-          {children}
+          <AuthGate>{children}</AuthGate>
         </AuthProvider>
         <Toaster
           position="top-center"

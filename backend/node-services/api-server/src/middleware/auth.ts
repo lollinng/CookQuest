@@ -10,6 +10,8 @@ export interface AuthenticatedRequest extends Request {
     email: string
     username: string
     isActive: boolean
+    isAllowed: boolean
+    isAdmin: boolean
   }
 }
 
@@ -95,7 +97,9 @@ export const authMiddleware = async (
       uuid: user.id.toString(), // Using id as uuid for now
       email: user.email,
       username: user.username,
-      isActive: true
+      isActive: true,
+      isAllowed: user.is_allowed,
+      isAdmin: user.is_admin,
     }
 
     next()
@@ -141,13 +145,45 @@ export const optionalAuth = async (
         uuid: user.id.toString(),
         email: user.email,
         username: user.username,
-        isActive: true
+        isActive: true,
+        isAllowed: user.is_allowed,
+        isAdmin: user.is_admin,
       }
     }
   } catch (error) {
     // Ignore auth errors in optional auth
   }
 
+  next()
+}
+
+// Alpha access gate — blocks users without is_allowed
+export const allowedMiddleware = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  if (!req.user?.isAllowed) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Alpha access required', code: 'NOT_ALLOWED' }
+    })
+  }
+  next()
+}
+
+// Admin gate — blocks non-admin users
+export const adminMiddleware = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  if (!req.user?.isAdmin) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Admin access required', code: 'NOT_ADMIN' }
+    })
+  }
   next()
 }
 

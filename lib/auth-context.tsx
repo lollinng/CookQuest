@@ -17,6 +17,8 @@ interface AuthContextValue {
   user: AuthUser | null
   isAuthenticated: boolean
   isLoading: boolean
+  isAllowed: boolean
+  isAdmin: boolean
   login: (email: string, password: string) => Promise<void>
   register: (
     email: string,
@@ -36,6 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   const isAuthenticated = !!user
+  const isAllowed = user?.is_allowed ?? false
+  const isAdmin = user?.is_admin ?? false
 
   // Check for existing session on mount
   // With httpOnly cookies, we can't check for the token directly —
@@ -97,6 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isAuthenticated,
         isLoading,
+        isAllowed,
+        isAdmin,
         login,
         register,
         logout,

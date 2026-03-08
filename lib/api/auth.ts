@@ -24,6 +24,8 @@ export interface AuthUser {
   username: string
   profile: UserProfile
   created_at?: string
+  is_allowed: boolean
+  is_admin: boolean
 }
 
 /** Shape returned by POST /auth/login and POST /auth/register */

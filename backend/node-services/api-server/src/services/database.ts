@@ -10,6 +10,8 @@ export interface User {
   password_hash: string
   created_at: string
   updated_at: string
+  is_allowed: boolean
+  is_admin: boolean
   profile?: {
     display_name?: string
     avatar_url?: string
@@ -709,6 +711,52 @@ class DatabaseServiceClass {
       logger.info('User favorites migration applied')
     }
 
+    // Social tables: user_follows + user_posts (migration 011)
+    const socialApplied = await this.isMigrationApplied('011_social_tables')
+    if (!socialApplied) {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS user_follows (
+          id SERIAL PRIMARY KEY,
+          follower_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          following_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(follower_id, following_id),
+          CHECK (follower_id != following_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_follows_follower ON user_follows(follower_id);
+        CREATE INDEX IF NOT EXISTS idx_user_follows_following ON user_follows(following_id);
+
+        CREATE TABLE IF NOT EXISTS user_posts (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          post_type TEXT CHECK (post_type IN ('recipe_completed', 'photo_upload', 'milestone')) NOT NULL,
+          recipe_id TEXT REFERENCES recipes(id) ON DELETE SET NULL,
+          photo_url TEXT,
+          caption TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_posts_user ON user_posts(user_id);
+        CREATE INDEX IF NOT EXISTS idx_user_posts_created ON user_posts(created_at DESC);
+
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS followers_count INTEGER DEFAULT 0;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS following_count INTEGER DEFAULT 0;
+      `)
+      await this.recordMigration('011_social_tables')
+      logger.info('Social tables migration applied')
+    }
+
+    // Alpha access: is_allowed + is_admin columns (migration 012)
+    const alphaApplied = await this.isMigrationApplied('012_alpha_access')
+    if (!alphaApplied) {
+      await this.pool.query(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS is_allowed BOOLEAN DEFAULT FALSE;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+        UPDATE users SET is_allowed = TRUE, is_admin = TRUE WHERE email = 'admin@cookquest.dev';
+      `)
+      await this.recordMigration('012_alpha_access')
+      logger.info('Alpha access migration applied')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
@@ -741,7 +789,7 @@ class DatabaseServiceClass {
 
   async getUserById(id: number): Promise<User | null> {
     const { rows } = await this.pool.query(
-      'SELECT id, email, username, password_hash, preferences as profile, created_at, updated_at FROM users WHERE id = $1',
+      'SELECT id, email, username, password_hash, preferences as profile, created_at, updated_at, is_allowed, is_admin FROM users WHERE id = $1',
       [id]
     )
     if (!rows[0]) return null
@@ -750,7 +798,7 @@ class DatabaseServiceClass {
 
   async getUserByEmail(email: string): Promise<User | null> {
     const { rows } = await this.pool.query(
-      'SELECT id, email, username, password_hash, preferences as profile, created_at, updated_at FROM users WHERE email = $1',
+      'SELECT id, email, username, password_hash, preferences as profile, created_at, updated_at, is_allowed, is_admin FROM users WHERE email = $1',
       [email]
     )
     if (!rows[0]) return null
@@ -759,7 +807,7 @@ class DatabaseServiceClass {
 
   async getUserByUsername(username: string): Promise<User | null> {
     const { rows } = await this.pool.query(
-      'SELECT id, email, username, password_hash, preferences as profile, created_at, updated_at FROM users WHERE username = $1',
+      'SELECT id, email, username, password_hash, preferences as profile, created_at, updated_at, is_allowed, is_admin FROM users WHERE username = $1',
       [username]
     )
     if (!rows[0]) return null
@@ -771,7 +819,29 @@ class DatabaseServiceClass {
       ...row,
       // preferences JSONB comes back as a native object; ensure profile shape
       profile: row.profile || {},
+      is_allowed: row.is_allowed ?? false,
+      is_admin: row.is_admin ?? false,
     }
+  }
+
+  // Admin methods
+  async getAllUsers(): Promise<User[]> {
+    const { rows } = await this.pool.query(
+      'SELECT id, email, username, is_allowed, is_admin, created_at FROM users ORDER BY created_at DESC'
+    )
+    return rows.map((row: any) => ({
+      ...row,
+      is_allowed: row.is_allowed ?? false,
+      is_admin: row.is_admin ?? false,
+    }))
+  }
+
+  async setUserAllowed(userId: number, isAllowed: boolean): Promise<void> {
+    await this.pool.query('UPDATE users SET is_allowed = $1 WHERE id = $2', [isAllowed, userId])
+  }
+
+  async setUserAdmin(userId: number, isAdmin: boolean): Promise<void> {
+    await this.pool.query('UPDATE users SET is_admin = $1 WHERE id = $2', [isAdmin, userId])
   }
 
   // Recipe methods
@@ -1114,6 +1184,170 @@ class DatabaseServiceClass {
       [userId]
     )
     return new Set(rows.map(r => r.recipe_id))
+  }
+
+  // ── Social: Follows ──
+
+  async followUser(followerId: number, followingId: number): Promise<void> {
+    await this.transaction(async (client) => {
+      await client.query(
+        `INSERT INTO user_follows (follower_id, following_id) VALUES ($1, $2)`,
+        [followerId, followingId]
+      )
+      await client.query(
+        'UPDATE users SET following_count = following_count + 1 WHERE id = $1',
+        [followerId]
+      )
+      await client.query(
+        'UPDATE users SET followers_count = followers_count + 1 WHERE id = $1',
+        [followingId]
+      )
+    })
+  }
+
+  async unfollowUser(followerId: number, followingId: number): Promise<boolean> {
+    return this.transaction(async (client) => {
+      const { rowCount } = await client.query(
+        'DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2',
+        [followerId, followingId]
+      )
+      if (!rowCount) return false
+      await client.query(
+        'UPDATE users SET following_count = GREATEST(following_count - 1, 0) WHERE id = $1',
+        [followerId]
+      )
+      await client.query(
+        'UPDATE users SET followers_count = GREATEST(followers_count - 1, 0) WHERE id = $1',
+        [followingId]
+      )
+      return true
+    })
+  }
+
+  async isFollowing(followerId: number, followingId: number): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      'SELECT 1 FROM user_follows WHERE follower_id = $1 AND following_id = $2',
+      [followerId, followingId]
+    )
+    return rows.length > 0
+  }
+
+  async getFollowers(userId: number, currentUserId?: number): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT u.id, u.username, u.display_name, u.avatar_url,
+              ${currentUserId
+                ? `EXISTS(SELECT 1 FROM user_follows WHERE follower_id = ${currentUserId} AND following_id = u.id) AS is_following`
+                : 'FALSE AS is_following'}
+       FROM user_follows uf
+       JOIN users u ON u.id = uf.follower_id
+       WHERE uf.following_id = $1
+       ORDER BY uf.created_at DESC`,
+      [userId]
+    )
+    return rows
+  }
+
+  async getFollowing(userId: number, currentUserId?: number): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT u.id, u.username, u.display_name, u.avatar_url,
+              ${currentUserId
+                ? `EXISTS(SELECT 1 FROM user_follows WHERE follower_id = ${currentUserId} AND following_id = u.id) AS is_following`
+                : 'FALSE AS is_following'}
+       FROM user_follows uf
+       JOIN users u ON u.id = uf.following_id
+       WHERE uf.follower_id = $1
+       ORDER BY uf.created_at DESC`,
+      [userId]
+    )
+    return rows
+  }
+
+  async searchUsers(query: string, currentUserId?: number, limit: number = 20): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT u.id, u.username, u.display_name, u.avatar_url,
+              u.followers_count, u.following_count,
+              ${currentUserId
+                ? `EXISTS(SELECT 1 FROM user_follows WHERE follower_id = $3 AND following_id = u.id) AS is_following`
+                : 'FALSE AS is_following'}
+       FROM users u
+       WHERE (u.username ILIKE $1 OR u.display_name ILIKE $1)
+         AND u.is_active = TRUE
+       ORDER BY u.username ASC
+       LIMIT $2`,
+      currentUserId
+        ? [`%${query}%`, limit, currentUserId]
+        : [`%${query}%`, limit]
+    )
+    return rows
+  }
+
+  async getPublicProfile(userId: number, currentUserId?: number): Promise<any | null> {
+    const { rows } = await this.pool.query(
+      `SELECT u.id, u.uuid, u.username, u.display_name, u.avatar_url,
+              u.followers_count, u.following_count,
+              COALESCE((SELECT COUNT(*) FROM user_recipe_progress WHERE user_id = u.id AND status = 'completed')::int, 0) AS total_recipes_completed,
+              ${currentUserId
+                ? `EXISTS(SELECT 1 FROM user_follows WHERE follower_id = ${currentUserId} AND following_id = u.id) AS is_following`
+                : 'FALSE AS is_following'}
+       FROM users u
+       WHERE u.id = $1 AND u.is_active = TRUE`,
+      [userId]
+    )
+    return rows[0] || null
+  }
+
+  // ── Social: Posts & Feed ──
+
+  async createPost(userId: number, postType: string, recipeId?: string, photoUrl?: string, caption?: string): Promise<any> {
+    const { rows } = await this.pool.query(
+      `INSERT INTO user_posts (user_id, post_type, recipe_id, photo_url, caption)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, user_id, post_type, recipe_id, photo_url, caption, created_at`,
+      [userId, postType, recipeId || null, photoUrl || null, caption || null]
+    )
+    return rows[0]
+  }
+
+  async getFeed(userId: number, limit: number = 5): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT
+        up.id, up.user_id, u.username, u.display_name, u.avatar_url,
+        up.post_type, up.recipe_id, r.title AS recipe_title, r.image_url AS recipe_image_url,
+        up.photo_url, up.caption, up.created_at
+       FROM user_posts up
+       JOIN user_follows uf ON uf.following_id = up.user_id AND uf.follower_id = $1
+       JOIN users u ON u.id = up.user_id
+       LEFT JOIN recipes r ON r.id = up.recipe_id
+       ORDER BY up.created_at DESC
+       LIMIT $2`,
+      [userId, limit]
+    )
+    return rows
+  }
+
+  async getUserPosts(userId: number, limit: number = 10): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT
+        up.id, up.user_id, u.username, u.display_name, u.avatar_url,
+        up.post_type, up.recipe_id, r.title AS recipe_title, r.image_url AS recipe_image_url,
+        up.photo_url, up.caption, up.created_at
+       FROM user_posts up
+       JOIN users u ON u.id = up.user_id
+       LEFT JOIN recipes r ON r.id = up.recipe_id
+       WHERE up.user_id = $1
+       ORDER BY up.created_at DESC
+       LIMIT $2`,
+      [userId, limit]
+    )
+    return rows
+  }
+
+  async hasRecipeCompletionPost(userId: number, recipeId: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM user_posts WHERE user_id = $1 AND recipe_id = $2 AND post_type = 'recipe_completed' LIMIT 1`,
+      [userId, recipeId]
+    )
+    return rows.length > 0
   }
 
   // Generic query helpers (used by routes that haven't been fully migrated)

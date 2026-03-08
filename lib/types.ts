@@ -78,3 +78,40 @@ export interface UserStats {
   totalRecipesCompleted: number
   skillsMastered: number
 }
+
+// ── Social ──
+
+export interface UserProfile {
+  id: number
+  uuid: string
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  followersCount: number
+  followingCount: number
+  isFollowing?: boolean
+  totalRecipesCompleted: number
+}
+
+export interface UserPost {
+  id: number
+  userId: number
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  postType: 'recipe_completed' | 'photo_upload' | 'milestone'
+  recipeId: string | null
+  recipeTitle: string | null
+  recipeImageUrl: string | null
+  photoUrl: string | null
+  caption: string | null
+  createdAt: string
+}
+
+export interface FollowUser {
+  id: number
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  isFollowing?: boolean
+}

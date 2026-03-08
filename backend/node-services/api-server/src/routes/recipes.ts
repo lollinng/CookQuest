@@ -205,6 +205,14 @@ router.post('/:id/progress',
     // Get updated progress
     const updatedProgress = await DatabaseService.getRecipeProgress(userId, id)
 
+    // Auto-post on new recipe completion (social feed)
+    if (completed && !wasAlreadyCompleted) {
+      const alreadyPosted = await DatabaseService.hasRecipeCompletionPost(userId, id)
+      if (!alreadyPosted) {
+        await DatabaseService.createPost(userId, 'recipe_completed', id, undefined, `Just completed ${recipe.title}!`)
+      }
+    }
+
     // Check for newly unlocked skills (only on NEW completions)
     let skills_unlocked: any[] = []
     if (completed && !wasAlreadyCompleted) {
