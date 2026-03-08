@@ -62,7 +62,7 @@ class ErrorBoundaryClass extends React.Component<Props, State> {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-gray-600">
+            <p className="text-cq-text-secondary">
               We're sorry, but something unexpected happened. Please try again.
             </p>
             {process.env.NODE_ENV === 'development' && this.state.error && (

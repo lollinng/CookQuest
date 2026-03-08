@@ -49,9 +49,12 @@ services:
           cpus: '0.5'
 
   cookquest-web:
+    image: ${COOKQUEST_WEB_IMAGE:-ghcr.io/lollinng/cookquest-web:latest}
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3003/api/v1}
     container_name: cookquest-web
     restart: unless-stopped
     ports:
@@ -72,6 +75,7 @@ services:
           memory: 128M
 
   cookquest-api:
+    image: ${COOKQUEST_API_IMAGE:-ghcr.io/lollinng/cookquest-api:latest}
     build:
       context: ./backend/node-services/api-server
       dockerfile: Dockerfile
@@ -86,6 +90,7 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD:-cookquest_redis}@redis:6379
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
       - SHARED_DIR=/shared
     volumes:
       - ./backend/shared:/shared:ro
@@ -106,6 +111,75 @@ services:
         reservations:
           memory: 128M
 
+  # ── Production-only services (start with: docker compose --profile prod up) ──
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: cookquest-nginx
+    restart: unless-stopped
+    profiles:
+      - prod
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - NGINX_ENVSUBST_FILTER=DOMAIN
+    volumes:
+      - certbot_conf:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - cookquest-web
+      - cookquest-api
+    networks:
+      - frontend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: cookquest-certbot
+    restart: unless-stopped
+    profiles:
+      - prod
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    # Renew certs every 12 hours (certbot skips if not due)
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 43200 & wait $${!}; done"
+
+  backup:
+    image: postgres:16-alpine
+    container_name: cookquest-backup
+    restart: unless-stopped
+    profiles:
+      - prod
+    volumes:
+      - ./scripts/backup-db.sh:/backup.sh:ro
+      - ./backups:/backups
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cookquest}
+      POSTGRES_DB: ${POSTGRES_DB:-cookquest}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-cookquest}
+      RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-7}
+    # Run backup immediately on start, then every 24 hours
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do sh /backup.sh; sleep 86400 & wait $${!}; done"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
 networks:
   frontend:
     driver: bridge
@@ -116,3 +190,5 @@ networks:
 volumes:
   pgdata:
   api_uploads:
+  certbot_conf:
+  certbot_www:

@@ -47,7 +47,9 @@ CREATE TABLE IF NOT EXISTS skills (
     color TEXT,
     sort_order INTEGER DEFAULT 0,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    required_skill_id TEXT REFERENCES skills(id),
+    required_recipes_completed INTEGER DEFAULT 0
 );
 
 -- ================================
@@ -279,3 +281,31 @@ CREATE TABLE IF NOT EXISTS user_recipe_photos (
 );
 CREATE INDEX IF NOT EXISTS idx_user_recipe_photos_user ON user_recipe_photos(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_recipe_photos_recipe ON user_recipe_photos(recipe_id);
+
+-- ================================
+-- Ingredients (Normalized)
+-- ================================
+
+CREATE TABLE IF NOT EXISTS ingredients (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  category TEXT CHECK (category IN ('protein', 'dairy', 'produce', 'grain', 'spice', 'herb', 'oil', 'seasoning', 'sauce', 'baking', 'other')),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_ingredients_name ON ingredients(name);
+CREATE INDEX IF NOT EXISTS idx_ingredients_category ON ingredients(category);
+
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
+  id SERIAL PRIMARY KEY,
+  recipe_id TEXT NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+  amount DECIMAL,
+  unit TEXT,
+  preparation TEXT,
+  optional BOOLEAN DEFAULT FALSE,
+  sort_order INTEGER DEFAULT 0,
+  notes TEXT,
+  UNIQUE(recipe_id, ingredient_id)
+);
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe_ingredients(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_ingredient ON recipe_ingredients(ingredient_id);

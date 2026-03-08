@@ -28,7 +28,7 @@ export function CoreLoopHeroCard({
 
   if (nextActionType === 'start_basic_cooking') {
     return (
-      <Card className="relative overflow-hidden border-0 shadow-xl animate-slide-up">
+      <Card className="relative overflow-hidden border-0 shadow-xl animate-slide-up-spring">
         {/* Warm gradient background */}
         <div className="absolute inset-0 bg-gradient-to-br from-amber-400 via-orange-400 to-red-400" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.15),transparent_50%)]" />
@@ -68,7 +68,7 @@ export function CoreLoopHeroCard({
 
   if (nextActionType === 'continue_basic_cooking') {
     return (
-      <Card className="relative overflow-hidden border-0 shadow-xl animate-slide-up">
+      <Card className="relative overflow-hidden border-0 shadow-xl animate-slide-up-spring">
         <div className="absolute inset-0 bg-gradient-to-br from-amber-400 via-orange-400 to-orange-500" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.15),transparent_50%)]" />
 
@@ -126,7 +126,7 @@ export function CoreLoopHeroCard({
 
   // explore_unlocked_skills
   return (
-    <Card className="relative overflow-hidden border-0 shadow-xl animate-slide-up">
+    <Card className="relative overflow-hidden border-0 shadow-xl animate-slide-up-spring">
       <div className="absolute inset-0 bg-gradient-to-br from-emerald-400 via-green-500 to-teal-500" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(255,255,255,0.12),transparent_50%)]" />
 

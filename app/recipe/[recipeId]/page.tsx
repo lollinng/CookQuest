@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { useRecipeDetail } from '@/hooks/use-recipes'
+import { useRecipeDetail, useCompleteRecipe, useUncompleteRecipe } from '@/hooks/use-recipes'
 import { useRecipeStore } from '@/lib/stores/recipe-store'
 import { useCoreLoopState } from '@/hooks/use-core-loop'
-import { getDifficultyColor } from '@/lib/utils'
+import { useAuth } from '@/lib/auth-context'
+import { getDifficultyColor, formatAmount } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { showCompletionToast, showUncompleteToast } from '@/components/completion-toast'
 import Link from 'next/link'
@@ -29,8 +30,12 @@ export default function RecipeDetail() {
   const recipeId = params.recipeId as string
 
   const { data: recipe, isLoading, isError } = useRecipeDetail(recipeId)
-  const { isRecipeCompleted, completeRecipe, uncompleteRecipe, getSkillProgress, getStreak, completedToday } = useRecipeStore()
+  const store = useRecipeStore()
+  const { isRecipeCompleted, completeRecipe: localComplete, uncompleteRecipe: localUncomplete, getSkillProgress, getStreak, completedToday } = store
   const coreLoop = useCoreLoopState()
+  const { user } = useAuth()
+  const serverComplete = useCompleteRecipe()
+  const serverUncomplete = useUncompleteRecipe()
 
   const isCompleted = recipe ? isRecipeCompleted(recipe.id) : false
 
@@ -38,27 +43,67 @@ export default function RecipeDetail() {
     if (!recipe) return;
 
     if (isCompleted) {
-      uncompleteRecipe(recipe.id)
+      // Uncomplete: always update local store first
+      localUncomplete(recipe.id)
       showUncompleteToast(recipe.title)
+      // If logged in, sync with server
+      if (user) {
+        serverUncomplete.mutate(recipe.id)
+      }
     } else {
+      // Complete: update local store for instant feedback
       const wasCompletedToday = completedToday()
-      completeRecipe(recipe.id)
+      localComplete(recipe.id)
 
-      // Calculate post-completion state
-      const skillProgress = getSkillProgress(recipe.skill)
-      const streak = getStreak()
+      if (user) {
+        // Logged in: call server and use server response for toast
+        serverComplete.mutate(recipe.id, {
+          onSuccess: (data) => {
+            showCompletionToast({
+              recipeName: recipe.title,
+              xpGained: data.xp_earned,
+              skillName: SKILL_NAMES[data.skill_progress.skill_id] || data.skill_progress.skill_id,
+              skillCompleted: data.skill_progress.completed,
+              skillTotal: data.skill_progress.total,
+              streakDays: data.user.streak_days,
+              streakUpdated: data.streak_updated,
+              skillMastered: data.skill_progress.percentage === 100,
+              levelUp: data.level_up ? { newLevel: data.level_up.new_level } : null,
+            })
+          },
+          onError: () => {
+            // Server failed — still show local toast
+            const skillProgress = getSkillProgress(recipe.skill)
+            showCompletionToast({
+              recipeName: recipe.title,
+              xpGained: recipe.xpReward || 100,
+              skillName: SKILL_NAMES[recipe.skill] || recipe.skill,
+              skillCompleted: skillProgress.completed,
+              skillTotal: skillProgress.total,
+              streakDays: getStreak(),
+              streakUpdated: !wasCompletedToday,
+              skillMastered: skillProgress.percentage === 100,
+              levelUp: null,
+            })
+          },
+        })
+      } else {
+        // Anonymous: use local state for toast
+        const skillProgress = getSkillProgress(recipe.skill)
+        const streak = getStreak()
 
-      showCompletionToast({
-        recipeName: recipe.title,
-        xpGained: recipe.xpReward || 100,
-        skillName: SKILL_NAMES[recipe.skill] || recipe.skill,
-        skillCompleted: skillProgress.completed,
-        skillTotal: skillProgress.total,
-        streakDays: streak,
-        streakUpdated: !wasCompletedToday,
-        skillMastered: skillProgress.percentage === 100,
-        levelUp: null, // TODO: detect level-up from XP threshold
-      })
+        showCompletionToast({
+          recipeName: recipe.title,
+          xpGained: recipe.xpReward || 100,
+          skillName: SKILL_NAMES[recipe.skill] || recipe.skill,
+          skillCompleted: skillProgress.completed,
+          skillTotal: skillProgress.total,
+          streakDays: streak,
+          streakUpdated: !wasCompletedToday,
+          skillMastered: skillProgress.percentage === 100,
+          levelUp: null,
+        })
+      }
     }
   }
 
@@ -134,24 +179,24 @@ export default function RecipeDetail() {
         <CardContent className="p-6">
           <div className="flex flex-wrap items-center gap-4 mb-6">
             <div className="flex items-center gap-2">
-              <Clock className="size-4 text-gray-500" />
+              <Clock className="size-4 text-muted-foreground" />
               <span className="text-sm">{recipe.time}</span>
             </div>
             <Badge className={getDifficultyColor(recipe.difficulty)}>
               {recipe.difficulty}
             </Badge>
             {recipe.xpReward && (
-              <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-sm font-semibold px-2.5 py-0.5 rounded-full">
+              <span className="inline-flex items-center gap-1 bg-orange-500/20 text-orange-400 text-sm font-semibold px-2.5 py-0.5 rounded-full">
                 <TrendingUp className="size-3.5" />
                 +{recipe.xpReward} XP
               </span>
             )}
             <div className="flex items-center gap-2">
-              <TrendingUp className="size-4 text-gray-500" />
+              <TrendingUp className="size-4 text-muted-foreground" />
               <span className="text-sm capitalize">{recipe.skill.replace('-', ' ')}</span>
             </div>
             <div className="flex items-center gap-2">
-              <Users className="size-4 text-gray-500" />
+              <Users className="size-4 text-muted-foreground" />
               <span className="text-sm">Serves 2-4</span>
             </div>
           </div>
@@ -160,7 +205,7 @@ export default function RecipeDetail() {
           <Button
             onClick={handleToggleCompletion}
             className={`
-              w-full mb-6 ${
+              w-full mb-6 text-base font-bold ${
                 isCompleted
                   ? 'bg-green-500 hover:bg-green-600 text-white'
                   : 'bg-orange-500 hover:bg-orange-600 text-white'
@@ -170,21 +215,21 @@ export default function RecipeDetail() {
             {isCompleted ? (
               <>
                 <CheckCircle2 className="size-4 mr-2" />
-                Completed! Mark as incomplete
+                Done! Undo?
               </>
             ) : (
-              'Mark as completed'
+              'I made this!'
             )}
           </Button>
 
           {isCompleted && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-              <div className="flex items-center gap-2 text-green-800">
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2 text-green-400">
                 <CheckCircle2 className="size-5" />
-                <span className="font-medium">Recipe completed!</span>
+                <span className="font-medium">Great job, chef!</span>
               </div>
-              <p className="text-green-700 text-sm mt-1">
-                Great job! This recipe has been added to your completed collection.
+              <p className="text-green-300/80 text-sm mt-1">
+                This one&apos;s in the bag. Keep going — every recipe levels you up!
               </p>
             </div>
           )}
@@ -201,12 +246,28 @@ export default function RecipeDetail() {
             </CardHeader>
             <CardContent>
               <ul className="space-y-3">
-                {recipe.ingredients.map((ingredient, index) => (
-                  <li key={index} className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-orange-400 rounded-full mt-2 flex-shrink-0" />
-                    <span className="text-gray-700">{ingredient}</span>
-                  </li>
-                ))}
+                {(recipe.structuredIngredients && recipe.structuredIngredients.length > 0) ? (
+                  recipe.structuredIngredients.map((ing) => (
+                    <li key={ing.id} className="flex items-start gap-3">
+                      <div className="w-2 h-2 bg-orange-400 rounded-full mt-2 flex-shrink-0" />
+                      <span className="text-foreground">
+                        {ing.amount != null && <span className="font-semibold">{formatAmount(ing.amount)}</span>}
+                        {ing.unit && <span className="font-semibold"> {ing.unit}</span>}
+                        {(ing.amount != null || ing.unit) && ' '}{ing.name}
+                        {ing.preparation && <span className="text-muted-foreground"> ({ing.preparation})</span>}
+                        {ing.optional && <span className="text-muted-foreground text-sm"> (optional)</span>}
+                        {ing.notes && <span className="text-muted-foreground text-sm"> — {ing.notes}</span>}
+                      </span>
+                    </li>
+                  ))
+                ) : (
+                  recipe.ingredients.map((ingredient, index) => (
+                    <li key={index} className="flex items-start gap-3">
+                      <div className="w-2 h-2 bg-orange-400 rounded-full mt-2 flex-shrink-0" />
+                      <span className="text-foreground">{ingredient}</span>
+                    </li>
+                  ))
+                )}
               </ul>
             </CardContent>
           </Card>
@@ -223,7 +284,7 @@ export default function RecipeDetail() {
                     <div className="w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
                       {index + 1}
                     </div>
-                    <p className="text-gray-700 leading-relaxed pt-1">{instruction}</p>
+                    <p className="text-foreground leading-relaxed pt-1">{instruction}</p>
                   </li>
                 ))}
               </ol>
@@ -243,7 +304,7 @@ export default function RecipeDetail() {
               {recipe.tips.map((tip, index) => (
                 <li key={index} className="flex items-start gap-3">
                   <div className="w-2 h-2 bg-blue-400 rounded-full mt-2 flex-shrink-0" />
-                  <span className="text-gray-700">{tip}</span>
+                  <span className="text-foreground">{tip}</span>
                 </li>
               ))}
             </ul>
@@ -261,19 +322,19 @@ export default function RecipeDetail() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-orange-500">{recipe.nutritionFacts.calories}</div>
-                <div className="text-sm text-gray-500">Calories</div>
+                <div className="text-sm text-muted-foreground">Calories</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-medium">{recipe.nutritionFacts.protein}</div>
-                <div className="text-sm text-gray-500">Protein</div>
+                <div className="text-lg font-medium text-foreground">{recipe.nutritionFacts.protein}</div>
+                <div className="text-sm text-muted-foreground">Protein</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-medium">{recipe.nutritionFacts.carbs}</div>
-                <div className="text-sm text-gray-500">Carbs</div>
+                <div className="text-lg font-medium text-foreground">{recipe.nutritionFacts.carbs}</div>
+                <div className="text-sm text-muted-foreground">Carbs</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-medium">{recipe.nutritionFacts.fat}</div>
-                <div className="text-sm text-gray-500">Fat</div>
+                <div className="text-lg font-medium text-foreground">{recipe.nutritionFacts.fat}</div>
+                <div className="text-sm text-muted-foreground">Fat</div>
               </div>
             </div>
           </CardContent>

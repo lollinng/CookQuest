@@ -1,0 +1,46 @@
+# Cloud Run Dockerfile for CookQuest API
+# Build context: project root (so we can access backend/shared/ for SQL migrations)
+#
+# Build: docker build -f gcp/Dockerfile.api -t cookquest-api .
+# Run:   docker run -p 3003:3003 -e DATABASE_URL=... cookquest-api
+
+FROM node:20-alpine AS base
+
+# Install dependencies
+FROM base AS deps
+WORKDIR /app
+COPY backend/node-services/api-server/package.json backend/node-services/api-server/package-lock.json* ./
+RUN npm ci
+
+# Build TypeScript
+FROM deps AS builder
+WORKDIR /app
+COPY backend/node-services/api-server/ .
+RUN npm run build
+
+# Production image
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 appuser
+
+COPY backend/node-services/api-server/package.json backend/node-services/api-server/package-lock.json* ./
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/dist ./dist
+
+# Include shared SQL files for schema migrations
+COPY backend/shared/ ./shared/
+
+RUN mkdir -p uploads && chown appuser:nodejs uploads
+
+USER appuser
+
+EXPOSE 3003
+
+ENV SHARED_DIR=/app/shared
+
+CMD ["node", "dist/index.js"]

@@ -1,15 +1,28 @@
 # Production overrides — run with:
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile prod up -d
 #
-# Requires a .env file with strong secrets (see .env.example)
+# Requires a .env file with strong secrets (see .env.production.example)
+#
+# What this adds:
+#   - Removes host port bindings (only nginx exposes 80/443)
+#   - Enforces required env vars (no dev defaults)
+#   - Upgrades restart policy to 'always'
+#   - Adds JSON log rotation to all services
+#   - Bumps Redis maxmemory for production load
 
 services:
   postgres:
     restart: always
+    ports: !override []
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: ${POSTGRES_DB:-cookquest}
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
 
   redis:
     restart: always
@@ -18,16 +31,55 @@ services:
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
       --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
 
   cookquest-web:
     restart: always
+    ports: !override []
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
 
   cookquest-api:
     restart: always
+    ports: !override []
     environment:
       - NODE_ENV=production
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
       - FRONTEND_URL=${FRONTEND_URL:?FRONTEND_URL must be set}
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  nginx:
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  certbot:
+    logging:
+      driver: json-file
+      options:
+        max-size: '5m'
+        max-file: '2'
+
+  backup:
+    logging:
+      driver: json-file
+      options:
+        max-size: '5m'
+        max-file: '2'

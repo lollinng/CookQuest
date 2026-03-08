@@ -66,6 +66,10 @@ router.get('/',
       }
     }
 
+    // Get unlocked skills based on user progress
+    const unlockedSkills = await DatabaseService.getUnlockedSkillsForUser(req.user!.id)
+    const unlockedSkillIds = unlockedSkills.map(s => s.id)
+
     res.json({
       success: true,
       data: {
@@ -88,7 +92,8 @@ router.get('/',
           recipe_id: p.recipe_id,
           completed_at: p.completed_at,
           rating: p.rating
-        }))
+        })),
+        unlocked_skills: unlockedSkillIds
       }
     })
   })

@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ['latin'] })
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#EA580C',
+  themeColor: '#0F172A',
 }
 
 export const metadata: Metadata = {
@@ -52,7 +52,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           <ErrorBoundary>
-            <div className="min-h-screen bg-gradient-to-b from-orange-50 to-amber-50">
+            <div className="min-h-screen bg-cq-bg">
               <main className="container mx-auto px-4 py-6">
                 {children}
               </main>

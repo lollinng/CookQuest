@@ -25,47 +25,17 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: TypeScript type check
+      - name: Frontend TypeScript type check
         run: npx tsc --noEmit
 
       - name: ESLint
         run: npm run lint
 
-  test-frontend:
-    name: Frontend Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: npm test -- --passWithNoTests
-
-  test-backend:
-    name: Backend Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend/node-services/api-server
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: npm test -- --passWithNoTests
+      - name: Backend TypeScript type check
+        run: |
+          cd backend/node-services/api-server
+          npm ci
+          npx tsc --noEmit
 
   build-frontend:
     name: Build Frontend
@@ -107,6 +77,90 @@ jobs:
       - name: Build TypeScript
         run: npm run build
 
+  test-e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-backend]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cookquest
+          POSTGRES_PASSWORD: cookquest
+          POSTGRES_DB: cookquest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cookquest"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Install backend dependencies
+        run: cd backend/node-services/api-server && npm ci
+
+      - name: Start backend API
+        run: cd backend/node-services/api-server && npm run dev &
+        env:
+          PORT: 3003
+          DATABASE_URL: postgresql://cookquest:cookquest@localhost:5432/cookquest
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: ci-test-secret-key-not-for-production
+          FRONTEND_URL: http://localhost:3002
+          SHARED_DIR: ${{ github.workspace }}/backend/shared
+          NODE_ENV: development
+
+      - name: Start frontend dev server
+        run: npm run dev -- --port 3002 &
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3003/api/v1
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for backend..."
+          timeout 60 bash -c 'until curl -sf http://localhost:3003/ready; do sleep 2; done'
+          echo "Backend ready."
+          echo "Waiting for frontend..."
+          timeout 60 bash -c 'until curl -sf http://localhost:3002; do sleep 2; done'
+          echo "Frontend ready."
+
+      - name: Run Playwright tests
+        run: npx playwright test --project=chromium
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
@@ -116,6 +170,8 @@ jobs:
 
       - name: Build Docker images
         run: docker compose build
+        env:
+          JWT_SECRET: ci-docker-build-secret
 
   security-audit:
     name: Security Audit

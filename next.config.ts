@@ -6,17 +6,8 @@ if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PUBLIC_API_URL) {
 }
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
-  experimental: {
-    turbo: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
-      },
-    },
-  },
+  // standalone for Docker; skip on Vercel for edge optimizations
+  ...(!process.env.VERCEL && { output: 'standalone' as const }),
   images: {
     remotePatterns: [
       {

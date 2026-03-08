@@ -93,6 +93,7 @@ function useContainerWidth(ref: React.RefObject<HTMLDivElement | null>) {
 }
 
 const NODE_SPACING = 180
+const COOKBOOK_NODE_SPACING = 240
 
 function getNodePosition(index: number, containerWidth: number): { x: number } {
   const amplitude = Math.min(containerWidth * 0.3, 200)
@@ -167,7 +168,7 @@ function PathNode({
           }
         `}>
           {isLocked ? (
-            <Lock className="size-8 text-gray-400" />
+            <Lock className="size-8 text-cq-text-muted" />
           ) : isCompleted ? (
             <Check className="size-10 text-white stroke-[3]" />
           ) : isCheckpoint ? (
@@ -203,11 +204,11 @@ function PathNode({
           : 'right-full mr-4 text-right'
       }`}>
         <div className={`text-sm font-semibold leading-tight ${
-          isLocked ? 'text-gray-600' : isCompleted ? 'text-green-400' : 'text-gray-300'
+          isLocked ? 'text-cq-text-muted' : isCompleted ? 'text-green-400' : 'text-cq-text-primary'
         }`}>
           {recipe.title}
         </div>
-        <div className={`text-xs mt-0.5 ${isLocked ? 'text-gray-700' : 'text-gray-500'}`}>
+        <div className={`text-xs mt-0.5 ${isLocked ? 'text-cq-text-muted' : 'text-cq-text-secondary'}`}>
           {recipe.time}
         </div>
         {!isLocked && !isCompleted && (
@@ -225,7 +226,7 @@ function PathNode({
         {!isLocked && isCompleted && (
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(recipe.id) }}
-            className="mt-1.5 px-3 py-1 rounded-full text-xs font-medium text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-500 transition-all"
+            className="mt-1.5 px-3 py-1 rounded-full text-xs font-medium text-cq-text-muted hover:text-cq-text-primary border border-cq-border hover:border-cq-text-muted transition-all"
           >
             UNDO
           </button>
@@ -295,11 +296,12 @@ export function LearningPath({
   // Calculate node positions with extra space for chef messages
   const CHEF_EXTRA = 100
   const START_Y = 100
+  const spacing = isCookbook ? COOKBOOK_NODE_SPACING : NODE_SPACING
   const positions: { x: number; y: number }[] = []
   let cumulativeY = START_Y
   for (let i = 0; i < recipes.length; i++) {
     positions.push({ x: getNodePosition(i, containerWidth).x, y: cumulativeY })
-    cumulativeY += NODE_SPACING
+    cumulativeY += spacing
     const hasChef = chefMessages.some(cm => cm.afterIndex === i && isRecipeCompleted(recipes[i].id))
     if (hasChef) cumulativeY += CHEF_EXTRA
   }
@@ -459,7 +461,7 @@ export function LearningPath({
               }
             `}>
               <div className={`w-24 h-24 rounded-full flex items-center justify-center ${allCompleted ? 'bg-yellow-300/30' : isCookbook ? 'bg-amber-50' : 'bg-gray-700'}`}>
-                <Crown className={`size-12 ${allCompleted ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]' : isCookbook ? 'text-amber-400' : 'text-gray-500'}`} />
+                <Crown className={`size-12 ${allCompleted ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]' : isCookbook ? 'text-amber-400' : 'text-cq-text-muted'}`} />
               </div>
             </div>
 
@@ -472,12 +474,12 @@ export function LearningPath({
                     <Star className="size-6 fill-yellow-400 text-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.8)]" />
                   </div>
                   <p className="text-xl font-black text-yellow-400">SKILL MASTERED!</p>
-                  <p className={`text-sm ${isCookbook ? 'text-stone-500' : 'text-gray-400'}`}>All {recipes.length} recipes completed</p>
+                  <p className={`text-sm ${isCookbook ? 'text-stone-500' : 'text-cq-text-secondary'}`}>All {recipes.length} recipes completed</p>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <p className={`text-sm font-bold ${isCookbook ? 'text-stone-500' : 'text-gray-500'}`}>COMPLETE ALL RECIPES</p>
-                  <p className={`text-xs ${isCookbook ? 'text-stone-400' : 'text-gray-600'}`}>to master this skill</p>
+                  <p className={`text-sm font-bold ${isCookbook ? 'text-stone-500' : 'text-cq-text-secondary'}`}>COMPLETE ALL RECIPES</p>
+                  <p className={`text-xs ${isCookbook ? 'text-stone-400' : 'text-cq-text-muted'}`}>to master this skill</p>
                 </div>
               )}
             </div>

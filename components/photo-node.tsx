@@ -26,8 +26,16 @@ export function PhotoNode({
   recipe,
 }: PhotoNodeProps) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const nodeSize = isCheckpoint ? 'w-24 h-24' : 'w-20 h-20'
+  const hasPhoto = !!photoUrl
+
+  // Larger nodes when photo is present so users can see their uploads
+  const nodeSize = hasPhoto
+    ? (isCheckpoint ? 'w-36 h-36' : 'w-32 h-32')
+    : (isCheckpoint ? 'w-24 h-24' : 'w-20 h-20')
   const innerSize = isCheckpoint ? 'w-20 h-20' : 'w-16 h-16'
+
+  // Rounded rectangle for photos, circle for empty/locked
+  const nodeShape = hasPhoto ? 'rounded-2xl' : 'rounded-full'
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -50,8 +58,8 @@ export function PhotoNode({
 
   return (
     <div className="relative">
-      {/* Node circle */}
-      <div className={`${nodeSize} rounded-full flex items-center justify-center relative`}>
+      {/* Node */}
+      <div className={`${nodeSize} ${nodeShape} flex items-center justify-center relative ${hasPhoto ? 'transition-transform duration-200 hover:scale-105' : ''}`}>
         {isLocked ? (
           /* Locked node — same lock UI as learn mode */
           <>
@@ -65,13 +73,13 @@ export function PhotoNode({
           <>
             {/* Photo or placeholder */}
             <div className={`
-              ${nodeSize} rounded-full overflow-hidden flex items-center justify-center
-              ${photoUrl
+              ${nodeSize} ${nodeShape} overflow-hidden flex items-center justify-center
+              ${hasPhoto
                 ? 'border-4 border-amber-400 shadow-[0_8px_0_0_rgb(180,83,9)]'
                 : 'border-[3px] border-dashed border-amber-400 shadow-[0_8px_0_0_rgb(180,83,9)] bg-amber-50'
               }
             `}>
-              {photoUrl ? (
+              {hasPhoto ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={photoUrl}
@@ -87,13 +95,17 @@ export function PhotoNode({
             <button
               onClick={() => inputRef.current?.click()}
               disabled={isUploading}
-              className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-amber-500 hover:bg-amber-400 text-white flex items-center justify-center shadow-lg transition-all hover:scale-110 active:scale-95 border-2 border-white"
-              title="Upload photo"
+              className={`
+                absolute bottom-0 right-0 rounded-full bg-amber-500 hover:bg-amber-400 text-white
+                flex items-center justify-center shadow-lg transition-all hover:scale-110 active:scale-95 border-2 border-white
+                ${hasPhoto ? 'w-9 h-9' : 'w-7 h-7'}
+              `}
+              title={hasPhoto ? 'Change photo' : 'Upload photo'}
             >
               {isUploading ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 className={`${hasPhoto ? 'size-4' : 'size-3.5'} animate-spin`} />
               ) : (
-                <Camera className="size-3.5" />
+                <Camera className={hasPhoto ? 'size-4' : 'size-3.5'} />
               )}
             </button>
 
@@ -109,10 +121,10 @@ export function PhotoNode({
       </div>
 
       {/* Side label */}
-      <div className={`absolute top-1/2 -translate-y-1/2 w-[120px] ${
+      <div className={`absolute top-1/2 -translate-y-1/2 ${hasPhoto ? 'w-[140px]' : 'w-[120px]'} ${
         labelSide === 'right'
-          ? 'left-full ml-4 text-left'
-          : 'right-full mr-4 text-right'
+          ? `left-full ${hasPhoto ? 'ml-5' : 'ml-4'} text-left`
+          : `right-full ${hasPhoto ? 'mr-5' : 'mr-4'} text-right`
       }`}>
         <div className={`text-sm font-semibold leading-tight ${
           isLocked ? 'text-stone-400' : 'text-stone-700'
@@ -122,7 +134,7 @@ export function PhotoNode({
         <div className={`text-xs mt-0.5 ${isLocked ? 'text-stone-300' : 'text-stone-500'}`}>
           {recipe.time}
         </div>
-        {!isLocked && !photoUrl && (
+        {!isLocked && !hasPhoto && (
           <div className="mt-1 text-xs text-amber-600 font-medium">
             Tap camera to add photo
           </div>

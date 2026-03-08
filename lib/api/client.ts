@@ -12,6 +12,17 @@
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3003/api/v1'
 
+if (
+  typeof window !== 'undefined' &&
+  !process.env.NEXT_PUBLIC_API_URL &&
+  window.location.protocol === 'https:'
+) {
+  console.warn(
+    '[CookQuest] NEXT_PUBLIC_API_URL is not set — using localhost fallback. ' +
+    'This will not work in production. Set NEXT_PUBLIC_API_URL at build time.'
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Token helpers — kept for backward compatibility but cookies are primary
 // ---------------------------------------------------------------------------

@@ -14,6 +14,8 @@ import type { Recipe, SkillType } from '@/lib/types'
 export interface RecipeFilters {
   skill?: SkillType
   difficulty?: 'beginner' | 'intermediate' | 'advanced'
+  sort?: string
+  search?: string
   page?: number
   limit?: number
 }
@@ -84,6 +86,8 @@ export async function getRecipes(
     params: {
       skill: filters?.skill,
       difficulty: filters?.difficulty,
+      sort: filters?.sort,
+      search: filters?.search,
       page: filters?.page,
       limit: filters?.limit,
     },

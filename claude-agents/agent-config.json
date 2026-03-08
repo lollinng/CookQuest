@@ -22,9 +22,7 @@
     "enabled": true,
     "strategy": "TDD",
     "frameworks": {
-      "unit": "jest",
-      "integration": "testing-library",
-      "e2e": "cypress"
+      "e2e": "playwright"
     },
     "coverageTargets": {
       "statements": 90,

@@ -2,14 +2,21 @@
 -- Compatible with schema-pg.sql (the simplified working schema)
 
 -- ================================
+-- Admin User (login: admin@cookquest.dev / Admin123!)
+-- ================================
+INSERT INTO users (email, username, password_hash, display_name, is_active, email_verified)
+VALUES ('admin@cookquest.dev', 'admin', '$2a$12$0UbEaOYvE6n6dLHWdAY0yel9G3ENT16Jnv25kt185imMyvovQF.fe', 'Chef Admin', TRUE, TRUE)
+ON CONFLICT (email) DO NOTHING;
+
+-- ================================
 -- Skills Data
 -- ================================
-INSERT INTO skills (id, name, description, icon, color) VALUES
-('basic-cooking', 'Basic Cooking', 'Essential cooking fundamentals', '👨‍🍳', 'blue'),
-('heat-control', 'Heat Control', 'Master temperature and timing', '🔥', 'orange'),
-('flavor-building', 'Flavor Building', 'Develop complex, balanced flavors', '🌟', 'purple'),
-('air-fryer', 'Air Fryer Mastery', 'Master the art of crispy, healthy air fryer cooking', '🍟', 'emerald'),
-('indian-cuisine', 'Indian Cuisine', 'Explore the rich flavors and techniques of Indian cooking', '🍛', 'amber')
+INSERT INTO skills (id, name, description, icon, color, required_skill_id, required_recipes_completed) VALUES
+('basic-cooking', 'Basic Cooking', 'Essential cooking fundamentals', '👨‍🍳', 'blue', NULL, 0),
+('heat-control', 'Heat Control', 'Master temperature and timing', '🔥', 'orange', 'basic-cooking', 3),
+('flavor-building', 'Flavor Building', 'Develop complex, balanced flavors', '🌟', 'purple', 'basic-cooking', 3),
+('air-fryer', 'Air Fryer Mastery', 'Master the art of crispy, healthy air fryer cooking', '🍟', 'emerald', 'basic-cooking', 3),
+('indian-cuisine', 'Indian Cuisine', 'Explore the rich flavors and techniques of Indian cooking', '🍛', 'amber', 'basic-cooking', 3)
 ON CONFLICT (id) DO NOTHING;
 
 -- ================================

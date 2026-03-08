@@ -1,3 +1,15 @@
+export interface StructuredIngredient {
+  id: number
+  name: string
+  category: string | null
+  amount: number | null
+  unit: string | null
+  preparation: string | null
+  optional: boolean
+  sortOrder: number
+  notes: string | null
+}
+
 export interface Recipe {
   id: string
   title: string
@@ -9,6 +21,7 @@ export interface Recipe {
   emoji?: string
   xpReward: number
   ingredients: string[]
+  structuredIngredients?: StructuredIngredient[]
   instructions: string[]
   tips?: string[]
   nutritionFacts?: {

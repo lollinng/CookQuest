@@ -4,8 +4,8 @@
   "description": "Level up your cooking skills through interactive recipes and gamified learning",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FFF7ED",
-  "theme_color": "#EA580C",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
   "orientation": "portrait-primary",
   "categories": ["food", "education", "lifestyle"],
   "icons": [

@@ -1,7 +1,23 @@
 # CookQuest - Claude Code Instructions
 
 ## Project Overview
-CookQuest is a gamified cooking skill learning app built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, and Zustand. Backend API runs on localhost:3003.
+CookQuest is a gamified cooking skill learning app built with Next.js 15, React 18, TypeScript, Tailwind CSS 4, shadcn/ui, TanStack Query, and Zustand. Backend: Node.js + Express on port 3003, PostgreSQL 16, Redis 7. Infrastructure: Docker Compose.
+
+**Admin login** (seeded): `admin@cookquest.dev` / `Admin123!`
+
+## Agent Quick-Start (READ ON EVERY NEW SESSION)
+
+When starting a new session as an implementer agent:
+1. Read `claude-agents/tasks.json` to see the task queue
+2. Pick the next available task (status: `"todo"`, unassigned)
+   - **Even-numbered tasks** (task_002, task_004, ...) → `implementer-agent-2`
+   - **Odd-numbered tasks** (task_001, task_003, ...) → `implementer-agent-main`
+3. Assign yourself: set `assignedTo` to your agent name, `assignedAt` to now, `status` → `"in_progress"`
+4. Follow the 6-step pipeline for feature tasks (PM → Architect → Test → Dev → Review → DevOps)
+5. Mark task as `"done"` with `completedAt` when finished
+6. Pick the next task and repeat
+
+If no tasks are available, tell the user and wait for instructions.
 
 ## Multi-Agent Pipeline Workflow (MANDATORY — READ FIRST)
 
@@ -51,10 +67,9 @@ For these keywords, use **normal workflow** instead (ONLY these):
 
 **Step 3: Test Engineer** - Write Tests First (TDD)
 - Write tests BEFORE implementation
-- integration tests (Testing Library), E2E tests (Playwright)
+- E2E tests with Playwright (no unit test framework installed)
 - Cover edge cases and error scenarios
-- Target 90%+ coverage
-- Output: test files
+- Output: test files in `e2e/`
 
 **Step 4: Developer** - Implementation
 - Implement code to pass all tests from Step 3
@@ -115,11 +130,12 @@ lib/              - Utilities, types, API clients, stores
 lib/api/          - API modules (recipes, skills, tips, auth, progress)
 lib/stores/       - Zustand stores
 hooks/            - Custom React hooks (use-recipes.ts)
-backend/          - Node.js API server
-__tests__/        - Test files
-e2e/              - Playwright E2E tests
-claude-agents/    - Multi-agent pipeline system
+backend/          - Node.js API server + shared SQL
+e2e/              - Playwright E2E tests + screenshots
+claude-agents/    - Multi-agent pipeline system (tasks.json, configs)
 ```
+
+> **Note**: `__tests__/` is legacy — unit tests were removed. All testing is Playwright E2E only.
 
 ### Code Style
 - TypeScript strict mode
@@ -137,3 +153,127 @@ claude-agents/    - Multi-agent pipeline system
 - Query hooks with proper cache times: `hooks/use-recipes.ts`
 - Hydration-safe components: check `useStoreHydrated()` before accessing store
 - Fallback patterns: API data → local fallback (see `components/cooking-tip.tsx`)
+
+### Pattern Reference Card
+
+**Adding a frontend feature (end-to-end checklist):**
+1. Define types in `lib/types.ts`
+2. Create API module in `lib/api/{name}.ts` using `apiClient` wrapper
+3. Create TanStack Query hook in `hooks/use-{name}.ts` (or add to `hooks/use-recipes.ts`)
+4. Create component in `components/{kebab-name}.tsx`
+5. Integrate into page in `app/` directory
+6. Write Playwright E2E test in `e2e/`
+
+**Adding a backend endpoint (end-to-end checklist):**
+1. Create route in `backend/node-services/api-server/src/routes/{name}.ts`
+2. Register in `backend/node-services/api-server/src/routes/index.ts`
+3. Add DB queries to `backend/node-services/api-server/src/services/database.ts`
+4. Add schema changes to `backend/shared/schema-pg.sql` + migration in database.ts
+5. Response format: `{ success: true, data: {} }` or `{ success: false, error: { message } }`
+6. Write Playwright API test in `e2e/`
+
+**Component template:**
+```tsx
+'use client';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+interface MyComponentProps {
+  title: string;
+}
+
+export function MyComponent({ title }: MyComponentProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {/* content */}
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Query hook template:**
+```ts
+export const myKeys = {
+  all: ['my-resource'] as const,
+  detail: (id: string) => [...myKeys.all, id] as const,
+};
+
+export function useMyResource() {
+  return useQuery({
+    queryKey: myKeys.all,
+    queryFn: () => getMyResource(),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+```
+
+**API module template:**
+```ts
+import { apiClient } from './client';
+
+// apiClient unwraps the envelope — returns T, not { success, data: T }
+export async function getMyResource(): Promise<MyType[]> {
+  return apiClient<MyType[]>('/my-resource');
+}
+```
+
+### Common Pitfalls & Gotchas
+
+| Pitfall | Correct approach |
+|---------|-----------------|
+| SQL placeholders | PostgreSQL uses `$1, $2, $N` — **NEVER** use `?` |
+| Session column name | `user_sessions.session_token` — not `refresh_token` |
+| Hydration mismatch | Always check `useStoreHydrated()` before reading Zustand store values |
+| Client components | `'use client'` directive required on ALL components using hooks, state, or event handlers |
+| apiClient return type | Returns unwrapped `T` directly — not `{ success, data: T }` |
+| SKILL_RECIPES map | Located in `lib/stores/recipe-store.ts` — update it when adding new skills |
+| Test framework | **Playwright E2E only** — no unit test framework. `__tests__/` is legacy, don't use it |
+| Playwright baseURL | Defaults to `http://localhost:3002` (see `playwright.config.ts`) |
+| Docker DB reset | `docker compose down -v && docker compose up` (the `-v` removes volumes) |
+| Concurrent agents | Agents should only touch files listed in their task's `files` array to avoid merge conflicts |
+| Query cache times | Use `gcTime` (not `cacheTime` which is deprecated in TanStack Query v5) |
+| Backend response envelope | Backend sends `{ success: true, data: {} }` — `apiClient` strips this, but raw `fetch` doesn't |
+| Migration tracking | `_migrations` table tracks applied migrations — migrations are idempotent |
+
+### Spawning Sub-Tasks
+
+Use the Task tool with `subagent_type: "general-purpose"` to delegate specialized work:
+
+**Test engineer sub-task:**
+```
+Write Playwright E2E tests for {feature}. Test file: e2e/{name}.spec.ts.
+The app runs on http://localhost:3002 (frontend) and http://localhost:3003/api/v1 (backend).
+Cover: happy path, error cases, edge cases. Use request fixture for API tests.
+Read existing tests in e2e/ for patterns.
+```
+
+**Code reviewer sub-task:**
+```
+Review the following files for correctness, security, performance, and accessibility: {file list}.
+Check for: OWASP top 10, proper error handling, TypeScript strict compliance, accessibility (WCAG 2.1 AA).
+Score 0-10 (threshold: 8.0). If below 8.0, list specific fixes needed.
+CookQuest conventions: 2-space indent, single quotes, semicolons, shadcn/ui, Tailwind only.
+```
+
+## Slash Commands Reference
+
+These commands are available via `/command-name` in Claude Code:
+
+| Command | Purpose |
+|---------|---------|
+| `/bootstrap` | Full session startup: check infra, read queue, pick task, begin pipeline |
+| `/pick-task` | Read tasks.json, filter by even/odd identity, assign highest-priority task |
+| `/task-status` | Show queue summary — open, in-progress, done, blockers |
+| `/scaffold-component` | Generate a React component following CookQuest patterns |
+| `/scaffold-api-route` | Generate backend route + frontend API module + hook |
+| `/run-e2e` | Run Playwright tests with pre-flight checks and failure analysis |
+| `/verify-build` | TypeScript type-check + Next.js build + lint |
+| `/deploy` | Deploy to production — Frontend (Vercel) + Backend (GCP Cloud Run) |
+| `/ui-audit` | Run UI/UX auditor workflow (screenshots, review, create tasks) |
+| `/plan-feature` | PM agent: take a requirement, break it into tasks, write to tasks.json |

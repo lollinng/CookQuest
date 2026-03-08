@@ -6,11 +6,11 @@ class RedisServiceClass {
   private isConnected = false
 
   async initialize(): Promise<void> {
-    // For development, we'll use in-memory cache if Redis is not available
     const redisUrl = process.env.REDIS_URL
 
-    if (!redisUrl && process.env.NODE_ENV === 'development') {
-      logger.info('Redis not configured, using in-memory cache for development')
+    // If no REDIS_URL is configured, use in-memory cache (works for dev and Cloud Run without Memorystore)
+    if (!redisUrl) {
+      logger.info('REDIS_URL not set, using in-memory cache')
       this.client = new InMemoryCache()
       this.isConnected = true
       return
@@ -18,7 +18,7 @@ class RedisServiceClass {
 
     try {
       this.client = createClient({
-        url: redisUrl || 'redis://localhost:6379'
+        url: redisUrl
       })
 
       this.client.on('error', (err: any) => {

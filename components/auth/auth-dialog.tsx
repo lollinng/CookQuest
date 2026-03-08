@@ -59,7 +59,7 @@ export function AuthDialog({
         </DialogTrigger>
       )}
 
-      <DialogContent className="sm:max-w-[420px] p-0 border-orange-200/50 overflow-hidden gap-0 bg-white">
+      <DialogContent className="theme-light sm:max-w-[420px] p-0 border-orange-200/50 overflow-hidden gap-0 bg-white">
         <DialogHeader className="sr-only">
           <DialogTitle>
             {view === 'login' ? 'Sign In' : 'Create Account'}
@@ -76,10 +76,10 @@ export function AuthDialog({
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-orange-100">
             <ChefHatIcon className="h-7 w-7 text-orange-600" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900">
+          <h2 className="text-xl font-bold text-foreground">
             {view === 'login' ? 'Welcome Back' : 'Join CookQuest'}
           </h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             {view === 'login'
               ? 'Sign in to continue your cooking journey'
               : 'Create an account to track your progress'}
@@ -94,7 +94,7 @@ export function AuthDialog({
             className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
               view === 'login'
                 ? 'bg-white text-orange-700 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Sign In
@@ -105,7 +105,7 @@ export function AuthDialog({
             className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
               view === 'register'
                 ? 'bg-white text-orange-700 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Create Account

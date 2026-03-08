@@ -106,10 +106,10 @@ export default function SkillPage() {
 
   if (isError || (!isLoading && !skill && !meta)) {
     return (
-      <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center space-y-4">
+      <div className="min-h-screen bg-cq-bg flex flex-col items-center justify-center space-y-4">
         <div className="text-red-400 text-lg font-medium">Skill not found</div>
         <Link href="/">
-          <Button variant="outline" className="border-gray-700 text-gray-300">Back to Dashboard</Button>
+          <Button variant="outline" className="border-cq-border text-cq-text-secondary">Back to Dashboard</Button>
         </Link>
       </div>
     )
@@ -123,21 +123,21 @@ export default function SkillPage() {
 
   return (
     <div
-      className={`pb-16 transition-colors duration-500 ${mode === 'cookbook' ? 'bg-amber-50' : 'bg-gray-950'}`}
+      className={`pb-16 transition-colors duration-500 ${mode === 'cookbook' ? 'bg-amber-50' : 'bg-cq-bg'}`}
       style={{ minHeight: '100vh', width: '100vw', marginLeft: 'calc(-50vw + 50%)', marginTop: '-24px', marginBottom: '-24px' }}
     >
       {/* Sticky top bar */}
       <div className={`sticky top-0 z-20 backdrop-blur-md border-b py-3 transition-colors duration-500 ${
         mode === 'cookbook'
           ? 'bg-amber-50/90 border-amber-200'
-          : 'bg-gray-950/90 border-gray-800'
+          : 'bg-cq-bg/90 border-cq-border'
       }`}>
         <div className="max-w-2xl mx-auto px-4">
           <div className="grid grid-cols-3 items-center">
             {/* Left: back button */}
             <div>
               <Link href="/">
-                <Button variant="ghost" size="sm" className={mode === 'cookbook' ? 'text-stone-500 hover:text-stone-800 hover:bg-amber-100' : 'text-gray-400 hover:text-white hover:bg-gray-800'}>
+                <Button variant="ghost" size="sm" className={mode === 'cookbook' ? 'text-stone-500 hover:text-stone-800 hover:bg-amber-100' : 'text-cq-text-muted hover:text-cq-text-primary hover:bg-cq-surface'}>
                   <ArrowLeft className="size-5" />
                 </Button>
               </Link>
@@ -145,7 +145,7 @@ export default function SkillPage() {
 
             {/* Center: progress bar */}
             <div className="flex justify-center">
-              <div className={`w-full max-w-[180px] rounded-full h-3 ${mode === 'cookbook' ? 'bg-amber-200' : 'bg-gray-800'}`}>
+              <div className={`w-full max-w-[180px] rounded-full h-3 ${mode === 'cookbook' ? 'bg-amber-200' : 'bg-cq-track'}`}>
                 <div
                   className="bg-gradient-to-r from-green-500 to-emerald-400 rounded-full h-3 transition-all duration-700"
                   style={{ width: `${progress.percentage}%` }}
@@ -172,30 +172,36 @@ export default function SkillPage() {
             </div>
           </div>
 
-          {/* Toggle chip — second row, right-aligned */}
-          <div className="flex justify-end mt-2">
-            <div className={`flex rounded-full overflow-hidden border text-xs font-bold ${
-              mode === 'cookbook' ? 'border-amber-300' : 'border-gray-700'
+          {/* Toggle chip — second row, centered */}
+          <div className="flex justify-center mt-3">
+            <div className={`inline-flex rounded-full p-1 text-sm font-bold shadow-lg ${
+              mode === 'cookbook'
+                ? 'bg-amber-200 shadow-amber-200/30'
+                : 'bg-cq-surface shadow-black/30'
             }`}>
               <button
                 onClick={() => handleSetMode('learn')}
-                className={`px-3 py-1 transition-colors ${
+                className={`px-5 py-2 rounded-full transition-all duration-200 ${
                   mode === 'learn'
-                    ? 'bg-gray-700 text-white'
-                    : 'text-gray-500 hover:text-gray-300 bg-transparent'
+                    ? 'bg-blue-500 text-white shadow-md'
+                    : mode === 'cookbook'
+                      ? 'text-amber-700 hover:bg-amber-300/50'
+                      : 'text-cq-text-secondary hover:bg-cq-surface-hover'
                 }`}
               >
                 📚 Learn
               </button>
               <button
                 onClick={() => handleSetMode('cookbook')}
-                className={`px-3 py-1 transition-colors ${
+                className={`px-5 py-2 rounded-full transition-all duration-200 ${
                   mode === 'cookbook'
-                    ? 'bg-amber-500 text-white'
-                    : 'text-stone-500 hover:text-stone-700 bg-transparent'
+                    ? 'bg-amber-500 text-white shadow-md'
+                    : mode === 'learn'
+                      ? 'text-cq-text-secondary hover:bg-cq-surface-hover'
+                      : 'text-amber-700 hover:bg-amber-300/50'
                 }`}
               >
-                📸 My Cookbook
+                📸 Cookbook
               </button>
             </div>
           </div>
@@ -206,8 +212,8 @@ export default function SkillPage() {
         {/* Skill header */}
         <div className="text-center mb-4">
           <div className="text-6xl mb-3">{icon}</div>
-          <h1 className={`text-3xl font-black tracking-tight ${mode === 'cookbook' ? 'text-stone-800' : 'text-white'}`}>{name}</h1>
-          <p className={`mt-2 text-sm ${mode === 'cookbook' ? 'text-stone-500' : 'text-gray-500'}`}>{description}</p>
+          <h1 className={`text-3xl font-black tracking-tight ${mode === 'cookbook' ? 'text-stone-800' : 'text-cq-text-primary'}`}>{name}</h1>
+          <p className={`mt-2 text-sm ${mode === 'cookbook' ? 'text-stone-500' : 'text-cq-text-muted'}`}>{description}</p>
         </div>
 
         {/* Skill tags */}
@@ -217,7 +223,7 @@ export default function SkillPage() {
               <span key={i} className={`text-xs px-3 py-1.5 rounded-full border ${
                 mode === 'cookbook'
                   ? 'bg-amber-100 text-stone-600 border-amber-300'
-                  : 'bg-gray-800 text-gray-400 border-gray-700'
+                  : 'bg-cq-surface text-cq-text-secondary border-cq-border'
               }`}>
                 {item}
               </span>
@@ -229,7 +235,7 @@ export default function SkillPage() {
         {isLoading ? (
           <div className="flex flex-col items-center gap-12 py-12">
             {[...Array(3)].map((_, i) => (
-              <Skeleton key={i} className="w-20 h-20 rounded-full bg-gray-800" />
+              <Skeleton key={i} className="w-20 h-20 rounded-full bg-cq-surface" />
             ))}
           </div>
         ) : recipes && recipes.length > 0 ? (
@@ -248,7 +254,7 @@ export default function SkillPage() {
             />
           </SectionErrorBoundary>
         ) : (
-          <div className={`text-center py-16 ${mode === 'cookbook' ? 'text-stone-400' : 'text-gray-600'}`}>
+          <div className={`text-center py-16 ${mode === 'cookbook' ? 'text-stone-400' : 'text-cq-text-muted'}`}>
             No recipes found for this skill.
           </div>
         )}

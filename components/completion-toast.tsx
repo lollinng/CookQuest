@@ -21,7 +21,7 @@ interface CompletionToastData {
 export function showCompletionToast(data: CompletionToastData) {
   toast.custom(
     (id) => (
-      <div className="w-[360px] bg-white rounded-xl shadow-2xl border border-orange-100 overflow-hidden animate-slide-up">
+      <div className="w-[360px] bg-cq-surface rounded-xl shadow-2xl border border-cq-border overflow-hidden animate-slide-up">
         {/* Header */}
         <div className="bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3">
           <div className="flex items-center gap-2 text-white">
@@ -33,24 +33,24 @@ export function showCompletionToast(data: CompletionToastData) {
         <div className="px-4 py-3 space-y-2.5">
           {/* XP earned */}
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
-              <TrendingUp className="size-4 text-orange-600" />
+            <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="size-4 text-orange-400" />
             </div>
-            <span className="text-sm font-semibold text-gray-900">
+            <span className="text-sm font-semibold text-cq-text-primary">
               +{data.xpGained} XP earned
             </span>
           </div>
 
           {/* Skill progress */}
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
               <span className="text-sm">📊</span>
             </div>
             <div className="flex-1 min-w-0">
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-cq-text-secondary">
                 {data.skillName}: {data.skillCompleted}/{data.skillTotal} recipes done
               </span>
-              <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+              <div className="mt-1 h-1.5 rounded-full bg-cq-track overflow-hidden">
                 <div
                   className="h-full rounded-full bg-blue-500 transition-all duration-500"
                   style={{ width: `${(data.skillCompleted / data.skillTotal) * 100}%` }}
@@ -62,10 +62,10 @@ export function showCompletionToast(data: CompletionToastData) {
           {/* Streak */}
           {data.streakUpdated && data.streakDays > 0 && (
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
-                <Flame className="size-4 text-red-500" />
+              <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                <Flame className="size-4 text-red-400" />
               </div>
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-sm font-medium text-cq-text-secondary">
                 Streak: Day {data.streakDays}! Keep the fire going!
               </span>
             </div>
@@ -73,11 +73,11 @@ export function showCompletionToast(data: CompletionToastData) {
 
           {/* Skill mastered */}
           {data.skillMastered && (
-            <div className="flex items-center gap-3 bg-emerald-50 rounded-lg p-2 -mx-1">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                <Trophy className="size-4 text-emerald-600" />
+            <div className="flex items-center gap-3 bg-emerald-500/10 rounded-lg p-2 -mx-1">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                <Trophy className="size-4 text-emerald-400" />
               </div>
-              <span className="text-sm font-bold text-emerald-800">
+              <span className="text-sm font-bold text-emerald-400">
                 You&apos;ve mastered {data.skillName}!
               </span>
             </div>
@@ -85,12 +85,12 @@ export function showCompletionToast(data: CompletionToastData) {
 
           {/* Level up */}
           {data.levelUp && (
-            <div className="flex items-center gap-3 bg-purple-50 rounded-lg p-2 -mx-1">
-              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+            <div className="flex items-center gap-3 bg-purple-500/10 rounded-lg p-2 -mx-1">
+              <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
                 <span className="text-sm">🎉</span>
               </div>
-              <span className="text-sm font-bold text-purple-800">
-                Level up! You&apos;re now Level {data.levelUp.newLevel}!
+              <span className="text-sm font-bold text-purple-400">
+                Level {data.levelUp.newLevel}! You&apos;re becoming a real chef!
               </span>
             </div>
           )}
@@ -99,7 +99,7 @@ export function showCompletionToast(data: CompletionToastData) {
         {/* Dismiss */}
         <button
           onClick={() => toast.dismiss(id)}
-          className="w-full text-center text-xs text-gray-400 py-2 hover:text-gray-600 transition-colors border-t border-gray-50"
+          className="w-full text-center text-xs text-cq-text-muted py-2 hover:text-cq-text-secondary transition-colors border-t border-cq-border"
         >
           Tap to dismiss
         </button>

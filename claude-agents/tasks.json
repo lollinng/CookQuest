@@ -1,90 +1,8 @@
 [
   {
-    "id": "task_026",
-    "title": "Enable TypeScript strict mode and fix all type errors",
-    "status": "todo",
-    "priority": 10,
-    "type": "security",
-    "description": "## CRITICAL \u2014 TypeScript strict mode is disabled\n\n### What's wrong\n`tsconfig.json:11` has `\"strict\": false`. This disables ALL type safety features:\n- Allows implicit `any` types\n- No strict null checks\n- No strict property initialization\n- Unvalidated user input flows can't be caught at compile time\n\nThis is a production blocker \u2014 type errors WILL slip through and cause runtime crashes.\n\n### What to fix\n1. Change `tsconfig.json` \u2192 `\"strict\": true`\n2. Run `npx tsc --noEmit` to find all type errors\n3. Fix each error \u2014 expect errors in:\n   - Components using `any` for event handlers\n   - API client response types\n   - Store hydration code\n   - Missing null checks on optional values\n4. Focus on fixing, not suppressing with `// @ts-ignore`\n5. Add `\"noUncheckedIndexedAccess\": true` for extra safety\n\n### Why this matters\nStrict mode catches entire categories of bugs: null pointer exceptions, type confusion, missing error handling. Every major production Next.js app uses strict mode.\n\n### Files to modify\n- `tsconfig.json` \u2014 enable strict\n- Multiple component/lib files \u2014 fix resulting type errors\n- Likely high-impact files: `lib/api/client.ts`, `lib/auth-context.tsx`, `hooks/use-recipes.ts`, `components/photo-node.tsx`",
-    "files": [
-      "tsconfig.json",
-      "lib/api/client.ts",
-      "lib/auth-context.tsx",
-      "hooks/use-recipes.ts"
-    ],
-    "createdAt": "2026-02-27T12:00:02.000Z",
-    "assignedTo": null,
-    "assignedAt": null,
-    "completedAt": null,
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
-    "id": "task_031",
-    "title": "Switch auth tokens from localStorage to httpOnly secure cookies",
-    "status": "done",
-    "priority": 9,
-    "type": "security",
-    "description": "## HIGH \u2014 JWT stored in localStorage is vulnerable to XSS\n\n### What's wrong\n`lib/api/client.ts:19-34` stores the JWT in localStorage:\n```typescript\nconst TOKEN_KEY = 'cookquest_token';\nexport function getToken(): string | null {\n  return localStorage.getItem(TOKEN_KEY);\n}\n```\n\nAny XSS vulnerability (in app code OR any dependency) gives attackers full access to the JWT token, enabling account takeover.\n\n`lib/api/auth.ts:46-67` also stores full user profile in localStorage, exposing PII (email, username).\n\n### What to fix\n\n**Backend changes:**\n1. Set JWT as httpOnly, secure, SameSite cookie on login/register:\n```typescript\nres.cookie('cookquest_token', token, {\n  httpOnly: true,\n  secure: process.env.NODE_ENV === 'production',\n  sameSite: 'strict',\n  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days\n  path: '/',\n});\n```\n2. Add `GET /api/v1/auth/me` endpoint to fetch current user from cookie\n3. Clear cookie on logout: `res.clearCookie('cookquest_token')`\n4. Read token from cookie in auth middleware instead of Authorization header (support both during migration)\n\n**Frontend changes:**\n1. Remove `localStorage.setItem(TOKEN_KEY, token)` from auth.ts\n2. Remove `getToken()`/`setToken()` functions\n3. Add `credentials: 'include'` to all fetch calls in `lib/api/client.ts`\n4. Only store non-sensitive data in localStorage (user ID for hydration hint)\n5. Fetch full user profile from `/api/v1/auth/me` on app load\n\n### Files to modify\n- `backend/node-services/api-server/src/routes/auth.ts` \u2014 set cookies instead of returning token in body\n- `backend/node-services/api-server/src/middleware/auth.ts` \u2014 read from cookie OR header\n- `lib/api/client.ts` \u2014 add `credentials: 'include'`, remove localStorage token logic\n- `lib/api/auth.ts` \u2014 remove localStorage user caching, add /auth/me fetch\n- `lib/auth-context.tsx` \u2014 update to use cookie-based auth flow",
-    "files": [
-      "backend/node-services/api-server/src/routes/auth.ts",
-      "backend/node-services/api-server/src/middleware/auth.ts",
-      "lib/api/client.ts",
-      "lib/api/auth.ts",
-      "lib/auth-context.tsx"
-    ],
-    "createdAt": "2026-02-27T12:00:07.000Z",
-    "assignedTo": null,
-    "assignedAt": null,
-    "completedAt": null,
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
-    "id": "task_036",
-    "title": "Fix broken recipe images on dashboard \u2014 hero images show gray/broken alt text",
-    "status": "done",
-    "priority": 8,
-    "type": "bug-fix",
-    "description": "## HIGH \u2014 Recipe images broken across the app\n\n### What's wrong (from Playwright screenshots)\n\n1. **Dashboard recipe cards** \u2014 'Perfect Boiled Egg' card shows broken image icon with alt text `Perfect Boiled Egg` visible as text. The image URL is failing to load from Unsplash.\n\n2. **Recipe detail page** \u2014 Hero section shows a GRAY BOX (~300px tall) with no image. Only the title text overlay is visible. This is the first thing users see \u2014 looks broken/unprofessional.\n\n3. **All recipe cards** have small circular emoji overlays (top-left) that appear but the main card images are inconsistent \u2014 some load, some don't.\n\n### Root cause investigation\n- Check if Unsplash image URLs in seed data are still valid\n- Check if `next.config.ts` image remotePatterns are correct\n- Check if images use Next.js `<Image>` component with proper error fallbacks\n- Check `?w=800&fit=crop&q=80` query params work with current Unsplash URLs\n\n### What to fix\n1. Verify/update all Unsplash image URLs in `backend/shared/seed-data-pg.sql`\n2. Add proper error fallback UI in recipe cards \u2014 gradient background with large emoji, not broken image icon\n3. Add `onError` handler to all `<Image>` and `<img>` tags:\n```tsx\n<Image\n  src={recipe.imageUrl}\n  alt={recipe.title}\n  onError={(e) => {\n    e.currentTarget.style.display = 'none';\n    // Show fallback gradient + emoji\n  }}\n/>\n```\n4. Recipe detail hero should use gradient fallback matching skill color, not gray box\n5. Consider downloading and self-hosting recipe images for reliability\n\n### Files to modify\n- `backend/shared/seed-data-pg.sql` \u2014 verify/update image URLs\n- `components/recipe-card.tsx` \u2014 add image error fallback\n- `app/recipe/[recipeId]/page.tsx` \u2014 fix hero image fallback\n- `next.config.ts` \u2014 verify remotePatterns configuration",
-    "files": [
-      "backend/shared/seed-data-pg.sql",
-      "components/recipe-card.tsx",
-      "app/recipe/[recipeId]/page.tsx",
-      "next.config.ts"
-    ],
-    "createdAt": "2026-02-27T12:00:12.000Z",
-    "assignedTo": "implementer-agent-2",
-    "assignedAt": "2026-02-27T16:40:00.000Z",
-    "completedAt": "2026-02-27T16:45:00.000Z",
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
-    "id": "task_051",
-    "title": "[Phase 1] Add xp_reward column to recipes table and update seed data",
-    "status": "in_progress",
-    "priority": 10,
-    "type": "enhancement",
-    "description": "## CRITICAL \u2014 Recipes have no XP reward value defined\n\n### What's wrong\nThe `recipes` table in `backend/shared/schema-pg.sql` has no `xp_reward` column. The core loop requires every recipe to grant XP on completion (e.g., 100 XP for beginner, 150 for intermediate, 200 for advanced). Without this, we cannot show \"+100 XP\" on recipe cards or in the completion toast.\n\n### What to fix\n1. **Add migration `005_add_xp_reward.sql`** to add `xp_reward INTEGER DEFAULT 100` column to `recipes` table\n2. **Update `backend/shared/schema-pg.sql`** with the new column for fresh installs\n3. **Update `backend/shared/seed-data-pg.sql`** to set XP values per recipe:\n   - beginner recipes: 100 XP (boiled-egg, make-rice, chop-onion)\n   - intermediate recipes: 150 XP (sear-steak, simmer-soup, etc.)\n   - advanced recipes: 200 XP\n4. **Update `backend/node-services/api-server/src/services/database.ts`** to run the new migration\n5. **Update recipe API responses** to include `xp_reward` in the JSON payload\n6. **Update `lib/types.ts`** to add `xpReward: number` to the Recipe interface\n7. **Update `hooks/use-recipes.ts` `mapRecipe()`** to map `xp_reward` \u2192 `xpReward`\n\n### Acceptance criteria\n- `GET /api/v1/recipes` returns `xp_reward` for each recipe\n- `GET /api/v1/recipes/:id` returns `xp_reward`\n- Frontend Recipe type includes `xpReward`\n- Migration is idempotent (can run multiple times safely)\n\n### Files to create/modify\n- `backend/shared/schema-pg.sql` \u2014 add column\n- `backend/shared/seed-data-pg.sql` \u2014 add XP values\n- `backend/node-services/api-server/src/services/database.ts` \u2014 add migration 005\n- `lib/types.ts` \u2014 add xpReward to Recipe interface\n- `hooks/use-recipes.ts` \u2014 update mapRecipe()",
-    "files": [
-      "backend/shared/schema-pg.sql",
-      "backend/shared/seed-data-pg.sql",
-      "backend/node-services/api-server/src/services/database.ts",
-      "lib/types.ts",
-      "hooks/use-recipes.ts"
-    ],
-    "createdAt": "2026-02-27T14:00:00.000Z",
-    "assignedTo": "implementer-agent-main",
-    "assignedAt": "2026-02-27T16:17:35.286421Z",
-    "completedAt": null,
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
     "id": "task_052",
     "title": "[Phase 1] Create unified POST /recipes/:id/complete endpoint",
-    "status": "in_progress",
+    "status": "done",
     "priority": 10,
     "type": "enhancement",
     "description": "## CRITICAL \u2014 No single endpoint to complete a recipe and return all updated state\n\n### What's wrong\nCurrently recipe completion is handled entirely in the frontend Zustand store (localStorage). The backend has `POST /recipes/:id/progress` but it only updates a single row \u2014 it doesn't:\n- Calculate XP gained\n- Update streak\n- Return skill progress\n- Detect skill unlocks\n- Detect level-ups\n\nThe core loop requires ONE endpoint that does everything and returns a rich payload.\n\n### What to fix\nCreate `POST /api/v1/recipes/:id/complete` that:\n\n1. **Marks recipe as completed** in `user_recipe_progress` (idempotent \u2014 if already completed, return current state with `already_completed: true`)\n2. **Calculates XP gained** from recipe's `xp_reward` value\n3. **Updates user's total XP** (add `current_xp` and `total_recipes_completed` columns to users table if not present)\n4. **Calculates streak**: query `user_recipe_progress` for the user, check if they completed a recipe yesterday (streak continues) or today (already counted). Update `streak_days` and `last_activity_date` on users table.\n5. **Computes skill progress**: count completed recipes in the recipe's skill\n6. **Detects skill unlocks**: if skill is `basic-cooking` and completed_count == total (3), flag `skills_unlocked: ['heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine']`\n7. **Detects level-up**: if `current_xp >= xp_to_next_level`, increment level\n8. **Returns unified payload**:\n```json\n{\n  \"success\": true,\n  \"data\": {\n    \"recipe_id\": \"boiled-egg\",\n    \"already_completed\": false,\n    \"xp_gained\": 100,\n    \"user\": {\n      \"level\": 1,\n      \"current_xp\": 100,\n      \"xp_to_next_level\": 1000,\n      \"streak_days\": 4,\n      \"total_recipes_completed\": 1\n    },\n    \"skill_progress\": {\n      \"skill_id\": \"basic-cooking\",\n      \"completed\": 1,\n      \"total\": 3,\n      \"percentage\": 33\n    },\n    \"level_up\": null,\n    \"skills_unlocked\": [],\n    \"streak_updated\": true\n  }\n}\n```\n\n### Subtasks\n- Add `current_xp`, `streak_days`, `last_activity_date`, `total_recipes_completed` columns to `users` table (migration 006)\n- Create the route handler in a new file or extend `backend/node-services/api-server/src/routes/progress.ts`\n- Use a database transaction to ensure atomicity\n- Add authentication middleware (require login)\n- Handle edge cases: recipe doesn't exist (404), user not found, already completed\n\n### Depends on\n- task_051 (xp_reward column must exist)\n\n### Files to create/modify\n- `backend/node-services/api-server/src/routes/progress.ts` \u2014 add complete endpoint\n- `backend/node-services/api-server/src/services/database.ts` \u2014 add migration 006, helper queries\n- `backend/node-services/api-server/src/index.ts` \u2014 register route if not already\n- `backend/shared/schema-pg.sql` \u2014 add user XP/streak columns",
@@ -102,29 +20,9 @@
     "maxRetries": 3
   },
   {
-    "id": "task_053",
-    "title": "[Phase 1] Implement real streak calculation from completion dates",
-    "status": "in_progress",
-    "priority": 10,
-    "type": "bug-fix",
-    "description": "## CRITICAL \u2014 Streak is hardcoded to 3 days\n\n### What's wrong\n`app/page.tsx:34` has:\n```typescript\nconst streak = 3 // TODO: Calculate actual streak from completion dates\n```\nThis means every user always sees 'Streak: 3 days' regardless of activity.\n\n### What to fix\n\n**Option A (Server-side, preferred for logged-in users):**\nThe `POST /recipes/:id/complete` endpoint (task_052) already calculates streak. Create a `GET /api/v1/users/me/stats` endpoint that returns:\n```json\n{\n  \"level\": 1,\n  \"current_xp\": 0,\n  \"xp_to_next_level\": 1000,\n  \"streak_days\": 0,\n  \"total_recipes_completed\": 0,\n  \"last_activity_date\": null\n}\n```\n\n**Option B (Client-side, for anonymous users):**\nCalculate streak from the Zustand store. Add `completionDates` to the store:\n```typescript\n// In recipe-store.ts\ncompletionDates: Map<string, string>, // recipeId \u2192 ISO date string\n\ntoggleRecipeCompletion: (recipeId) => {\n  // ... existing logic ...\n  // Also track: completionDates.set(recipeId, new Date().toISOString())\n}\n\ngetStreak: () => {\n  const dates = [...get().completionDates.values()]\n    .map(d => new Date(d).toDateString())\n  const uniqueDays = [...new Set(dates)].sort().reverse()\n  // Walk backwards from today, counting consecutive days\n  let streak = 0\n  const today = new Date()\n  for (let i = 0; i < uniqueDays.length; i++) {\n    const expected = new Date(today)\n    expected.setDate(today.getDate() - i)\n    if (uniqueDays[i] === expected.toDateString()) streak++\n    else break\n  }\n  return streak\n}\n```\n\n**Implementation**: Use Option B for anonymous users + Option A for logged-in users. The dashboard should prefer server data when available.\n\n### Subtasks\n1. Add `completionDates` to Zustand store with proper serialization\n2. Add `getStreak()` method to store\n3. Create `GET /api/v1/users/me/stats` backend endpoint\n4. Create `useUserStats()` TanStack Query hook\n5. Update `app/page.tsx` to use real streak (server if logged in, store if anonymous)\n\n### Depends on\n- task_052 (unified complete endpoint handles streak server-side)\n\n### Files to modify\n- `lib/stores/recipe-store.ts` \u2014 add completionDates, getStreak()\n- `app/page.tsx` \u2014 replace hardcoded streak\n- `hooks/use-recipes.ts` \u2014 add useUserStats() hook\n- `backend/node-services/api-server/src/routes/progress.ts` \u2014 add /users/me/stats endpoint",
-    "files": [
-      "lib/stores/recipe-store.ts",
-      "app/page.tsx",
-      "hooks/use-recipes.ts",
-      "backend/node-services/api-server/src/routes/progress.ts"
-    ],
-    "createdAt": "2026-02-27T14:00:02.000Z",
-    "assignedTo": "implementer-agent-main",
-    "assignedAt": "2026-02-27T16:17:35.286421Z",
-    "completedAt": null,
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
     "id": "task_054",
     "title": "[Phase 1] Create CoreLoopHeroCard component with Start/Continue CTA",
-    "status": "in_progress",
+    "status": "done",
     "priority": 10,
     "type": "enhancement",
     "description": "## CRITICAL \u2014 New users have no clear 'Start here' guidance\n\n### What's wrong\nThe dashboard shows 5 skill cards and 3 recipe cards but no prominent CTA telling users what to do next. The bottom 'Ready for your next challenge?' card is too generic and buried below the fold.\n\n### What to build\nCreate `components/core-loop-hero-card.tsx` \u2014 a prominent card placed **immediately below the Level/Streak/XP header** and **above the Cooking Skills section**.\n\n**States:**\n\n1. **New user (0 recipes completed overall)**:\n   - Title: \"Start with Basic Cooking\"\n   - Subtitle: \"Complete 3 quick recipes to unlock more skills.\"\n   - Button: \"Start Basic Cooking\" \u2192 navigates to `/recipe/boiled-egg` (first Basic Cooking recipe)\n   - Visual: warm gradient background (amber \u2192 orange), chef hat icon\n\n2. **Returning user (incomplete Basic Cooking, 1-2 of 3 done)**:\n   - Title: \"Continue Basic Cooking\"\n   - Subtitle: \"You've completed X of 3 recipes.\"\n   - Button: \"Resume last recipe\" \u2192 navigates to the next incomplete Basic Cooking recipe\n   - Progress bar showing X/3\n   - Visual: same gradient, progress indicator\n\n3. **Basic Cooking complete (3/3), other skills available**:\n   - Title: \"New skills unlocked!\"\n   - Subtitle: \"Explore Heat Control, Flavor Building, and more.\"\n   - Button: \"Explore Heat Control\" (primary), \"Browse all skills\" (secondary)\n   - Visual: celebration gradient (green \u2192 emerald)\n\n4. **All recipes completed (hide card or show mastery)**:\n   - Don't render the card\n\n### Props interface\n```typescript\ninterface CoreLoopHeroCardProps {\n  totalCompleted: number;\n  basicCookingProgress: { completed: number; total: number; percentage: number };\n  nextRecipeId: string | null; // ID of next incomplete recipe in Basic Cooking\n  hasUnlockedSkills: boolean; // true if Basic Cooking is 100%\n}\n```\n\n### Subtasks\n1. Create the component with all 4 states\n2. Add helper function to determine `nextRecipeId` (find first incomplete Basic Cooking recipe)\n3. Integrate into `app/page.tsx` between the header Card and the grid\n4. Add entrance animation (slide-up with delay)\n5. Mobile responsive (full-width, stacked layout)\n\n### Acceptance criteria\n- Given a new user with 0 completed recipes, when they load the dashboard, then they see \"Start with Basic Cooking\" with a prominent orange CTA button\n- Given a user with 1/3 Basic Cooking done, when they load the dashboard, then they see \"Continue Basic Cooking\" with progress 1/3 and button linking to next incomplete recipe\n- Given a user with 3/3 Basic Cooking done, then they see \"New skills unlocked!\" with link to Heat Control\n- Card is responsive (looks good on 390px mobile and 1440px desktop)\n- Card has smooth entrance animation\n\n### Files to create/modify\n- `components/core-loop-hero-card.tsx` \u2014 NEW component\n- `app/page.tsx` \u2014 integrate between header and grid",
@@ -140,28 +38,9 @@
     "maxRetries": 3
   },
   {
-    "id": "task_055",
-    "title": "[Phase 1] Create CompletionToast component with XP, streak, and skill progress feedback",
-    "status": "in_progress",
-    "priority": 9,
-    "type": "enhancement",
-    "description": "## HIGH \u2014 Users get no reward feedback on recipe completion\n\n### What's wrong\nCurrently `app/recipe/[recipeId]/page.tsx:30-35` shows a basic toast:\n```typescript\ntoast.success(isCompleted ? 'marked as incomplete' : '\ud83c\udf89 completed!')\n```\nThis gives zero information about XP earned, streak impact, or skill progress. The core loop requires instant, satisfying feedback.\n\n### What to build\nCreate `components/completion-toast.tsx` \u2014 a rich toast/notification that appears when a recipe is marked as completed.\n\n**Content (all in one toast, stacked vertically):**\n1. \"Nice work! +{xp} XP\" (e.g., +100 XP) \u2014 with XP icon\n2. \"Basic Cooking: {x}/3 recipes completed\" \u2014 with progress bar\n3. \"Streak: Day {n}!\" (ONLY if this is the first recipe completed today) \u2014 with flame icon\n4. If skill just completed (3/3): \"You've mastered Basic Cooking!\" bonus line\n5. If level-up: \"Level up! You're now Level {n}!\" bonus line\n\n**Design:**\n- Use sonner custom toast (already in project) with a custom React component\n- Warm background (orange/amber gradient or white with orange accent)\n- Auto-dismiss after 5 seconds\n- Celebratory emoji/icon\n- Slide-in from top-right (default sonner behavior)\n\n### Props interface\n```typescript\ninterface CompletionToastProps {\n  recipeName: string;\n  xpGained: number;\n  skillProgress: { skillName: string; completed: number; total: number };\n  streakUpdated: boolean;\n  streakDays: number;\n  levelUp: { newLevel: number } | null;\n  skillMastered: boolean;\n}\n```\n\n### Integration\n- Replace the simple `toast.success()` in `app/recipe/[recipeId]/page.tsx`\n- Also integrate into `components/recipe-card.tsx` completion toggle\n- For anonymous users: compute values from Zustand store\n- For logged-in users: use response from `POST /recipes/:id/complete`\n\n### Acceptance criteria\n- Given a user completes 'Perfect Boiled Egg', then a rich toast appears showing \"+100 XP\", \"Basic Cooking: 1/3\", and streak info\n- Toast auto-dismisses after 5 seconds\n- Toast is beautiful and on-brand (warm colors, emojis)\n- If user uncompletes a recipe, show a simple \"Recipe marked as incomplete\" (no XP toast)\n\n### Depends on\n- task_051 (xp_reward on recipes)\n\n### Files to create/modify\n- `components/completion-toast.tsx` \u2014 NEW component\n- `app/recipe/[recipeId]/page.tsx` \u2014 replace toast.success()\n- `components/recipe-card.tsx` \u2014 update completion handler",
-    "files": [
-      "components/completion-toast.tsx",
-      "app/recipe/[recipeId]/page.tsx",
-      "components/recipe-card.tsx"
-    ],
-    "createdAt": "2026-02-27T14:00:04.000Z",
-    "assignedTo": "implementer-agent-main",
-    "assignedAt": "2026-02-27T16:20:10.116588+00:00",
-    "completedAt": null,
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
     "id": "task_056",
     "title": "[Phase 1] Update RecipeCard to show XP reward badge and improved completed state",
-    "status": "in_progress",
+    "status": "done",
     "priority": 9,
     "type": "ui-fix",
     "description": "## HIGH \u2014 Recipe cards don't show XP reward or clear completed state\n\n### What's wrong\n`components/recipe-card.tsx` shows recipe image, title, time, difficulty, and a small completion toggle (circle icon top-right). But:\n1. No XP reward displayed (e.g., \"+100 XP\" badge)\n2. Completed state is just a green circle \u2014 not visually satisfying\n3. No disabled/already-completed button state\n\n### What to fix\n\n1. **Add XP badge**: Show a small badge on the card (e.g., bottom-right or near the title) with \"+{xp} XP\" in orange text. Only show if recipe has `xpReward` property.\n\n2. **Improve completed state**:\n   - Show a green checkmark overlay on the card image\n   - Change completion button text to \"Completed \u2713\" (not just a circle icon)\n   - Add subtle green border/glow to completed cards\n   - Disable the completion button (or show \"Already completed\" tooltip) \u2014 but still allow uncomplete on click\n\n3. **Show skill association** more prominently if not already visible\n\n### Design guidance\n- XP badge: small pill/chip, `bg-orange-100 text-orange-700 text-xs font-semibold px-2 py-0.5 rounded-full`\n- Completed overlay: `bg-green-500/20` with centered `CheckCircle2` icon\n- Completed card border: `ring-2 ring-green-400`\n\n### Acceptance criteria\n- Given a recipe card for 'Perfect Boiled Egg' (beginner, 100 XP), then the card shows \"+100 XP\" badge\n- Given a completed recipe, the card has a green overlay, checkmark, and completed text\n- Given an incomplete recipe, the card shows the standard completion button\n- XP badge is visible on both compact and full card layouts\n\n### Depends on\n- task_051 (xpReward in Recipe type)\n\n### Files to modify\n- `components/recipe-card.tsx` \u2014 add XP badge, improve completed state",
@@ -176,26 +55,9 @@
     "maxRetries": 3
   },
   {
-    "id": "task_057",
-    "title": "[Phase 1] Create getUserCoreLoopState hook for determining next user action",
-    "status": "in_progress",
-    "priority": 9,
-    "type": "enhancement",
-    "description": "## HIGH \u2014 No centralized logic to determine user's position in the core loop\n\n### What's wrong\nMultiple components need to know the user's current state in the core loop (what to show, what CTA to display, what's next). This logic is currently scattered or non-existent. We need a single source of truth.\n\n### What to build\nCreate `hooks/use-core-loop.ts` with a `useCoreLoopState()` hook that returns:\n\n```typescript\ninterface CoreLoopState {\n  // Next action determination\n  nextActionType: 'start_basic_cooking' | 'continue_basic_cooking' | 'explore_unlocked_skills' | 'all_complete';\n  primaryCtaLabel: string; // e.g., 'Start Basic Cooking'\n  primaryCtaRoute: string; // e.g., '/recipe/boiled-egg'\n  secondaryActions: Array<{ label: string; route: string }>;\n\n  // Progress data\n  basicCookingProgress: { completed: number; total: number; percentage: number };\n  overallProgress: { completed: number; total: number; percentage: number };\n  currentLevel: number;\n  currentXp: number;\n  xpToNextLevel: number;\n  streak: number;\n  totalRecipesCompleted: number;\n\n  // Unlock state\n  unlockedSkills: string[]; // skill IDs that are currently unlocked\n  newlyUnlockedSkills: string[]; // skills unlocked in this session (for 'New!' badge)\n  isBasicCookingComplete: boolean;\n\n  // Next recipe helpers\n  nextIncompleteRecipeId: string | null; // in Basic Cooking\n  nextIncompleteRecipeTitle: string | null;\n}\n```\n\n### Logic\n```typescript\nfunction getUserCoreLoopState(store, recipes): CoreLoopState {\n  const bcProgress = store.getSkillProgress('basic-cooking')\n  const overall = store.getOverallProgress()\n  \n  if (overall.completed === 0) {\n    return { nextActionType: 'start_basic_cooking', ... }\n  } else if (bcProgress.percentage < 100) {\n    return { nextActionType: 'continue_basic_cooking', ... }\n  } else if (overall.percentage < 100) {\n    return { nextActionType: 'explore_unlocked_skills', ... }\n  } else {\n    return { nextActionType: 'all_complete', ... }\n  }\n}\n```\n\n### Integration points\n- `CoreLoopHeroCard` (task_054) uses this to determine what to show\n- `app/page.tsx` uses this for streak, level, XP values\n- `CompletionToast` (task_055) uses this to compute skill progress after completion\n- `SkillUnlockBanner` (task_059) uses this to detect unlocks\n\n### Acceptance criteria\n- Hook returns correct state for all 4 nextActionTypes\n- `nextIncompleteRecipeId` correctly identifies the first incomplete Basic Cooking recipe\n- Works for both anonymous (Zustand) and logged-in (server data) users\n- Memoized to prevent unnecessary re-renders\n\n### Files to create\n- `hooks/use-core-loop.ts` \u2014 NEW file with useCoreLoopState() hook",
-    "files": [
-      "hooks/use-core-loop.ts"
-    ],
-    "createdAt": "2026-02-27T14:00:06.000Z",
-    "assignedTo": "implementer-agent-main",
-    "assignedAt": "2026-02-27T16:17:35.286421Z",
-    "completedAt": null,
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
     "id": "task_058",
     "title": "[Phase 1] Wire the full completion flow: recipe complete \u2192 API \u2192 toast \u2192 real-time UI updates",
-    "status": "in_progress",
+    "status": "done",
     "priority": 9,
     "type": "enhancement",
     "description": "## HIGH \u2014 Completion flow doesn't update XP bar, recipe count, or skill progress in real-time\n\n### What's wrong\nWhen a user clicks 'Mark as completed':\n1. Zustand store toggles the recipe in a Set (localStorage only)\n2. A basic toast appears\n3. The XP bar, recipe count, and skill progress DO update reactively (Zustand re-renders) but with NO animation\n4. No server call is made (progress is ephemeral)\n\n### What to fix\nWire the complete flow end-to-end:\n\n**For logged-in users:**\n1. User clicks 'Mark as completed'\n2. Call `POST /api/v1/recipes/:id/complete` (from task_052)\n3. On success response, update Zustand store AND show CompletionToast (task_055)\n4. Animate XP bar fill from old value to new value\n5. Update recipe count in header (e.g., '1 of 28 recipes completed')\n6. If `skills_unlocked` in response, trigger SkillUnlockBanner (task_059)\n7. If `level_up` in response, trigger level-up celebration (task_061)\n\n**For anonymous users (no auth):**\n1. User clicks 'Mark as completed'\n2. Update Zustand store (existing behavior)\n3. Calculate XP/streak/progress from store\n4. Show CompletionToast with computed values\n5. Animate XP bar\n\n### Implementation\nCreate a `useCompleteRecipe()` mutation hook in `hooks/use-recipes.ts`:\n```typescript\nexport function useCompleteRecipe() {\n  const store = useRecipeStore()\n  const { user } = useAuth() // check if logged in\n  \n  return useMutation({\n    mutationFn: async (recipeId: string) => {\n      if (user) {\n        // Server call\n        return await completeRecipe(recipeId)\n      } else {\n        // Local-only\n        store.toggleRecipeCompletion(recipeId)\n        return computeLocalCompletionResult(recipeId, store)\n      }\n    },\n    onSuccess: (data) => {\n      // Show CompletionToast\n      // Invalidate queries\n      // Trigger unlock/level-up if applicable\n    }\n  })\n}\n```\n\n### Subtasks\n1. Create `useCompleteRecipe()` mutation hook\n2. Create `lib/api/progress.ts` with `completeRecipe(recipeId)` API call\n3. Update `app/recipe/[recipeId]/page.tsx` to use the new hook\n4. Update `components/recipe-card.tsx` to use the new hook\n5. Add XP bar animation (CSS transition on Progress component value)\n6. Add optimistic update for instant feedback\n\n### Depends on\n- task_052 (backend endpoint)\n- task_055 (CompletionToast component)\n- task_057 (core loop state hook)\n\n### Acceptance criteria\n- Given a logged-in user completing a recipe, the server is called and toast shows server-returned XP/streak/progress\n- Given an anonymous user completing a recipe, the local store is updated and toast shows computed values\n- XP bar animates smoothly from old to new value\n- Recipe count updates in real-time in the header\n- Skill progress updates in real-time on skill cards\n\n### Files to create/modify\n- `hooks/use-recipes.ts` \u2014 add useCompleteRecipe()\n- `lib/api/progress.ts` \u2014 NEW file with completeRecipe() API call\n- `app/recipe/[recipeId]/page.tsx` \u2014 use new hook\n- `components/recipe-card.tsx` \u2014 use new hook",
@@ -213,103 +75,9 @@
     "maxRetries": 3
   },
   {
-    "id": "task_059",
-    "title": "[Phase 2] Create SkillUnlockBanner component for Basic Cooking mastery",
-    "status": "todo",
-    "priority": 8,
-    "type": "enhancement",
-    "description": "## HIGH \u2014 No celebration when users unlock new skills\n\n### What's wrong\nWhen Basic Cooking reaches 3/3, skills silently become clickable. There's a 'Trophy Skill Mastered!' card at the bottom of the dashboard (page.tsx:218-230) but it's:\n1. At the very bottom \u2014 users won't see it\n2. Static \u2014 no animation or celebration\n3. Doesn't name the newly unlocked skills\n4. Doesn't direct users to try them\n\n### What to build\nCreate `components/skill-unlock-banner.tsx` \u2014 a full-width celebration banner that appears when Basic Cooking goes from <3 to 3 completed recipes.\n\n**Trigger:** When the completion flow (task_058) detects `skills_unlocked` is non-empty, OR when the Zustand store's basic-cooking progress reaches 100% for the first time in this session.\n\n**Design:**\n- Full-width banner, overlaid or inserted at top of dashboard\n- Confetti animation (use CSS or a lightweight library like `canvas-confetti`)\n- Title: \"You've mastered Basic Cooking!\" with trophy emoji\n- Subtitle: \"You've unlocked new skills: Heat Control, Flavor Building, Air Fryer Mastery, Indian Cuisine.\"\n- Two buttons:\n  - Primary: \"Explore Heat Control\" \u2192 `/skill/heat-control`\n  - Secondary: \"Browse all skills\" \u2192 scroll to skills section\n- Auto-dismiss after 10 seconds OR on button click\n- Store dismissal in sessionStorage so it doesn't re-show on page reload\n\n### Props interface\n```typescript\ninterface SkillUnlockBannerProps {\n  masteredSkillName: string;\n  unlockedSkills: Array<{ id: string; name: string }>;\n  onDismiss: () => void;\n  onExploreSkill: (skillId: string) => void;\n}\n```\n\n### Acceptance criteria\n- Given a user who just completed the 3rd Basic Cooking recipe, when the dashboard renders, then a celebration banner appears with confetti\n- Banner names all 4 newly unlocked skills\n- Primary CTA navigates to Heat Control skill page\n- Banner can be dismissed and doesn't re-appear on reload\n- Banner is responsive (stacked layout on mobile)\n- Animation is smooth and doesn't jank\n\n### Depends on\n- task_058 (completion flow that detects unlocks)\n\n### Files to create/modify\n- `components/skill-unlock-banner.tsx` \u2014 NEW component\n- `app/page.tsx` \u2014 integrate banner trigger logic",
-    "files": [
-      "components/skill-unlock-banner.tsx",
-      "app/page.tsx"
-    ],
-    "createdAt": "2026-02-27T14:00:08.000Z",
-    "assignedTo": null,
-    "assignedAt": null,
-    "completedAt": null,
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
-    "id": "task_060",
-    "title": "[Phase 2] Implement skill card unlock state transitions with 'New!' badges",
-    "status": "todo",
-    "priority": 8,
-    "type": "ui-fix",
-    "description": "## HIGH \u2014 Locked skills transition silently when unlocked\n\n### What's wrong\n`components/skill-card.tsx` handles locked state well (grayed out, 'Locked' badge, 'Complete Basic Cooking to unlock this skill' message). But when Basic Cooking is completed:\n1. Skills just become clickable \u2014 no 'New!' badge\n2. No visual transition or animation\n3. No 'just unlocked' state to draw attention\n4. Per-skill progress label missing (e.g., '0 / 5 recipes completed' for Heat Control)\n\n### What to fix\n\n1. **Add 'New!' badge** to freshly unlocked skills:\n   - Track `newlyUnlockedSkills` in sessionStorage (set when Basic Cooking completes, cleared after first visit)\n   - Show pulsing green 'New!' badge on skill cards that are in the newly-unlocked list\n   - Badge: `bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full animate-pulse`\n\n2. **Add entrance animation** for unlocked skills:\n   - When a skill transitions from locked \u2192 unlocked, use a scale-up + glow animation\n   - CSS: `@keyframes unlock { 0% { transform: scale(0.95); opacity: 0.5 } 100% { transform: scale(1); opacity: 1 } }`\n\n3. **Add progress label per skill**:\n   - Below the progress bar: \"0 / 5 recipes completed\" (not just \"0/5 completed\")\n   - This already partially exists but should be more prominent\n\n4. **Update skill card colors** when unlocked:\n   - Remove gray overlay\n   - Show skill's native color border/accent\n   - Show 'Start Learning' and 'View recipes' links (same as Basic Cooking)\n\n### Acceptance criteria\n- Given a user who just unlocked skills, when they see the dashboard, then Heat Control, Flavor Building, Air Fryer, and Indian Cuisine show 'New!' badges\n- Badges pulse gently to attract attention\n- After user clicks on a newly unlocked skill, the 'New!' badge disappears on next dashboard visit\n- Each skill shows 'X / Y recipes completed' progress text\n- Unlocked skills show their native color accent (not gray)\n\n### Depends on\n- task_059 (skill unlock detection)\n\n### Files to modify\n- `components/skill-card.tsx` \u2014 add New! badge, progress text, unlock animation\n- `app/page.tsx` \u2014 pass newlyUnlocked prop to SkillCard",
-    "files": [
-      "components/skill-card.tsx",
-      "app/page.tsx"
-    ],
-    "createdAt": "2026-02-27T14:00:09.000Z",
-    "assignedTo": null,
-    "assignedAt": null,
-    "completedAt": null,
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
-    "id": "task_061",
-    "title": "[Phase 2] Create level-up celebration modal when XP threshold is crossed",
-    "status": "todo",
-    "priority": 7,
-    "type": "enhancement",
-    "description": "## MEDIUM-HIGH \u2014 No celebration when user levels up\n\n### What's wrong\nThe header shows 'Level 1 \u2014 Beginner' and '0/1000 XP', but when the XP bar fills to 1000 and the user reaches Level 2, nothing happens. The level number just increments silently.\n\n### What to build\nCreate `components/level-up-modal.tsx` \u2014 a modal/dialog that appears when a level-up is detected.\n\n**Design:**\n- Center-screen modal with overlay\n- Large level number with scale-up animation (e.g., '2' zooming in)\n- Title: \"Level Up!\"\n- Subtitle: \"You're now Level 2 \u2014 Beginner\" (or Intermediate at level 4+)\n- Show new XP threshold: \"Next level: 0 / 2000 XP\"\n- Celebratory animation (confetti or sparkle effect)\n- Single button: \"Keep Cooking!\" \u2192 dismisses modal\n- Optional: show total recipes completed, total XP earned as stats\n\n### Trigger\nWhen `POST /recipes/:id/complete` returns `level_up: { newLevel: 2 }`, or when client-side calculation detects level change after recipe completion.\n\n**Level thresholds** (from `lib/utils.ts` `calculateLevel()`):\n- Level 1: 0 XP\n- Level 2: 1000 XP\n- Level 3: 2500 XP\n- etc.\n\n### Implementation\n- Use shadcn/ui `Dialog` component for the modal\n- Trigger from the completion flow (task_058)\n- Only show once per level-up (use state flag)\n\n### Acceptance criteria\n- Given a user at 900 XP who completes a 100 XP recipe, when the completion response returns, then a level-up modal appears showing 'Level 2'\n- Modal has animation and is visually celebratory\n- Modal dismisses on button click\n- Does not re-appear after dismissal\n\n### Depends on\n- task_058 (completion flow detects level-up)\n\n### Files to create/modify\n- `components/level-up-modal.tsx` \u2014 NEW component\n- `app/page.tsx` or completion flow \u2014 trigger modal",
-    "files": [
-      "components/level-up-modal.tsx",
-      "app/page.tsx"
-    ],
-    "createdAt": "2026-02-27T14:00:10.000Z",
-    "assignedTo": null,
-    "assignedAt": null,
-    "completedAt": null,
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
-    "id": "task_062",
-    "title": "[Phase 2] Add skill unlock computation to backend progress service",
-    "status": "todo",
-    "priority": 8,
-    "type": "enhancement",
-    "description": "## HIGH \u2014 Backend doesn't know about skill dependencies or unlock logic\n\n### What's wrong\nThe frontend currently handles skill locking/unlocking in `app/page.tsx:120-121`:\n```typescript\nconst isLocked = skill.id !== 'basic-cooking' && basicCookingProgress.percentage < 100\n```\nThis is client-only logic. The backend has no concept of:\n- Which skills depend on which other skills\n- When a skill should unlock\n- What the skill dependency tree looks like\n\nFor the `POST /recipes/:id/complete` endpoint to return `skills_unlocked`, the backend needs this logic.\n\n### What to fix\n\n1. **Add `required_skill_id` and `required_recipes_completed` columns to `skills` table:**\n```sql\nALTER TABLE skills ADD COLUMN required_skill_id TEXT REFERENCES skills(id);\nALTER TABLE skills ADD COLUMN required_recipes_completed INTEGER DEFAULT 0;\n```\n\n2. **Update seed data** for skills:\n```sql\n-- basic-cooking: no requirements (always unlocked)\nUPDATE skills SET required_skill_id = NULL, required_recipes_completed = 0 WHERE id = 'basic-cooking';\n-- All others: require basic-cooking 3/3\nUPDATE skills SET required_skill_id = 'basic-cooking', required_recipes_completed = 3 WHERE id IN ('heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine');\n```\n\n3. **Add unlock check function in database service:**\n```typescript\nasync getNewlyUnlockedSkills(userId: number, completedSkillId: string): Promise<Skill[]> {\n  // Query skills where required_skill_id = completedSkillId\n  // AND user has completed >= required_recipes_completed in that skill\n  // AND skill is not already 'unlocked' for this user\n}\n```\n\n4. **Integrate into complete endpoint** (task_052):\n   - After marking recipe complete, check if the skill is now fully completed\n   - If so, query for skills that this skill unlocks\n   - Return them in `skills_unlocked` array\n\n### Acceptance criteria\n- When a user completes the 3rd Basic Cooking recipe, the complete endpoint returns `skills_unlocked: ['heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine']`\n- When a user completes the 1st or 2nd Basic Cooking recipe, `skills_unlocked` is empty\n- Skill dependencies are stored in DB, not hardcoded in backend logic\n\n### Depends on\n- task_052 (complete endpoint structure)\n\n### Files to modify\n- `backend/shared/schema-pg.sql` \u2014 add columns to skills table\n- `backend/shared/seed-data-pg.sql` \u2014 set dependency data\n- `backend/node-services/api-server/src/services/database.ts` \u2014 add migration + unlock query\n- `backend/node-services/api-server/src/routes/progress.ts` \u2014 integrate unlock check",
-    "files": [
-      "backend/shared/schema-pg.sql",
-      "backend/shared/seed-data-pg.sql",
-      "backend/node-services/api-server/src/services/database.ts",
-      "backend/node-services/api-server/src/routes/progress.ts"
-    ],
-    "createdAt": "2026-02-27T14:00:11.000Z",
-    "assignedTo": null,
-    "assignedAt": null,
-    "completedAt": null,
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
-    "id": "task_063",
-    "title": "[Phase 1] Implement idempotent recipe completion (prevent double-complete)",
-    "status": "in_progress",
-    "priority": 9,
-    "type": "bug-fix",
-    "description": "## HIGH \u2014 Users can complete the same recipe multiple times\n\n### What's wrong\nThe current Zustand store's `toggleRecipeCompletion` is a toggle \u2014 it adds or removes from a Set. This means:\n1. Clicking 'Mark as completed' twice uncompletes the recipe (confusing UX)\n2. There's no guard against accidental double-clicks\n3. The backend endpoint (when implemented) could award duplicate XP\n\n### What to fix\n\n1. **Frontend: Separate complete and uncomplete actions**\n   - `completeRecipe(recipeId)` \u2014 only adds, never removes. Shows error toast if already completed.\n   - `uncompleteRecipe(recipeId)` \u2014 explicit uncomplete with confirmation dialog\n   - Keep `toggleRecipeCompletion` for backward compatibility but prefer explicit methods\n\n2. **Frontend: Debounce/disable button after click**\n   - After clicking 'Mark as completed', disable the button for 2 seconds\n   - Show loading spinner during API call\n   - On success, change button to 'Completed \u2713' (non-clickable unless long-press/click reveals 'Undo')\n\n3. **Backend: Idempotent endpoint**\n   - `POST /recipes/:id/complete` should check if already completed\n   - If already completed: return `{ already_completed: true, ... }` with current state but NO additional XP\n   - Use UPSERT: `INSERT INTO user_recipe_progress ... ON CONFLICT (user_id, recipe_id) DO NOTHING`\n\n4. **Show 'Already completed' state**\n   - If user tries to complete again: toast saying 'You've already completed this recipe!'\n   - Completed recipes show checkmark and green state\n\n### Acceptance criteria\n- Given a user who completed 'Perfect Boiled Egg', when they click 'Mark as completed' again, then they see 'Already completed' (no double XP)\n- Backend returns 200 with `already_completed: true` on duplicate completion\n- Button shows loading state during API call\n- Accidental double-clicks don't cause issues\n\n### Files to modify\n- `lib/stores/recipe-store.ts` \u2014 add explicit complete/uncomplete methods\n- `components/recipe-card.tsx` \u2014 debounce button, loading state\n- `app/recipe/[recipeId]/page.tsx` \u2014 update completion handler\n- `backend/node-services/api-server/src/routes/progress.ts` \u2014 idempotent logic",
-    "files": [
-      "lib/stores/recipe-store.ts",
-      "components/recipe-card.tsx",
-      "app/recipe/[recipeId]/page.tsx",
-      "backend/node-services/api-server/src/routes/progress.ts"
-    ],
-    "createdAt": "2026-02-27T14:00:12.000Z",
-    "assignedTo": "implementer-agent-main",
-    "assignedAt": "2026-02-27T16:20:10.116588+00:00",
-    "completedAt": null,
-    "retryCount": 0,
-    "maxRetries": 3
-  },
-  {
     "id": "task_064",
     "title": "[Phase 1] Update ProgressSummaryHeader to show real-time XP, streak, level, and recipe count",
-    "status": "in_progress",
+    "status": "done",
     "priority": 9,
     "type": "ui-fix",
     "description": "## HIGH \u2014 Header progress bar and stats don't update smoothly\n\n### What's wrong\nThe dashboard header in `app/page.tsx:56-95` shows:\n- Level (computed from completed count)\n- Streak (hardcoded to 3)\n- Recipes completed count\n- XP bar\n\nBut:\n1. XP bar has no animation (jumps instantly)\n2. Streak is hardcoded (task_053 fixes the data, this task fixes the display)\n3. No visual feedback when values change\n4. Level label doesn't animate on level-up\n\n### What to fix\n\n1. **Animate XP bar**: Add CSS transition to the Progress component value:\n```css\n.progress-bar-fill {\n  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);\n}\n```\nThe shadcn/ui Progress component uses `style={{ transform: translateX(-${100-value}%) }}`. Override or extend to add transition.\n\n2. **Animate recipe count**: When count changes, briefly highlight the number (e.g., scale-up + color flash)\n\n3. **Animate streak**: When streak increments, briefly show flame icon pulsing\n\n4. **Update header to use real data**:\n   - Use `useCoreLoopState()` hook (task_057) for all values\n   - Display: Level N \u2014 {title}, Streak: {n} days, {completed} of {total} recipes, {xp}/{nextLevelXp} XP\n\n5. **Mobile layout improvement**: Ensure streak flame badge shows current streak count (not hardcoded 3)\n\n### Acceptance criteria\n- XP bar smoothly animates from old value to new value over ~0.8 seconds\n- Recipe count briefly highlights when incremented\n- Streak displays real calculated value (not hardcoded 3)\n- All values update in real-time when recipes are completed (no page reload needed)\n- Mobile layout shows streak correctly\n\n### Depends on\n- task_053 (real streak data)\n- task_057 (core loop state hook)\n\n### Files to modify\n- `app/page.tsx` \u2014 update header to use real data + animations\n- `components/ui/progress.tsx` \u2014 add transition to progress bar fill (if needed)",
@@ -327,7 +95,7 @@
   {
     "id": "task_065",
     "title": "[Phase 3] Refine all core loop microcopy for warmth and encouragement",
-    "status": "todo",
+    "status": "done",
     "priority": 6,
     "type": "enhancement",
     "description": "## MEDIUM \u2014 Copy is functional but not warm/encouraging (Strava + Duolingo vibe missing)\n\n### What's wrong\nCurrent copy is generic:\n- 'Ready for your next challenge?' (bottom CTA) \u2014 too vague\n- 'Mark as completed' \u2014 no excitement\n- 'Recipe completed!' toast \u2014 no personality\n- No encouraging microcopy throughout the journey\n\n### What to fix\nUpdate copy across all core loop touchpoints to be warm, encouraging, and personality-driven:\n\n**CoreLoopHeroCard (task_054):**\n- New user: \"Start your cooking journey\" / \"Complete 3 Basic Cooking recipes to unlock more skills.\"\n- Returning: \"Welcome back, chef!\" / \"You're {X}/3 through Basic Cooking. Keep going!\"\n- Unlocked: \"New skills unlocked!\" / \"You've opened up Heat Control, Flavor Building, Air Fryer Mastery, and Indian Cuisine.\"\n\n**CompletionToast (task_055):**\n- \"Nice work! +100 XP earned.\"\n- \"Basic Cooking: {x}/3 recipes done.\"\n- \"Streak updated: Day {n}! Keep the fire going!\"\n\n**SkillUnlockBanner (task_059):**\n- \"You've mastered Basic Cooking!\"\n- \"Your kitchen just got bigger. Explore 4 new skill tracks.\"\n\n**Level-up modal (task_061):**\n- \"Level {n}! You're becoming a real chef.\"\n\n**Recipe detail page:**\n- Completed state: \"Great job, chef! This one's in the bag.\"\n- CTA: \"I made this!\" instead of \"Mark as completed\"\n\n**Dashboard CTA (replace existing):**\n- \"Your kitchen awaits! Pick a skill and keep leveling up.\" \u2192 \"Every recipe brings you closer to mastery. What's cooking today?\"\n\n### Acceptance criteria\n- All user-facing strings are warm, encouraging, and on-brand\n- No generic/placeholder copy remains\n- Copy is consistent across components\n- Microcopy drives action (not just informs)\n\n### Files to modify\n- `components/core-loop-hero-card.tsx`\n- `components/completion-toast.tsx`\n- `components/skill-unlock-banner.tsx`\n- `components/level-up-modal.tsx`\n- `app/recipe/[recipeId]/page.tsx`\n- `app/page.tsx`",
@@ -349,7 +117,7 @@
   {
     "id": "task_066",
     "title": "[Phase 3] Add entrance animations and micro-interactions for core loop elements",
-    "status": "todo",
+    "status": "done",
     "priority": 6,
     "type": "enhancement",
     "description": "## MEDIUM \u2014 Core loop elements appear without animation or delight\n\n### What's wrong\nSome animations exist (slide-up on skill cards, fade-in on recipes) but the core loop elements need more polished micro-interactions:\n1. XP counter doesn't count up (just appears as final number)\n2. Streak flame doesn't animate\n3. Completion checkmarks don't animate\n4. Unlock transitions are instant\n5. Progress bars don't fill with animation\n\n### What to fix\n\n1. **XP counter animation**: When XP increases, count up from old value to new value over 1.5 seconds (like a slot machine). Use `requestAnimationFrame` or a lightweight counter library.\n\n2. **Streak flame pulse**: When streak is active (>0), the flame icon gently pulses. When streak increments, burst animation (scale up + glow).\n\n3. **Completion checkmark**: When recipe is completed, the checkmark draws itself (SVG path animation) with a satisfying green glow.\n\n4. **Skill card unlock animation**: When a skill goes from locked \u2192 unlocked, animate:\n   - Gray \u2192 color transition (0.5s)\n   - Lock icon \u2192 skill icon morph\n   - Subtle glow/shimmer effect\n\n5. **Progress bar fill**: Smooth fill animation with a slight overshoot (spring physics).\n\n6. **CoreLoopHeroCard entrance**: Slide up with spring physics, slightly delayed after header loads.\n\n### Implementation notes\n- Use CSS animations/transitions where possible (performant)\n- Use `framer-motion` only if already installed (check package.json) \u2014 otherwise pure CSS\n- Add `will-change` hints for animated elements\n- Respect `prefers-reduced-motion` media query\n\n### Acceptance criteria\n- XP counter counts up visually when XP increases\n- Flame icon pulses gently for active streaks\n- Completion creates a satisfying checkmark animation\n- All animations respect reduced-motion preferences\n- No jank or layout shifts during animations\n\n### Files to modify\n- `app/page.tsx` \u2014 XP counter, streak animations\n- `components/recipe-card.tsx` \u2014 completion animation\n- `components/skill-card.tsx` \u2014 unlock animation\n- `components/core-loop-hero-card.tsx` \u2014 entrance animation\n- `app/globals.css` or `tailwind.config.ts` \u2014 add keyframes",
@@ -361,16 +129,16 @@
       "app/globals.css"
     ],
     "createdAt": "2026-02-27T14:00:15.000Z",
-    "assignedTo": null,
-    "assignedAt": null,
-    "completedAt": null,
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-02-27T20:23:24.826Z",
+    "completedAt": "2026-02-27T20:25:47.792Z",
     "retryCount": 0,
     "maxRetries": 3
   },
   {
     "id": "task_067",
     "title": "[Phase 3] Add daily quest suggestion card ('Complete 1 recipe today')",
-    "status": "todo",
+    "status": "done",
     "priority": 5,
     "type": "enhancement",
     "description": "## MEDIUM-LOW \u2014 No daily engagement hook to keep users returning\n\n### What's wrong\nThere's no 'daily quest' or 'daily goal' to encourage users to complete at least 1 recipe per day. Streaks exist but aren't tied to visible daily objectives.\n\n### What to build\nCreate `components/daily-quest-card.tsx` \u2014 a small card shown on the dashboard when the user hasn't completed a recipe today.\n\n**States:**\n1. **Not completed today**: Show a card below the CoreLoopHeroCard:\n   - Icon: target/calendar icon\n   - Title: \"Daily Quest\"\n   - Subtitle: \"Complete 1 recipe today to keep your streak alive!\"\n   - Progress: \"0/1 recipes today\"\n   - CTA: \"Start cooking\" \u2192 link to next recommended recipe\n\n2. **Completed today**: Show completed state:\n   - Icon: checkmark\n   - Title: \"Daily Quest Complete!\"\n   - Subtitle: \"You've cooked today. Streak: Day {n}!\"\n   - Optional: \"Want to do more? Try another recipe \u2192\"\n\n3. **All recipes done**: Don't show\n\n**Logic:**\n- Check if any recipe was completed with today's date\n- For anonymous users: check Zustand store completionDates\n- For logged-in users: check last_activity_date from server\n\n### Acceptance criteria\n- Given a user who hasn't completed a recipe today, they see the daily quest card\n- Given a user who completed 1+ recipes today, they see the completed state\n- Card links to the next recommended recipe\n- Card is small/compact (doesn't dominate the dashboard)\n\n### Depends on\n- task_053 (streak/completion dates in store)\n\n### Files to create/modify\n- `components/daily-quest-card.tsx` \u2014 NEW component\n- `app/page.tsx` \u2014 integrate below CoreLoopHeroCard",
@@ -382,6 +150,529 @@
     "assignedTo": null,
     "assignedAt": null,
     "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_photo_toggle_fix",
+    "title": "Fix photo upload toggle visibility and discoverability in skill section",
+    "status": "done",
+    "priority": 7,
+    "type": "bug-fix",
+    "description": "## BUG \u2014 Photo upload toggle in skill section had contrast/visibility issues\n\n### What was wrong\nThe Learn/Cookbook toggle in `app/skill/[skillId]/page.tsx` existed but had issues:\n1. In dark (learn) mode, unselected 'My Cookbook' button used `text-stone-500 hover:text-stone-700` \u2014 hover went darker against dark bg (wrong contrast direction)\n2. Toggle was right-aligned and tiny (`text-xs`), easy to miss\n3. No background hint on the toggle container\n\n### What was fixed\n1. Fixed hover contrast: unselected cookbook button now uses `text-gray-400 hover:text-gray-200` in dark mode\n2. Centered the toggle for better discoverability\n3. Increased size from `text-xs px-3 py-1` to `text-sm px-4 py-1.5`\n4. Added subtle background to toggle container (`bg-gray-800/50` in dark, `bg-amber-100/50` in light)",
+    "files": [
+      "app/skill/[skillId]/page.tsx"
+    ],
+    "createdAt": "2026-02-28T00:00:00.000Z",
+    "assignedTo": "implementer-agent",
+    "assignedAt": "2026-02-28T00:00:00.000Z",
+    "completedAt": "2026-02-28T00:00:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_070",
+    "title": "[Ingredients] DB Migration \u2014 Create ingredients and recipe_ingredients tables",
+    "status": "done",
+    "priority": 8,
+    "type": "enhancement",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "description": "## HIGH \u2014 Ingredients are stored as flat JSONB strings with no normalization\n\n### Context\nCurrently, ingredients live as a JSONB array of strings on the `recipes` table:\n```json\n[\"1 cup long-grain white rice\", \"2 cups water\", \"1/2 teaspoon salt\", \"1 tablespoon butter (optional)\"]\n```\nThis makes it impossible to query by ingredient, reuse ingredients across recipes, or separate quantity from ingredient name.\n\n### What to build\nCreate **migration 008** in `database.ts` (`008_ingredients_tables`) that adds two new tables:\n\n**`ingredients` table** (master ingredient catalog):\n```sql\nCREATE TABLE IF NOT EXISTS ingredients (\n  id SERIAL PRIMARY KEY,\n  name TEXT UNIQUE NOT NULL,\n  category TEXT CHECK (category IN ('protein', 'dairy', 'produce', 'grain', 'spice', 'herb', 'oil', 'seasoning', 'sauce', 'baking', 'other')),\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);\nCREATE INDEX IF NOT EXISTS idx_ingredients_name ON ingredients(name);\nCREATE INDEX IF NOT EXISTS idx_ingredients_category ON ingredients(category);\n```\n\n**`recipe_ingredients` junction table** (many-to-many with quantity):\n```sql\nCREATE TABLE IF NOT EXISTS recipe_ingredients (\n  id SERIAL PRIMARY KEY,\n  recipe_id TEXT NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,\n  ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,\n  amount DECIMAL,\n  unit TEXT,\n  preparation TEXT,\n  optional BOOLEAN DEFAULT FALSE,\n  sort_order INTEGER DEFAULT 0,\n  notes TEXT,\n  UNIQUE(recipe_id, ingredient_id)\n);\nCREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe_ingredients(recipe_id);\nCREATE INDEX IF NOT EXISTS idx_recipe_ingredients_ingredient ON recipe_ingredients(ingredient_id);\n```\n\n### Quantity design decisions\n- `amount`: DECIMAL to handle fractions (0.5 for 1/2, 0.25 for 1/4). NULL for unmeasured items ('salt to taste', 'fresh cilantro')\n- `unit`: TEXT \u2014 values like 'cup', 'teaspoon', 'tablespoon', 'pound', 'gram', 'clove', 'can', 'block'. NULL for countable items ('2 large eggs' \u2192 amount=2, unit=NULL)\n- `preparation`: TEXT \u2014 'chopped', 'minced', 'grated', 'cubed', 'melted', etc. NULL if no prep needed\n- `optional`: BOOLEAN \u2014 for things like 'butter (optional)'\n- `sort_order`: INTEGER \u2014 maintain the display order from the original recipe\n- `notes`: TEXT \u2014 for qualifiers like 'enough to cover eggs', 'your favorite', '1-inch thick'\n\n### Implementation\n1. Add migration 008 in `database.ts` `initialize()` method, following the existing pattern (check `isMigrationApplied`, run SQL, `recordMigration`)\n2. Also add the tables to `backend/shared/schema-pg.sql` for documentation (append at end, before indexes section or in a new section)\n3. Do NOT drop or modify the existing `ingredients` JSONB column on `recipes` \u2014 keep it for backward compatibility\n\n### Acceptance criteria\n- Given a fresh database (docker compose down -v && up), the `ingredients` and `recipe_ingredients` tables exist after initialization\n- Given an existing database, migration 008 runs idempotently (IF NOT EXISTS)\n- Both tables have proper foreign keys and indexes\n- The old `recipes.ingredients` JSONB column is untouched\n\n### Files to modify\n- `backend/node-services/api-server/src/services/database.ts` \u2014 add migration 008\n- `backend/shared/schema-pg.sql` \u2014 add table definitions for documentation",
+    "files": [
+      "backend/node-services/api-server/src/services/database.ts",
+      "backend/shared/schema-pg.sql"
+    ],
+    "createdAt": "2026-02-28T12:00:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_071",
+    "title": "[Ingredients] DB Migration \u2014 Seed all ingredient data for 22 existing recipes",
+    "status": "done",
+    "priority": 8,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Populate the new ingredients tables with data from all 22 recipes\n\n### Context\nAfter task_070 creates the tables, this migration (009) populates them by parsing the existing JSONB ingredient strings from all 22 recipes. This must be hand-crafted SQL (not programmatic parsing) to ensure accuracy.\n\n### What to build\nCreate **migration 009** (`009_seed_ingredients`) that:\n\n1. **Inserts all unique ingredients** into the `ingredients` table with proper categories\n2. **Inserts all recipe-ingredient links** into `recipe_ingredients` with amount, unit, preparation, optional flag, sort_order, and notes\n\n### Ingredient parsing reference (Perfect Rice example)\nOriginal JSONB: `[\"1 cup long-grain white rice\", \"2 cups water\", \"1/2 teaspoon salt\", \"1 tablespoon butter (optional)\"]`\n\nBecomes:\n```sql\n-- ingredients table\nINSERT INTO ingredients (name, category) VALUES\n('long-grain white rice', 'grain'),\n('water', 'other'),\n('salt', 'seasoning'),\n('butter', 'dairy')\nON CONFLICT (name) DO NOTHING;\n\n-- recipe_ingredients table\nINSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit, preparation, optional, sort_order) VALUES\n('make-rice', (SELECT id FROM ingredients WHERE name = 'long-grain white rice'), 1, 'cup', NULL, FALSE, 1),\n('make-rice', (SELECT id FROM ingredients WHERE name = 'water'), 2, 'cup', NULL, FALSE, 2),\n('make-rice', (SELECT id FROM ingredients WHERE name = 'salt'), 0.5, 'teaspoon', NULL, FALSE, 3),\n('make-rice', (SELECT id FROM ingredients WHERE name = 'butter'), 1, 'tablespoon', NULL, TRUE, 4);\n```\n\n### All 22 recipes to seed\nParse ingredients from `backend/shared/seed-data-pg.sql` for these recipes:\n\n**Basic Cooking (3):** boiled-egg, make-rice, chop-onion\n**Heat Control (5):** sear-steak, simmer-soup, deep-fry, stir-fry, grill-chicken\n**Flavor Building (7):** make-sauce, season-taste, herb-pairing, spice-blend, marinate, balance-flavors, umami-boost\n**Air Fryer (6):** air-fryer-fries, air-fryer-chicken-wings, air-fryer-salmon, air-fryer-vegetables, air-fryer-tofu, air-fryer-donuts\n**Indian Cuisine (7):** dal-tadka, butter-chicken, jeera-rice, aloo-gobi, naan-bread, chana-masala, mango-lassi\n\n### Shared ingredients (deduplication)\nMany ingredients appear in multiple recipes. The `ON CONFLICT (name) DO NOTHING` on the ingredients INSERT handles this. Key shared ingredients:\n- **salt** \u2014 appears in ~18 recipes\n- **butter/ghee** \u2014 ~8 recipes\n- **oil** (olive oil, vegetable oil, sesame oil) \u2014 ~10 recipes\n- **garlic** \u2014 ~8 recipes\n- **cumin seeds** \u2014 ~5 recipes (Indian + some others)\n- **turmeric** \u2014 ~4 recipes\n- **onion** \u2014 ~6 recipes\n- **water** \u2014 ~4 recipes\n- **black pepper** \u2014 ~5 recipes\n- **sugar** \u2014 ~4 recipes\n- **yogurt** \u2014 ~3 recipes\n- **soy sauce** \u2014 ~3 recipes\n- **cilantro** \u2014 ~4 recipes\n\n### Category mapping guide\n- `protein`: eggs, chicken (thighs/wings/pieces), steak, salmon, tofu, chickpeas, toor dal\n- `dairy`: butter, ghee, yogurt, cream, milk, parmesan cheese\n- `produce`: onion, garlic, potatoes, cauliflower, broccoli, bell pepper, zucchini, mushrooms, tomato, mango, lemon, ginger, green chilies, dried red chilies\n- `grain`: rice (long-grain, basmati), flour, pasta, biscuit dough\n- `spice`: turmeric, cumin seeds, mustard seeds, garam masala, paprika, coriander powder, chili powder (kashmiri/red), cardamom, cinnamon, nutmeg, kasuri methi, amchur powder, saffron\n- `herb`: thyme, rosemary, basil, oregano, cilantro, bay leaf\n- `oil`: olive oil, vegetable oil, sesame oil\n- `seasoning`: salt, black pepper, sugar, honey\n- `sauce`: soy sauce, fish sauce, tomato paste/puree, miso paste, wing sauce, wine\n- `baking`: baking powder, cornstarch, yeast\n- `other`: water, ice, broth, pan drippings\n\n### Edge cases to handle\n- **Tools are NOT ingredients**: 'Sharp chef's knife', 'Cutting board', 'Food thermometer', 'Paper towels', 'Wire rack' \u2014 SKIP these from chop-onion and deep-fry\n- **Generic items**: 'Food to fry', 'Herbs and seasonings', 'Sauce ingredients', 'Base ingredients to season' \u2014 either skip or insert with notes\n- **Compound items**: 'Salt and freshly ground black pepper' \u2192 insert as TWO separate ingredients\n- **Descriptors in parens**: '2 salmon fillets (6 oz each)' \u2192 name: 'salmon fillets', notes: '6 oz each'\n- **Alternative items**: 'chicken or vegetable broth' \u2192 insert as 'broth', notes: 'chicken or vegetable'\n\n### Implementation\n1. Add migration 009 in `database.ts` following the existing pattern\n2. Use a single large SQL block with all INSERTs\n3. Use subqueries `(SELECT id FROM ingredients WHERE name = '...')` for ingredient_id references\n4. Wrap in a transaction for atomicity\n\n### Depends on\n- task_070 (tables must exist)\n\n### Acceptance criteria\n- Given migration 009 runs, all ~80+ unique ingredients are in the `ingredients` table\n- Given migration 009 runs, all ~120+ recipe-ingredient links exist in `recipe_ingredients`\n- Given a query `SELECT * FROM recipe_ingredients WHERE recipe_id = 'make-rice'`, it returns 4 rows with correct amounts/units\n- Given `SELECT * FROM recipe_ingredients ri JOIN ingredients i ON i.id = ri.ingredient_id WHERE i.name = 'salt'`, it returns ~18 rows (all recipes using salt)\n- No duplicate ingredient names in the `ingredients` table\n- Tools (knife, cutting board, thermometer) are NOT inserted as ingredients\n\n### Files to modify\n- `backend/node-services/api-server/src/services/database.ts` \u2014 add migration 009",
+    "files": [
+      "backend/node-services/api-server/src/services/database.ts"
+    ],
+    "createdAt": "2026-02-28T12:00:01.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-28T12:45:00.000Z",
+    "completedAt": "2026-02-28T13:00:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_072",
+    "title": "[Ingredients] Backend \u2014 Add DatabaseService methods for ingredient queries",
+    "status": "done",
+    "priority": 7,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Need DatabaseService methods to query the new ingredients tables\n\n### Context\nAfter task_070 and task_071 create and populate the tables, the backend needs query methods to serve ingredient data through the API.\n\n### What to build\nAdd the following methods to `DatabaseServiceClass` in `database.ts`:\n\n**1. `getIngredientsByRecipeId(recipeId: string)`**\nReturns structured ingredients for a recipe, joined with ingredient details:\n```sql\nSELECT i.id, i.name, i.category,\n       ri.amount, ri.unit, ri.preparation,\n       ri.optional, ri.sort_order, ri.notes\nFROM recipe_ingredients ri\nJOIN ingredients i ON i.id = ri.ingredient_id\nWHERE ri.recipe_id = $1\nORDER BY ri.sort_order\n```\nReturn type:\n```typescript\ninterface StructuredIngredient {\n  id: number\n  name: string\n  category: string | null\n  amount: number | null\n  unit: string | null\n  preparation: string | null\n  optional: boolean\n  sortOrder: number\n  notes: string | null\n}\n```\n\n**2. `getAllIngredients()`**\nReturns all ingredients from the master catalog:\n```sql\nSELECT id, name, category, created_at FROM ingredients ORDER BY name\n```\n\n**3. `searchIngredients(query: string)`**\nFull-text search on ingredient names:\n```sql\nSELECT id, name, category FROM ingredients\nWHERE name ILIKE $1\nORDER BY name LIMIT 20\n```\nCalled with `%${query}%` as the parameter.\n\n**4. `getRecipesByIngredientId(ingredientId: number)`**\nReverse lookup \u2014 which recipes use a specific ingredient:\n```sql\nSELECT r.id, r.title, r.skill_id AS skill, r.emoji,\n       ri.amount, ri.unit\nFROM recipe_ingredients ri\nJOIN recipes r ON r.id = ri.recipe_id\nWHERE ri.ingredient_id = $1 AND r.is_active = TRUE\nORDER BY r.title\n```\n\n**5. `getIngredientsByCategory(category: string)`**\nFilter ingredients by category:\n```sql\nSELECT id, name, category FROM ingredients\nWHERE category = $1\nORDER BY name\n```\n\n### TypeScript interfaces\nAdd to the top of `database.ts` (or a shared types file):\n```typescript\nexport interface StructuredIngredient {\n  id: number\n  name: string\n  category: string | null\n  amount: number | null\n  unit: string | null\n  preparation: string | null\n  optional: boolean\n  sort_order: number\n  notes: string | null\n}\n\nexport interface Ingredient {\n  id: number\n  name: string\n  category: string | null\n  created_at: string\n}\n```\n\n### Also update `_mapRecipe()` and `getRecipeById()`\nUpdate `getRecipeById()` to also fetch structured ingredients and include them in the response:\n```typescript\nasync getRecipeById(id: string): Promise<Recipe | null> {\n  // ... existing query ...\n  if (!rows[0]) return null\n  const recipe = this._mapRecipe(rows[0])\n  // Fetch structured ingredients\n  const structuredIngredients = await this.getIngredientsByRecipeId(id)\n  return { ...recipe, structured_ingredients: structuredIngredients }\n}\n```\n\nUpdate the `Recipe` interface in `database.ts` to include:\n```typescript\nstructured_ingredients?: StructuredIngredient[]\n```\n\n### Depends on\n- task_070 (tables must exist)\n- task_071 (data must be seeded)\n\n### Acceptance criteria\n- Given recipe 'make-rice', `getIngredientsByRecipeId('make-rice')` returns 4 structured ingredients with correct amounts/units\n- Given `searchIngredients('salt')`, it returns the salt ingredient\n- Given `getRecipesByIngredientId(saltId)`, it returns all recipes that use salt\n- `getRecipeById('make-rice')` now includes `structured_ingredients` alongside the old `ingredients` string array\n- All methods return empty arrays (not null) when no results found\n\n### Files to modify\n- `backend/node-services/api-server/src/services/database.ts` \u2014 add 5 methods + update Recipe interface + update getRecipeById",
+    "files": [
+      "backend/node-services/api-server/src/services/database.ts"
+    ],
+    "createdAt": "2026-02-28T12:00:02.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-28T13:00:00.000Z",
+    "completedAt": "2026-02-28T13:15:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_073",
+    "title": "[Ingredients] Backend \u2014 Add /api/v1/ingredients routes and update recipe response",
+    "status": "done",
+    "priority": 7,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Need API endpoints to serve ingredient data\n\n### Context\nAfter task_072 adds the DatabaseService methods, we need Express routes to expose ingredient data and update the recipe endpoints to include structured ingredients.\n\n### What to build\n\n**1. Create `backend/node-services/api-server/src/routes/ingredients.ts`** with these endpoints:\n\n**GET /api/v1/ingredients** \u2014 List all ingredients\n```\nQuery params: ?category=spice&search=cumin\nResponse: { success: true, data: { ingredients: [...], total: N } }\n```\n- Optional `category` filter (validate against allowed values)\n- Optional `search` query (ILIKE search on name)\n- Cache response for 10 minutes (ingredients rarely change)\n\n**GET /api/v1/ingredients/:id** \u2014 Get single ingredient with recipes that use it\n```\nResponse: {\n  success: true,\n  data: {\n    ingredient: { id, name, category },\n    recipes: [{ id, title, skill, emoji, amount, unit }]\n  }\n}\n```\n\n**GET /api/v1/ingredients/:id/recipes** \u2014 Get recipes that use this ingredient\n```\nResponse: { success: true, data: { recipes: [...] } }\n```\n\n**2. Register the new routes in `backend/node-services/api-server/src/index.ts`**\n```typescript\nimport { ingredientRoutes } from './routes/ingredients'\napp.use('/api/v1/ingredients', ingredientRoutes)\n```\n\n**3. Update recipe response format**\nThe existing `GET /api/v1/recipes/:id` (in `routes/recipes.ts`) should now include `structured_ingredients` in the response. Since task_072 updates `getRecipeById()` to include them, the route handler may not need changes \u2014 but verify the serialization works.\n\nFor `GET /api/v1/recipes` (list), do NOT include structured_ingredients (too much data for a list view). Only include them in the single recipe detail endpoint.\n\n### Route validation\nUse express-validator (already imported in recipes.ts):\n- `category` param: validate against enum\n- `search` param: sanitize, max 100 chars\n- `id` param: validate integer\n\n### Caching strategy\n- Ingredient list: cache 10 minutes (ingredients are static seed data)\n- Ingredient detail: cache 10 minutes\n- Recipe detail already cached \u2014 invalidate when ingredients change (unlikely)\n\n### Depends on\n- task_072 (DatabaseService methods must exist)\n\n### Acceptance criteria\n- Given `GET /api/v1/ingredients`, returns all ~80+ ingredients sorted by name\n- Given `GET /api/v1/ingredients?category=spice`, returns only spice ingredients\n- Given `GET /api/v1/ingredients?search=rice`, returns ingredients matching 'rice'\n- Given `GET /api/v1/ingredients/5/recipes`, returns all recipes using that ingredient\n- Given `GET /api/v1/recipes/make-rice`, the response now includes `structured_ingredients` array with 4 items\n- Given `GET /api/v1/recipes` (list), structured_ingredients is NOT included (to keep payload small)\n- All endpoints return proper error responses for invalid params\n\n### Files to create/modify\n- `backend/node-services/api-server/src/routes/ingredients.ts` \u2014 NEW file\n- `backend/node-services/api-server/src/index.ts` \u2014 register new routes\n- `backend/node-services/api-server/src/routes/recipes.ts` \u2014 verify structured_ingredients in detail response",
+    "files": [
+      "backend/node-services/api-server/src/routes/ingredients.ts",
+      "backend/node-services/api-server/src/index.ts",
+      "backend/node-services/api-server/src/routes/recipes.ts"
+    ],
+    "createdAt": "2026-02-28T12:00:03.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-28T13:15:00.000Z",
+    "completedAt": "2026-02-28T13:30:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_074",
+    "title": "[Ingredients] Frontend \u2014 Update Recipe type and recipe detail page for structured ingredients",
+    "status": "done",
+    "priority": 7,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Frontend needs to display structured ingredients from the API\n\n### Context\nAfter task_073 updates the API to return `structured_ingredients`, the frontend should display them with proper formatting (amount + unit + name) instead of raw strings.\n\n### What to build\n\n**1. Update TypeScript types in `lib/types.ts`**\nAdd:\n```typescript\nexport interface StructuredIngredient {\n  id: number\n  name: string\n  category: string | null\n  amount: number | null\n  unit: string | null\n  preparation: string | null\n  optional: boolean\n  sortOrder: number\n  notes: string | null\n}\n```\n\nUpdate the `Recipe` interface:\n```typescript\nexport interface Recipe {\n  // ... existing fields ...\n  ingredients: string[]                          // keep for backward compat\n  structuredIngredients?: StructuredIngredient[]  // new structured data\n}\n```\n\n**2. Create an ingredient display helper in `lib/utils.ts`**\n```typescript\nexport function formatIngredient(ing: StructuredIngredient): string {\n  const parts: string[] = []\n  if (ing.amount) {\n    parts.push(formatAmount(ing.amount)) // 0.5 \u2192 '1/2', 0.25 \u2192 '1/4', 1 \u2192 '1'\n  }\n  if (ing.unit) parts.push(ing.unit)\n  parts.push(ing.name)\n  if (ing.preparation) parts.push(`(${ing.preparation})`)\n  if (ing.notes) parts.push(`\u2014 ${ing.notes}`)\n  return parts.join(' ')\n}\n\n// Convert decimal back to fraction for display\nfunction formatAmount(amount: number): string {\n  if (amount === 0.25) return '1/4'\n  if (amount === 0.33) return '1/3'\n  if (amount === 0.5) return '1/2'\n  if (amount === 0.75) return '3/4'\n  if (amount === 1.5) return '1 1/2'\n  if (Number.isInteger(amount)) return amount.toString()\n  return amount.toString()\n}\n```\n\n**3. Update `app/recipe/[recipeId]/page.tsx` ingredient section**\nCurrently (lines 197-212) it renders:\n```tsx\n{recipe.ingredients.map((ingredient, index) => (\n  <li key={index}>\n    <span>{ingredient}</span>\n  </li>\n))}\n```\n\nUpdate to prefer `structuredIngredients` when available, with fallback to the old `ingredients` strings:\n```tsx\n{(recipe.structuredIngredients || []).length > 0 ? (\n  recipe.structuredIngredients!.map((ing, index) => (\n    <li key={ing.id} className=\"flex items-start gap-3\">\n      <div className=\"w-2 h-2 bg-orange-400 rounded-full mt-2 flex-shrink-0\" />\n      <span className=\"text-gray-700\">\n        {ing.amount && <span className=\"font-semibold\">{formatAmount(ing.amount)}</span>}\n        {ing.unit && <span className=\"font-semibold\"> {ing.unit}</span>}\n        {' '}{ing.name}\n        {ing.preparation && <span className=\"text-gray-500\"> ({ing.preparation})</span>}\n        {ing.optional && <span className=\"text-gray-400 text-sm\"> (optional)</span>}\n        {ing.notes && <span className=\"text-gray-400 text-sm\"> \u2014 {ing.notes}</span>}\n      </span>\n    </li>\n  ))\n) : (\n  recipe.ingredients.map((ingredient, index) => (\n    <li key={index} className=\"flex items-start gap-3\">\n      <div className=\"w-2 h-2 bg-orange-400 rounded-full mt-2 flex-shrink-0\" />\n      <span className=\"text-gray-700\">{ingredient}</span>\n    </li>\n  ))\n)}\n```\n\n**4. Update the API response mapping in `hooks/use-recipes.ts`**\nEnsure `useRecipeDetail()` maps the API response's `structured_ingredients` (snake_case from backend) to `structuredIngredients` (camelCase for frontend). Check how the existing mapping works and add the new field.\n\n### Design guidance\n- Amount + unit should be **bold/semibold** to stand out\n- Ingredient name in normal weight\n- Preparation and notes in lighter gray\n- Optional ingredients get an '(optional)' tag in muted text\n- Keep the orange dot bullet style\n\n### Depends on\n- task_073 (API must return structured_ingredients)\n\n### Acceptance criteria\n- Given the 'Perfect Rice' recipe page, ingredients show as:\n  - **1 cup** long-grain white rice\n  - **2 cups** water\n  - **1/2 teaspoon** salt\n  - **1 tablespoon** butter *(optional)*\n- Given a recipe without structured_ingredients (fallback), the old string format still renders\n- Given an ingredient with preparation (e.g., 'garlic (minced)'), the preparation shows in lighter text\n- The Recipe TypeScript type compiles with the new optional field\n- No visual regression on existing recipe pages\n\n### Files to modify\n- `lib/types.ts` \u2014 add StructuredIngredient interface, update Recipe interface\n- `lib/utils.ts` \u2014 add formatIngredient() and formatAmount() helpers\n- `app/recipe/[recipeId]/page.tsx` \u2014 update ingredient rendering\n- `hooks/use-recipes.ts` \u2014 ensure proper field mapping from API response",
+    "files": [
+      "lib/types.ts",
+      "lib/utils.ts",
+      "app/recipe/[recipeId]/page.tsx",
+      "hooks/use-recipes.ts"
+    ],
+    "createdAt": "2026-02-28T12:00:04.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-28T13:30:00.000Z",
+    "completedAt": "2026-02-28T13:45:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_075",
+    "title": "[Design System] Define CSS custom properties and Tailwind color tokens",
+    "status": "done",
+    "priority": 8,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 No centralized design tokens; colors are hardcoded across 15+ files\n\n### What's wrong\nThe app uses Tailwind's default color palette with no custom design tokens. Colors like `bg-gray-900`, `text-orange-500`, `border-gray-100` are scattered across every component. There's no way to change the palette without editing dozens of files. The current theme is light (white backgrounds) but the target is a dark, warm, gamified aesthetic.\n\n### What to build\nCreate a centralized CookQuest color system using CSS custom properties and Tailwind token extensions.\n\n**1. Add CSS custom properties to `app/globals.css`:**\n```css\n:root {\n  /* Brand */\n  --cq-primary: #F97316;\n  --cq-primary-hover: #EA580C;\n  --cq-primary-text: #0B1120;\n\n  /* Backgrounds */\n  --cq-bg: #0F172A;\n  --cq-surface: #111827;\n  --cq-surface-hover: #1a2332;\n\n  /* Text */\n  --cq-text-primary: #F9FAFB;\n  --cq-text-secondary: #9CA3AF;\n  --cq-text-muted: #6B7280;\n\n  /* Borders */\n  --cq-border: #1F2937;\n  --cq-border-accent: #F97316;\n\n  /* Semantic / Gamification */\n  --cq-success: #22C55E;\n  --cq-info: #3B82F6;\n  --cq-warning: #EAB308;\n  --cq-error: #EF4444;\n\n  /* Button secondary hover tint */\n  --cq-primary-tint: rgba(249, 115, 22, 0.1);\n\n  /* Progress track */\n  --cq-track: #1F2937;\n}\n```\n\n**2. Extend `tailwind.config.ts` with custom tokens:**\n```typescript\ncolors: {\n  cq: {\n    primary: 'var(--cq-primary)',\n    'primary-hover': 'var(--cq-primary-hover)',\n    'primary-text': 'var(--cq-primary-text)',\n    bg: 'var(--cq-bg)',\n    surface: 'var(--cq-surface)',\n    'surface-hover': 'var(--cq-surface-hover)',\n    'text-primary': 'var(--cq-text-primary)',\n    'text-secondary': 'var(--cq-text-secondary)',\n    'text-muted': 'var(--cq-text-muted)',\n    border: 'var(--cq-border)',\n    'border-accent': 'var(--cq-border-accent)',\n    success: 'var(--cq-success)',\n    info: 'var(--cq-info)',\n    warning: 'var(--cq-warning)',\n    error: 'var(--cq-error)',\n    track: 'var(--cq-track)',\n    'primary-tint': 'var(--cq-primary-tint)',\n  }\n}\n```\nThis lets components use `bg-cq-surface`, `text-cq-text-primary`, `border-cq-border`, etc.\n\n**3. Update `app/layout.tsx`:**\n- Change body background from `bg-gradient-to-br from-orange-50 to-amber-50` to `bg-cq-bg`\n- Keep the Inter font and existing meta tags\n- Update meta theme-color from `#EA580C` to `#0F172A`\n\n**4. Update `lib/utils.ts` color helpers:**\n- `getDifficultyColor()`: Update to use dark-mode compatible classes:\n  - beginner: `bg-green-500/20 text-green-400`\n  - intermediate: `bg-yellow-500/20 text-yellow-400`\n  - advanced: `bg-red-500/20 text-red-400`\n  - default: `bg-gray-500/20 text-gray-400`\n- `getSkillColor()`: Keep existing mappings (they work in dark mode)\n\n**5. Update `app/globals.css` body styles:**\n- Change `background-color: white` to `background-color: var(--cq-bg)`\n- Change `color: rgb(15, 23, 42)` to `color: var(--cq-text-primary)`\n\n### What NOT to do\n- Don't change component files yet \u2014 that's tasks 076-078\n- Don't remove existing Tailwind color classes from components yet\n- Don't add a light/dark mode toggle \u2014 just ship dark mode\n- Don't use `@apply` in globals.css for component styles\n\n### Acceptance criteria\n- Given the app loads, the page background is deep navy (#0F172A), not white\n- Given a component uses `bg-cq-surface`, it renders as #111827\n- Given a component uses `text-cq-text-primary`, it renders as near-white #F9FAFB\n- All CSS custom properties are defined and accessible\n- Tailwind config generates utility classes for all `cq.*` tokens\n- `getDifficultyColor()` returns dark-mode compatible classes\n- No visual regression on existing components (they still use old Tailwind classes, which is fine for now)\n\n### Files to modify\n- `app/globals.css` \u2014 add CSS custom properties, update body styles\n- `tailwind.config.ts` \u2014 extend colors with `cq` namespace\n- `app/layout.tsx` \u2014 update body background class and meta theme-color\n- `lib/utils.ts` \u2014 update getDifficultyColor() for dark mode",
+    "files": [
+      "app/globals.css",
+      "tailwind.config.ts",
+      "app/layout.tsx",
+      "lib/utils.ts"
+    ],
+    "createdAt": "2026-02-28T18:00:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-28T19:00:00.000Z",
+    "completedAt": "2026-02-28T19:30:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_076",
+    "title": "[Design System] Apply dark palette to dashboard and skill detail pages",
+    "status": "done",
+    "priority": 7,
+    "type": "ui-fix",
+    "description": "## HIGH \u2014 Dashboard and skill detail pages still use light-mode colors after token setup\n\n### What's wrong\nAfter task_075 defines the design tokens, the two main pages (`app/page.tsx` and `app/skill/[skillId]/page.tsx`) still use hardcoded light-mode Tailwind classes like `bg-white`, `text-gray-900`, `border-gray-100`, etc.\n\n### What to fix\n\n**1. Dashboard (`app/page.tsx`):**\n\nHeader card (the Level/Streak/XP section):\n- Card background: `bg-white` \u2192 `bg-cq-surface`\n- Card border: `border-gray-100` \u2192 `border-cq-border`\n- Title text ('CookQuest'): `text-gray-900` \u2192 `text-cq-text-primary`\n- Subtitle/stats text: `text-gray-600` \u2192 `text-cq-text-secondary`\n- Muted labels: `text-gray-500` \u2192 `text-cq-text-muted`\n- ChefHat icon: keep `text-orange-500` (or use `text-cq-primary`)\n- Flame icon: keep `text-orange-600`\n- Progress bar: track \u2192 `bg-cq-track`, fill \u2192 `bg-cq-primary` (orange)\n\nSection headers ('Cooking Skills', 'Basic Cooking Recipes'):\n- `text-gray-900` \u2192 `text-cq-text-primary`\n- Section icons: keep their color accents (purple, green)\n\nContinue Learning CTA:\n- Keep gradient `from-amber-500 to-orange-500` (already warm)\n- Text stays white\n\nSkeleton loaders:\n- Background: use `bg-cq-surface` instead of default gray\n\n**2. Skill Detail Page (`app/skill/[skillId]/page.tsx`):**\n\nThe learn mode already uses `bg-gray-950` \u2014 update to `bg-cq-bg` (#0F172A) for consistency.\n\nTop bar:\n- Learn mode: `bg-gray-950/90` \u2192 `bg-cq-bg/90`, border \u2192 `border-cq-border`\n- Back button: `text-gray-400 hover:text-white hover:bg-gray-800` \u2192 `text-cq-text-muted hover:text-cq-text-primary hover:bg-cq-surface`\n\nSkill header:\n- Title: `text-white` \u2192 `text-cq-text-primary` (same value, but uses token)\n- Description: `text-gray-500` \u2192 `text-cq-text-muted`\n\nSkill tags:\n- Learn mode: `bg-gray-800 text-gray-400 border-gray-700` \u2192 `bg-cq-surface text-cq-text-secondary border-cq-border`\n\nLearn/Cookbook toggle:\n- Container: `bg-gray-700` \u2192 `bg-cq-surface`\n- Inactive buttons: `text-gray-300 hover:bg-gray-600` \u2192 `text-cq-text-secondary hover:bg-cq-surface-hover`\n\nRecipe list section (within skill page):\n- Card backgrounds should use `bg-cq-surface`\n- Text colors should use the `cq-text-*` tokens\n\n**3. Progress component (`components/ui/progress.tsx`):**\n- Default track background: update to use `bg-cq-track` (#1F2937)\n- Default fill: update to use `bg-cq-primary` (#F97316)\n- Ensure the CSS transition on the fill bar is preserved\n\n### Button system on skill detail page\nApply the button design from the spec:\n\nPrimary button (START / I made this!):\n```\nbg-cq-primary hover:bg-cq-primary-hover text-cq-primary-text\nrounded-full (pill shape) or rounded-xl\nfont-semibold\n```\n\nSecondary button (Back to skills, Browse all):\n```\nbg-transparent border border-cq-border-accent text-cq-primary\nhover:bg-cq-primary-tint\nrounded-full or rounded-xl\n```\n\n### Cookbook mode\nLeave cookbook mode (light amber theme) mostly as-is. The dark palette applies to learn mode and the dashboard. Cookbook mode keeps its warm amber-50 background.\n\n### Depends on\n- task_075 (CSS tokens and Tailwind config must exist)\n\n### Acceptance criteria\n- Given the dashboard loads, the header card has a dark surface (#111827) with near-white text\n- Given the skill detail page loads in learn mode, the background is #0F172A with properly contrasted text\n- Given the progress bar renders, the track is #1F2937 and fill is #F97316\n- Given primary buttons render, they are orange pills with dark text\n- Given secondary buttons render, they have orange borders with transparent background\n- Cookbook mode on skill detail page is NOT affected (stays light)\n- No text-on-background contrast issues (WCAG AA minimum)\n\n### Files to modify\n- `app/page.tsx` \u2014 replace light-mode classes with cq-* tokens\n- `app/skill/[skillId]/page.tsx` \u2014 replace gray-* classes with cq-* tokens in learn mode\n- `components/ui/progress.tsx` \u2014 update default track/fill colors",
+    "files": [
+      "app/page.tsx",
+      "app/skill/[skillId]/page.tsx",
+      "components/ui/progress.tsx"
+    ],
+    "createdAt": "2026-02-28T18:00:01.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_077",
+    "title": "[Design System] Apply dark palette to recipe cards and skill cards",
+    "status": "done",
+    "priority": 7,
+    "type": "ui-fix",
+    "description": "## HIGH \u2014 Recipe cards and skill cards still use light-mode colors\n\n### What's wrong\nAfter task_075 defines the tokens and task_076 updates the pages, the two main card components still use light backgrounds (`bg-white`, `bg-gray-100`, `bg-blue-50`, etc.) and light-mode text colors.\n\n### What to fix\n\n**1. Recipe Card (`components/recipe-card.tsx`):**\n\nNormal (incomplete) state:\n- Card background: `bg-white` \u2192 `bg-cq-surface`\n- Card border: `border-gray-100` \u2192 `border-cq-border`\n- Hover border: `hover:border-orange-200` \u2192 `hover:border-cq-border-accent`\n- Title: `text-gray-900 group-hover:text-orange-600` \u2192 `text-cq-text-primary group-hover:text-cq-primary`\n- Description: `text-gray-600` \u2192 `text-cq-text-secondary`\n- Metadata (time, skill): `text-gray-500` \u2192 `text-cq-text-muted`\n- XP badge: `bg-orange-100 text-orange-700` \u2192 `bg-orange-500/20 text-orange-400` (dark-mode friendly)\n\nCompleted state:\n- Card border: `border-green-400 bg-green-50` \u2192 `border-cq-success bg-green-500/10`\n- Completed button: `bg-green-500 text-white` \u2192 keep (green on dark looks good)\n- Progress indicator bg: `bg-green-100` \u2192 `bg-green-500/20`\n- Progress text: `text-green-800` \u2192 `text-green-400`\n\nLocked state:\n- Card: `border-gray-300 bg-gray-100` \u2192 `border-cq-border bg-cq-bg opacity-60`\n- Lock overlay: `bg-gray-900/50` \u2192 keep (works on dark)\n- Lock text: `text-gray-600` \u2192 `text-cq-text-muted`\n\nCompletion toggle button (circle):\n- Incomplete: `bg-white hover:bg-gray-50 text-gray-700` \u2192 `bg-cq-surface hover:bg-cq-surface-hover text-cq-text-secondary`\n- Hover ring: `hover:ring-orange-300` \u2192 `hover:ring-cq-primary`\n- Circle border: `border-gray-300` \u2192 `border-cq-border`\n\n**2. Skill Card (`components/skill-card.tsx`):**\n\nCard surface:\n- Background classes like `bg-blue-50`, `bg-orange-50`, `bg-purple-50`, etc. \u2192 all become `bg-cq-surface`\n- The colored gradient bar at the top stays (it provides skill identity)\n- Card hover shadow: use a subtle warm shadow\n\nText:\n- Skill name: `text-gray-900` \u2192 `text-cq-text-primary`\n- Description: `text-gray-600` \u2192 `text-cq-text-secondary`\n- Stats (recipe count, etc.): `text-gray-500` \u2192 `text-cq-text-muted`\n\nProgress bar:\n- Track: keep skill-specific gradient fills (blue, orange, purple, emerald, amber)\n- Background track: update to `bg-cq-track`\n\nStatus badges:\n- New: `bg-green-500 text-white` \u2192 keep\n- Locked: `bg-gray-200 text-gray-600` \u2192 `bg-cq-border text-cq-text-muted`\n- Mastered: `bg-green-100 text-green-800` \u2192 `bg-green-500/20 text-green-400`\n\nLocked state:\n- Gradient: `from-gray-400 to-gray-500` \u2192 `from-gray-600 to-gray-700`\n- Keep grayscale filter and reduced opacity\n\nCompleted state:\n- Ring: `ring-green-400` \u2192 `ring-cq-success`\n- Keep the green glow effect\n\n### Depends on\n- task_075 (CSS tokens must exist)\n\n### Acceptance criteria\n- Given recipe cards render on the dashboard, they have dark surface backgrounds (#111827) with near-white titles\n- Given a completed recipe card, it has a green border glow on the dark surface\n- Given a locked recipe card, it appears muted on the dark background\n- Given skill cards render, they have dark surfaces with colored gradient accent bars at top\n- Given a skill card's progress bar, the track is dark (#1F2937) with the skill-specific gradient fill\n- XP badges are readable on dark backgrounds (orange text on semi-transparent orange bg)\n- All card hover states work with proper contrast\n\n### Files to modify\n- `components/recipe-card.tsx` \u2014 replace all light-mode color classes\n- `components/skill-card.tsx` \u2014 replace all light-mode color classes",
+    "files": [
+      "components/recipe-card.tsx",
+      "components/skill-card.tsx"
+    ],
+    "createdAt": "2026-02-28T18:00:02.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-28T19:35:00.000Z",
+    "completedAt": "2026-02-28T19:50:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_078",
+    "title": "[Design System] Apply dark palette to gamification components",
+    "status": "done",
+    "priority": 7,
+    "type": "ui-fix",
+    "description": "## HIGH \u2014 Gamification components still use light-mode colors\n\n### What's wrong\nAfter tasks 075-077, the five gamification overlay/banner components still use light backgrounds, light text, and light-mode semantic colors.\n\n### What to fix\n\n**1. Completion Toast (`components/completion-toast.tsx`):**\n- Toast container: `bg-white border-orange-100` \u2192 `bg-cq-surface border-cq-border`\n- Header gradient: keep `from-amber-400 to-orange-500` (works on dark)\n- Section icons containers: `bg-orange-100`, `bg-blue-100`, `bg-red-100` \u2192 `bg-orange-500/20`, `bg-blue-500/20`, `bg-red-500/20`\n- Section icon colors: `text-orange-600`, `text-blue-500`, `text-red-500` \u2192 `text-orange-400`, `text-blue-400`, `text-red-400`\n- Text: `text-gray-900` \u2192 `text-cq-text-primary`, `text-gray-700` \u2192 `text-cq-text-secondary`\n- Progress bar background: `bg-gray-100` \u2192 `bg-cq-track`\n- Progress bar fill: `bg-blue-500` \u2192 `bg-cq-info`\n- Skill mastered section: `bg-emerald-50` \u2192 `bg-emerald-500/10`, text: `text-emerald-800` \u2192 `text-emerald-400`\n- Level up section: `bg-purple-50` \u2192 `bg-purple-500/10`, text: `text-purple-800` \u2192 `text-purple-400`\n- Dismiss button: `text-gray-400 hover:text-gray-600` \u2192 `text-cq-text-muted hover:text-cq-text-secondary`\n- Bottom border: `border-gray-50` \u2192 `border-cq-border`\n\n**2. Level Up Modal (`components/level-up-modal.tsx`):**\n- Modal background/overlay: ensure backdrop is dark enough\n- Modal surface: if any `bg-white` exists, change to `bg-cq-surface`\n- Header gradient: keep `from-amber-400 via-orange-500 to-red-500`\n- Stats section labels: `text-gray-600` \u2192 `text-cq-text-muted`\n- Stats values: `text-orange-600` \u2192 `text-cq-primary`\n- Progress bar: `bg-gray-100` \u2192 `bg-cq-track`\n- Progress fill: keep `from-orange-400 to-orange-500`\n- Button: keep gradient `from-orange-500 to-red-500`\n\n**3. Skill Unlock Banner (`components/skill-unlock-banner.tsx`):**\n- Keep the emerald/green gradient background (it's a celebration banner)\n- Skill pills: `bg-white/20 text-white` \u2192 keep (works on gradient)\n- Buttons: `bg-white text-emerald-600` \u2192 keep (white CTA on green gradient is correct)\n- This component mostly works as-is since it uses its own gradient background\n\n**4. Daily Quest Card (`components/daily-quest-card.tsx`):**\nIncomplete state:\n- Card: `border-amber-200 bg-amber-50` \u2192 `border-amber-500/30 bg-cq-surface`\n- Icon container: `bg-amber-100` \u2192 `bg-amber-500/20`\n- Icon: `text-amber-600` \u2192 `text-amber-400`\n- Title: `text-amber-800` \u2192 `text-cq-text-primary`\n- Subtitle: `text-amber-700` \u2192 `text-cq-text-secondary`\n- Button: `bg-amber-500 hover:bg-amber-600 text-white` \u2192 `bg-cq-primary hover:bg-cq-primary-hover text-cq-primary-text`\n\nCompleted state:\n- Card: `border-green-200 bg-green-50` \u2192 `border-green-500/30 bg-cq-surface`\n- Icon container: `bg-green-100` \u2192 `bg-green-500/20`\n- Icon: `text-green-600` \u2192 `text-green-400`\n- Title: `text-green-800` \u2192 `text-cq-text-primary`\n- Subtitle: `text-green-700` \u2192 `text-cq-text-secondary`\n- Button: `text-green-700 hover:bg-green-100` \u2192 `text-green-400 hover:bg-green-500/10`\n\n**5. Core Loop Hero Card (`components/core-loop-hero-card.tsx`):**\n- The hero card uses its own gradient backgrounds (amber \u2192 orange, emerald \u2192 teal) which work great on dark pages\n- Main thing: ensure the card doesn't have a white fallback background\n- Button: `bg-white text-orange-600` \u2192 keep (white CTA on gradient is correct contrast)\n- If any surrounding container uses light colors, update to `bg-cq-surface` or transparent\n\n### Motivational line styling\nThe spec mentions a motivational line like 'I believe in you! Keep going!' \u2014 style it as:\n```\ntext-cq-warning (yellow #EAB308) OR text-cq-text-primary with a border-l-2 border-cq-primary pl-3\n```\nPick whichever looks better. The yellow option adds warmth; the orange-border option is subtler.\n\n### Depends on\n- task_075 (CSS tokens must exist)\n\n### Acceptance criteria\n- Given a completion toast appears, it has a dark surface with properly contrasted text and icons\n- Given the level-up modal opens, stats section uses dark surface with orange accent text\n- Given the daily quest card renders (incomplete), it has a dark surface with amber accents\n- Given the daily quest card renders (completed), it has a dark surface with green accents\n- Given the core loop hero card renders, its gradient background contrasts well against the dark page\n- All gamification components maintain their celebratory/exciting feel on dark backgrounds\n- No white flash or light-mode remnants in any overlay/modal\n\n### Files to modify\n- `components/completion-toast.tsx` \u2014 replace light-mode color classes\n- `components/level-up-modal.tsx` \u2014 replace light-mode color classes\n- `components/skill-unlock-banner.tsx` \u2014 minor adjustments if needed\n- `components/daily-quest-card.tsx` \u2014 replace light-mode color classes\n- `components/core-loop-hero-card.tsx` \u2014 verify/fix any light-mode fallbacks",
+    "files": [
+      "components/completion-toast.tsx",
+      "components/level-up-modal.tsx",
+      "components/skill-unlock-banner.tsx",
+      "components/daily-quest-card.tsx",
+      "components/core-loop-hero-card.tsx"
+    ],
+    "createdAt": "2026-02-28T18:00:03.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_079",
+    "title": "[Recipes] Backend \u2014 Add sort & search query params to GET /recipes",
+    "status": "done",
+    "priority": 7,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Backend has no sorting or text search for recipes\n\n### What's wrong\nThe `GET /api/v1/recipes` endpoint only supports `skill`, `difficulty`, `page`, `limit` filters. There's no `sort` param and no `search` text search.\n\n### What to build\nAdd two new query params to the existing `GET /recipes` route in `backend/node-services/api-server/src/routes/recipes.ts`:\n\n**1. `sort` param:**\nValues: `title`, `-title`, `difficulty`, `-difficulty`, `time`, `-time`, `xp`, `-xp`\n- Prefix `-` means descending\n- Default: `title` (alphabetical A-Z)\n- Difficulty ordering: beginner=1, intermediate=2, advanced=3\n- Time: parse the string (e.g. '15 min' \u2192 15, '1 hour' \u2192 60)\n- XP: numeric `xp_reward`\n\n**2. `search` param:**\n- Case-insensitive substring match on recipe `title` and `description`\n- Apply BEFORE pagination\n- Min 1 char, max 100 chars\n\n### Implementation\n```typescript\nquery('sort').optional().matches(/^-?(title|difficulty|time|xp)$/),\nquery('search').optional().isString().trim().isLength({ min: 1, max: 100 })\n\nif (search) {\n  const q = (search as string).toLowerCase()\n  recipes = recipes.filter(r => r.title.toLowerCase().includes(q) || r.description.toLowerCase().includes(q))\n}\n\nconst DIFFICULTY_ORDER: Record<string, number> = { beginner: 1, intermediate: 2, advanced: 3 }\nfunction parseTime(t: string): number {\n  const m = t.match(/(\\d+)\\s*(min|hour|h)/i)\n  if (!m) return 0\n  return m[2].startsWith('h') ? Number(m[1]) * 60 : Number(m[1])\n}\n\nconst sortParam = (sort as string) || 'title'\nconst desc = sortParam.startsWith('-')\nconst field = sortParam.replace(/^-/, '')\nrecipes.sort((a, b) => {\n  let cmp = 0\n  switch (field) {\n    case 'title': cmp = a.title.localeCompare(b.title); break\n    case 'difficulty': cmp = (DIFFICULTY_ORDER[a.difficulty] || 0) - (DIFFICULTY_ORDER[b.difficulty] || 0); break\n    case 'time': cmp = parseTime(a.time) - parseTime(b.time); break\n    case 'xp': cmp = (a.xp_reward || 100) - (b.xp_reward || 100); break\n  }\n  return desc ? -cmp : cmp\n})\n```\n\nUpdate cache key: `recipes:${skill}:${difficulty}:${sort}:${search}:${page}:${limit}`\n\n### Depends on\nnone\n\n### Acceptance criteria\n- Given `GET /recipes?sort=-xp`, recipes are returned sorted by XP descending\n- Given `GET /recipes?search=egg`, only recipes with 'egg' in title or description are returned\n- Given combined params, filters stack correctly\n- Invalid sort values are rejected with 400\n\n### Files to modify\n- `backend/node-services/api-server/src/routes/recipes.ts`",
+    "files": [
+      "backend/node-services/api-server/src/routes/recipes.ts"
+    ],
+    "createdAt": "2026-02-28T19:00:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-02-28T20:00:00.000Z",
+    "completedAt": "2026-02-28T20:20:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_080",
+    "title": "[Recipes] Frontend \u2014 Create useFilteredRecipes hook and extend RecipeFilters",
+    "status": "done",
+    "priority": 7,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Frontend has no parameterized recipe fetching hook\n\n### What's wrong\n`useRecipes()` hardcodes `limit: 50` with no filter params. No way for the UI to request filtered/sorted recipes.\n\n### What to build\n\n**1. Extend `RecipeFilters` in `lib/api/recipes.ts`:**\n```typescript\nexport interface RecipeFilters {\n  skill?: SkillType\n  difficulty?: 'beginner' | 'intermediate' | 'advanced'\n  sort?: string\n  search?: string\n  page?: number\n  limit?: number\n}\n```\n\n**2. Update `getRecipes()` to pass new params:**\nAdd `sort` and `search` to the params object.\n\n**3. Create `useFilteredRecipes()` in `hooks/use-recipes.ts`:**\n```typescript\nexport function useFilteredRecipes(filters: RecipeFilters) {\n  return useQuery({\n    queryKey: recipeKeys.list(filters),\n    queryFn: async () => {\n      const data = await getRecipes(filters)\n      return { recipes: data.recipes.map(mapRecipe), pagination: data.pagination }\n    },\n    staleTime: 2 * 60 * 1000,\n    gcTime: 5 * 60 * 1000,\n    placeholderData: (prev) => prev,\n  })\n}\n```\n\n### Depends on\n- task_079\n\n### Acceptance criteria\n- `useFilteredRecipes({ skill: 'basic-cooking', sort: '-xp' })` fetches with correct query params\n- Filter changes trigger refetch with new params\n- Previous data is kept during transitions\n\n### Files to modify\n- `lib/api/recipes.ts`\n- `hooks/use-recipes.ts`",
+    "files": [
+      "lib/api/recipes.ts",
+      "hooks/use-recipes.ts"
+    ],
+    "createdAt": "2026-02-28T19:00:01.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_081",
+    "title": "[Recipes] Frontend \u2014 Create RecipeFilterBar component",
+    "status": "done",
+    "priority": 7,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 No filter UI exists for recipes\n\n### What to build\nCreate `components/recipe-filter-bar.tsx` with:\n\n1. **Search input** \u2014 shadcn `Input` with Search icon (from lucide-react), debounced 300ms (use `debounce` from `lib/utils.ts`)\n2. **Skill filter pills** \u2014 All + one per skill, scrollable on mobile\n3. **Difficulty filter pills** \u2014 All, Beginner, Intermediate, Advanced\n4. **Sort dropdown** \u2014 shadcn `Select`: Title A-Z, Title Z-A, Easiest First, Hardest First, Quickest First, Most XP\n5. **Active filter count + Clear all** button\n\n### Props\n```typescript\nimport type { RecipeFilters } from '@/lib/api/recipes'\n\ninterface RecipeFilterBarProps {\n  filters: RecipeFilters\n  onFiltersChange: (filters: RecipeFilters) => void\n  skills: Array<{ id: string; name: string }>\n}\n```\n\n### Dark Mode Design (uses cq-* design tokens from task_075)\n\n**Search input:**\n```\nbg-cq-surface border-cq-border text-cq-text-primary\nplaceholder:text-cq-text-muted\nfocus:border-cq-border-accent focus:ring-cq-primary\n```\nSearch icon: `text-cq-text-muted`\n\n**Filter pills (inactive):**\n```\nbg-cq-surface border border-cq-border text-cq-text-secondary\nhover:bg-cq-surface-hover hover:text-cq-text-primary\nrounded-full px-3 py-1.5 text-sm cursor-pointer transition-colors\n```\n\n**Filter pills (active):**\n```\nbg-cq-primary text-cq-primary-text border-transparent\nrounded-full px-3 py-1.5 text-sm font-medium\n```\n\n**Sort dropdown:**\n```\nSelect trigger: bg-cq-surface border-cq-border text-cq-text-primary\nSelect content: bg-cq-surface border-cq-border\nSelect item: text-cq-text-secondary hover:bg-cq-surface-hover hover:text-cq-text-primary\nSelect item (selected): text-cq-primary\n```\n\n**Clear all button:**\n```\ntext-cq-text-muted hover:text-cq-primary text-sm\n```\n\n**Active filter count badge:**\n```\nbg-cq-primary text-cq-primary-text text-xs rounded-full px-1.5 min-w-[18px] text-center\n```\n\n### Layout\n- Desktop: horizontal flex-wrap with gap-3. Search input takes flex-1 min-w-[200px].\n- Mobile: stacked. Skill/difficulty pills in horizontally scrollable containers (overflow-x-auto, flex-nowrap). Sort dropdown full-width.\n- All containers: `bg-cq-surface rounded-xl p-4 border border-cq-border`\n\n### Depends on\nnone (uses RecipeFilters type from `lib/api/recipes.ts` which already exists)\n\n### Acceptance criteria\n- Given the filter bar renders, all controls use dark cq-* token classes (no white/light backgrounds)\n- Given a user types in search, it debounces 300ms and calls onFiltersChange with search value, resetting page to 1\n- Given a user clicks a skill pill, it toggles active state and calls onFiltersChange\n- Given a user clicks 'Clear all', all filters reset to defaults\n- Given mobile viewport, pills scroll horizontally and sort dropdown is full-width\n- All interactive elements have proper hover/focus states with cq-* tokens\n\n### Files to create\n- `components/recipe-filter-bar.tsx`",
+    "files": [
+      "components/recipe-filter-bar.tsx"
+    ],
+    "createdAt": "2026-02-28T19:00:02.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_082",
+    "title": "[Recipes] Frontend \u2014 Create /recipes browse page with filters and pagination",
+    "status": "done",
+    "priority": 7,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 Dashboard 'View all' links to /recipes which doesn't exist\n\n### What to build\nCreate `app/recipes/page.tsx` \u2014 full recipe browse page:\n\n1. Page header: 'All Recipes' with count + back button\n2. `RecipeFilterBar` at top\n3. Recipe grid: 1 col mobile, 2 cols sm, 3 cols lg using `RecipeCard`\n4. Pagination at bottom (shadcn Pagination component exists at `components/ui/pagination.tsx`)\n5. Empty state when no matches\n6. Loading skeletons\n7. URL state sync via `useSearchParams()`\n\n**URL sync pattern:**\n```typescript\n'use client'\n\nimport { useSearchParams, useRouter } from 'next/navigation'\nimport { useMemo, useCallback, Suspense } from 'react'\nimport type { RecipeFilters } from '@/lib/api/recipes'\n\nfunction RecipeBrowseContent() {\n  const searchParams = useSearchParams()\n  const router = useRouter()\n\n  const filters = useMemo(() => ({\n    skill: searchParams.get('skill') || undefined,\n    difficulty: searchParams.get('difficulty') || undefined,\n    sort: searchParams.get('sort') || 'title',\n    search: searchParams.get('search') || undefined,\n    page: Number(searchParams.get('page')) || 1,\n    limit: 12,\n  }), [searchParams])\n\n  const setFilters = useCallback((f: RecipeFilters) => {\n    const params = new URLSearchParams()\n    if (f.skill) params.set('skill', f.skill)\n    if (f.difficulty) params.set('difficulty', f.difficulty)\n    if (f.sort && f.sort !== 'title') params.set('sort', f.sort)\n    if (f.search) params.set('search', f.search)\n    if (f.page && f.page > 1) params.set('page', String(f.page))\n    router.push(`/recipes?${params.toString()}`, { scroll: false })\n  }, [router])\n\n  // ... rest of component\n}\n\n// Wrap in Suspense because useSearchParams requires it in Next.js 15\nexport default function RecipeBrowsePage() {\n  return (\n    <Suspense fallback={<RecipeBrowseSkeleton />}>\n      <RecipeBrowseContent />\n    </Suspense>\n  )\n}\n```\n\nUse `useFilteredRecipes(filters)` from `hooks/use-recipes.ts` and `RecipeFilterBar` from `components/recipe-filter-bar.tsx`.\n\n### Dark Mode Design (uses cq-* design tokens from task_075)\n\n**Page background:** Inherits `bg-cq-bg` from layout \u2014 no override needed.\n\n**Page header:**\n```\n<div class=\"flex items-center justify-between mb-6\">\n  Back button: text-cq-text-muted hover:text-cq-text-primary\n  Title 'All Recipes': text-cq-text-primary text-2xl font-bold\n  Count badge: text-cq-text-secondary text-sm\n</div>\n```\n\n**Recipe grid:**\n```\ngrid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4\n```\nRecipeCard already uses cq-* tokens (task_077 done).\n\n**Pagination:**\n```\nPagination container: flex justify-center mt-8\nPage buttons (inactive): bg-cq-surface border-cq-border text-cq-text-secondary hover:bg-cq-surface-hover\nPage buttons (active): bg-cq-primary text-cq-primary-text\nPrev/Next arrows: text-cq-text-muted hover:text-cq-text-primary\nDisabled: opacity-50 cursor-not-allowed\n```\n\n**Empty state (no results):**\n```\n<div class=\"text-center py-16\">\n  Icon: Search or UtensilsCrossed from lucide, size-12 text-cq-text-muted mx-auto\n  Title: text-cq-text-primary text-lg font-semibold mt-4\n  Subtitle: text-cq-text-secondary text-sm mt-2\n  Clear filters button: text-cq-primary hover:underline\n</div>\n```\n\n**Loading skeletons:**\n```\nSkeleton cards: bg-cq-surface rounded-xl h-64 animate-pulse\nSkeleton filter bar: bg-cq-surface rounded-xl h-16 animate-pulse\n```\n\n### Depends on\n- task_080 (useFilteredRecipes hook)\n- task_081 (RecipeFilterBar component)\n\n### Acceptance criteria\n- Given /recipes loads, all recipes display in a dark-themed grid with cq-* backgrounds\n- Given filters are applied, URL updates and recipes refetch\n- Given URL params are present on page load, filter state is restored\n- Given no results match filters, a dark-themed empty state shows with 'Clear filters' link\n- Given pagination controls render, they use cq-* tokens (no white/light backgrounds)\n- Given loading state, skeleton cards use bg-cq-surface with pulse animation\n- Responsive: 1 col mobile, 2 cols sm, 3 cols lg\n- Page is wrapped in Suspense (required by useSearchParams in Next.js 15)\n\n### Files to create\n- `app/recipes/page.tsx`",
+    "files": [
+      "app/recipes/page.tsx"
+    ],
+    "createdAt": "2026-02-28T19:00:03.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_083",
+    "title": "[Recipes] E2E \u2014 Playwright tests for recipe browse and filtering",
+    "status": "done",
+    "priority": 8,
+    "type": "enhancement",
+    "description": "## MEDIUM \u2014 No test coverage for recipe browse page\n\n### What to build\nCreate `e2e/recipe-filters.spec.ts` covering:\n1. Page loads and shows recipe cards\n2. Search filters recipes (type 'egg', verify results)\n3. Skill filter works (click 'Basic Cooking', verify URL + results)\n4. Difficulty filter works\n5. Sort by Most XP (verify order)\n6. Clear all filters\n7. Empty state for no matches\n8. URL state restoration on page load\n9. API-level tests for sort/search params\n\n### Depends on\n- task_082\n\n### Acceptance criteria\n- All tests pass against localhost:3002/3003\n- Covers search, skill, difficulty, sort, clear, empty state, URL state\n\n### Files to create\n- `e2e/recipe-filters.spec.ts`",
+    "files": [
+      "e2e/recipe-filters.spec.ts"
+    ],
+    "createdAt": "2026-02-28T19:00:04.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_084",
+    "title": "[Infra] Fix broken CI pipeline \u2014 remove dead test jobs, fix build",
+    "status": "done",
+    "priority": 2,
+    "type": "infrastructure",
+    "description": "## CRITICAL \u2014 CI pipeline references non-existent test scripts\n\n### What's wrong\n`.github/workflows/ci.yml` has `test-frontend` and `test-backend` jobs that run `npm test -- --passWithNoTests`. But:\n- No unit test framework is installed (Jest/Vitest removed)\n- `package.json` has no `test` script\n- Backend `package.json` also has no `test` script\n- Only Playwright E2E tests exist (`npm run test:e2e`)\n\nThe `build-frontend` job also doesn't set `NODE_ENV` which may cause the `NEXT_PUBLIC_API_URL` env check in `next.config.ts` to throw.\n\n### What to fix\n1. **Remove** `test-frontend` and `test-backend` jobs entirely (no unit test framework)\n2. **Add** a Playwright E2E job that:\n   - Starts backend services via Docker Compose (postgres + redis + api)\n   - Starts the Next.js dev server\n   - Runs `npx playwright test`\n   - Uploads test results as artifacts on failure\n3. **Fix** `build-frontend` job \u2014 ensure `NEXT_PUBLIC_API_URL` is set as env var\n4. **Fix** `build-backend` \u2014 needs `npm ci` before `npm run build` (already does this, just verify)\n5. **Add** backend TypeScript type-check: `cd backend/node-services/api-server && npx tsc --noEmit`\n\n### Subtasks\n1. Remove `test-frontend` job\n2. Remove `test-backend` job\n3. Add `test-e2e` job with Docker Compose services\n4. Verify `build-frontend` sets NEXT_PUBLIC_API_URL\n5. Add backend type-check to `lint` job\n\n### Acceptance criteria\n- Given a push to main, CI passes without referencing non-existent test scripts\n- Given Playwright tests exist, they run in CI against real backend services\n- Given build jobs run, both frontend and backend compile without errors\n\n### Files to modify\n- `.github/workflows/ci.yml`",
+    "files": [
+      ".github/workflows/ci.yml"
+    ],
+    "createdAt": "2026-03-08T12:00:00.000Z",
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-03-08T16:30:00.000Z",
+    "completedAt": "2026-03-08T16:45:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_085",
+    "title": "[Infra] Add Nginx reverse proxy with SSL termination to Docker Compose",
+    "status": "done",
+    "priority": 2,
+    "type": "infrastructure",
+    "description": "## CRITICAL \u2014 No unified entry point or HTTPS for production\n\n### What's wrong\nFrontend runs on :3000 and API on :3003 with no reverse proxy. In production:\n- Users can't access the app over HTTPS\n- No unified domain entry point\n- CORS issues when frontend/API are on different ports\n- No HTTP/2, gzip at the edge, or request buffering\n\n### What to build\nAdd an Nginx service to `docker-compose.yml` (or a new `docker-compose.prod.yml`) that:\n\n1. **Listens on ports 80 and 443**\n2. **Routes** `/` \u2192 `cookquest-web:3000` (frontend)\n3. **Routes** `/api/` \u2192 `cookquest-api:3003` (backend API)\n4. **Routes** `/uploads/` \u2192 `cookquest-api:3003` (user photos)\n5. **SSL via Let's Encrypt** \u2014 use Certbot sidecar or acme.sh for auto-renewal\n6. **Security headers** \u2014 HSTS, X-Frame-Options (already set by app, but defense-in-depth)\n7. **Gzip/Brotli** compression for static assets\n8. **Rate limiting** at proxy level (backup to Express rate limiter)\n9. **HTTP \u2192 HTTPS redirect**\n\n### Nginx config template\n```nginx\nupstream frontend {\n    server cookquest-web:3000;\n}\n\nupstream backend {\n    server cookquest-api:3003;\n}\n\nserver {\n    listen 80;\n    server_name ${DOMAIN};\n    return 301 https://$host$request_uri;\n}\n\nserver {\n    listen 443 ssl http2;\n    server_name ${DOMAIN};\n\n    ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;\n\n    # Security\n    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains; preload\" always;\n    add_header X-Frame-Options DENY always;\n    add_header X-Content-Type-Options nosniff always;\n\n    # Gzip\n    gzip on;\n    gzip_types text/plain text/css application/json application/javascript text/xml;\n\n    location / {\n        proxy_pass http://frontend;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /api/ {\n        proxy_pass http://backend;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n        client_max_body_size 10m;\n    }\n\n    location /uploads/ {\n        proxy_pass http://backend;\n        proxy_cache_valid 200 7d;\n    }\n\n    location /health {\n        proxy_pass http://backend;\n    }\n}\n```\n\n### Subtasks\n1. Create `nginx/nginx.conf` template with envsubst support for DOMAIN\n2. Create `nginx/Dockerfile` (nginx:alpine + envsubst)\n3. Add nginx service to docker-compose.yml (or create docker-compose.prod.yml)\n4. Add certbot service for SSL cert auto-renewal\n5. Add DOMAIN env var to `.env.example`\n6. Update `cookquest-web` to NOT expose port 3000 externally (only via nginx network)\n7. Update `cookquest-api` to NOT expose port 3003 externally\n8. Put nginx on the `frontend` network\n\n### Depends on\n- none (can be done independently)\n\n### Acceptance criteria\n- Given `docker compose up`, nginx starts and proxies HTTP\u2192HTTPS\n- Given a request to `https://{DOMAIN}/`, it reaches the Next.js frontend\n- Given a request to `https://{DOMAIN}/api/v1/recipes`, it reaches the Express API\n- Given HTTP request, it 301 redirects to HTTPS\n- Ports 3000 and 3003 are NOT exposed to the host in production\n\n### Files to create/modify\n- `nginx/nginx.conf` \u2014 NEW\n- `nginx/Dockerfile` \u2014 NEW\n- `docker-compose.yml` \u2014 add nginx service, adjust port exposure\n- `.env.example` \u2014 add DOMAIN var",
+    "files": [
+      "nginx/nginx.conf",
+      "nginx/Dockerfile",
+      "docker-compose.yml",
+      ".env.example"
+    ],
+    "createdAt": "2026-03-08T12:00:01.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T16:00:00.000Z",
+    "completedAt": "2026-03-08T16:45:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_086",
+    "title": "[Infra] Production environment config \u2014 .env.production, API URL, CORS",
+    "status": "done",
+    "priority": 2,
+    "type": "infrastructure",
+    "description": "## CRITICAL \u2014 NEXT_PUBLIC_API_URL hardcoded to localhost, no production env config\n\n### What's wrong\n- `NEXT_PUBLIC_API_URL` defaults to `http://localhost:3003/api/v1` everywhere \u2014 this is baked into the Next.js client bundle at build time\n- In production, the frontend runs in the user's browser and must call the **public domain** API URL (e.g., `https://cookquest.app/api/v1`)\n- CORS `FRONTEND_URL` also defaults to `http://localhost:3000`\n- Docker Compose `args` section hardcodes localhost\n\n### What to fix\n1. **Create `.env.production.example`** with production-ready template:\n   ```env\n   DOMAIN=cookquest.app\n   POSTGRES_USER=cookquest\n   POSTGRES_PASSWORD=<generate-strong-password>\n   POSTGRES_DB=cookquest\n   REDIS_PASSWORD=<generate-strong-password>\n   JWT_SECRET=<openssl-rand-base64-64>\n   FRONTEND_URL=https://cookquest.app\n   NEXT_PUBLIC_API_URL=https://cookquest.app/api/v1\n   ALLOWED_ORIGINS=https://cookquest.app\n   NODE_ENV=production\n   ```\n2. **Update `docker-compose.yml`** \u2014 remove hardcoded localhost defaults for `NEXT_PUBLIC_API_URL` and `FRONTEND_URL`, require them from `.env`\n3. **Update `lib/api/client.ts`** \u2014 the fallback `?? 'http://localhost:3003/api/v1'` is fine for dev but log a warning if it's used in production\n4. **Add `ALLOWED_ORIGINS`** env var support in backend (already partially there in `index.ts`)\n5. **Add deployment checklist** \u2014 a `DEPLOY.md` with step-by-step instructions\n\n### Subtasks\n1. Create `.env.production.example`\n2. Update docker-compose.yml to remove hardcoded localhost in build args\n3. Add console.warn in client.ts when fallback URL is used and NODE_ENV=production\n4. Create `DEPLOY.md` with deployment steps\n\n### Depends on\n- task_085 (nginx determines the final URL pattern)\n\n### Acceptance criteria\n- Given a production `.env` with `NEXT_PUBLIC_API_URL=https://cookquest.app/api/v1`, the frontend calls the correct URL\n- Given FRONTEND_URL is set to the production domain, CORS allows requests from that origin\n- Given a developer clones the repo, `DEPLOY.md` provides clear steps to deploy\n\n### Files to create/modify\n- `.env.production.example` \u2014 NEW\n- `docker-compose.yml` \u2014 remove hardcoded localhost defaults\n- `lib/api/client.ts` \u2014 add production fallback warning\n- `DEPLOY.md` \u2014 NEW deployment guide",
+    "files": [
+      ".env.production.example",
+      "docker-compose.yml",
+      "lib/api/client.ts",
+      "DEPLOY.md"
+    ],
+    "createdAt": "2026-03-08T12:00:02.000Z",
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-03-08T17:20:00.000Z",
+    "completedAt": "2026-03-08T17:35:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_087",
+    "title": "[Infra] Add CI/CD deployment step \u2014 build + push Docker images, deploy",
+    "status": "done",
+    "priority": 3,
+    "type": "infrastructure",
+    "description": "## CRITICAL \u2014 CI builds Docker images but never deploys them\n\n### What's wrong\nThe `docker` job in `.github/workflows/ci.yml` runs `docker compose build` but:\n- Doesn't push images to a registry (GHCR, Docker Hub, etc.)\n- Doesn't trigger deployment to a server\n- No CD pipeline exists at all\n\n### What to build\nAdd a deployment workflow `.github/workflows/deploy.yml` that:\n\n1. **Triggers** on push to `main` (after CI passes) or manual dispatch\n2. **Builds** Docker images for frontend and backend\n3. **Pushes** to GitHub Container Registry (ghcr.io)\n4. **Deploys** via SSH to VPS (or alternative \u2014 see notes)\n\n### Option A: VPS with Docker Compose (recommended for simplicity)\n```yaml\ndeploy:\n  name: Deploy to Production\n  runs-on: ubuntu-latest\n  needs: [docker]\n  if: github.ref == 'refs/heads/main' && github.event_name == 'push'\n  steps:\n    - uses: actions/checkout@v4\n\n    - name: Login to GHCR\n      uses: docker/login-action@v3\n      with:\n        registry: ghcr.io\n        username: ${{ github.actor }}\n        password: ${{ secrets.GITHUB_TOKEN }}\n\n    - name: Build and push images\n      run: |\n        docker compose build\n        docker compose push\n\n    - name: Deploy to server via SSH\n      uses: appleboy/ssh-action@v1\n      with:\n        host: ${{ secrets.DEPLOY_HOST }}\n        username: ${{ secrets.DEPLOY_USER }}\n        key: ${{ secrets.DEPLOY_SSH_KEY }}\n        script: |\n          cd /opt/cookquest\n          docker compose pull\n          docker compose up -d --remove-orphans\n          docker image prune -f\n```\n\n### Required GitHub Secrets\n- `DEPLOY_HOST` \u2014 server IP/hostname\n- `DEPLOY_USER` \u2014 SSH username\n- `DEPLOY_SSH_KEY` \u2014 SSH private key\n\n### Subtasks\n1. Add `image:` tags to docker-compose.yml services for GHCR\n2. Create `.github/workflows/deploy.yml`\n3. Add manual trigger (workflow_dispatch) for ad-hoc deploys\n4. Add deployment status badge to README\n5. Document required GitHub secrets in `DEPLOY.md`\n\n### Depends on\n- task_084 (CI must be fixed first)\n- task_086 (production env config)\n\n### Acceptance criteria\n- Given a push to main, images are built and pushed to GHCR\n- Given deployment secrets are configured, the app deploys to the VPS\n- Given manual dispatch, deployment can be triggered on-demand\n\n### Files to create/modify\n- `.github/workflows/deploy.yml` \u2014 NEW\n- `docker-compose.yml` \u2014 add image tags\n- `DEPLOY.md` \u2014 add secrets setup instructions",
+    "files": [
+      ".github/workflows/deploy.yml",
+      "docker-compose.yml",
+      "DEPLOY.md"
+    ],
+    "createdAt": "2026-03-08T12:00:03.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T18:30:00.000Z",
+    "completedAt": "2026-03-08T18:45:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_088",
+    "title": "[Infra] Add PostgreSQL backup strategy with pg_dump cron",
+    "status": "done",
+    "priority": 5,
+    "type": "infrastructure",
+    "description": "## HIGH \u2014 No database backup strategy for production\n\n### What's wrong\nPostgreSQL data lives in a Docker volume (`pgdata`). If the volume is deleted, server crashes, or data corrupts \u2014 everything is lost. No backup mechanism exists.\n\n### What to build\nAdd an automated backup solution:\n\n1. **Backup script** `scripts/backup-db.sh`:\n   ```bash\n   #!/bin/bash\n   set -euo pipefail\n   BACKUP_DIR=\"/backups\"\n   TIMESTAMP=$(date +%Y%m%d_%H%M%S)\n   FILENAME=\"cookquest_${TIMESTAMP}.sql.gz\"\n\n   pg_dump -h postgres -U ${POSTGRES_USER} ${POSTGRES_DB} | gzip > \"${BACKUP_DIR}/${FILENAME}\"\n\n   # Retain only last 7 daily backups\n   find ${BACKUP_DIR} -name 'cookquest_*.sql.gz' -mtime +7 -delete\n\n   echo \"Backup completed: ${FILENAME}\"\n   ```\n\n2. **Backup service** in docker-compose.yml:\n   ```yaml\n   backup:\n     image: postgres:16-alpine\n     volumes:\n       - ./scripts/backup-db.sh:/backup.sh:ro\n       - ./backups:/backups\n     environment:\n       POSTGRES_USER: ${POSTGRES_USER:-cookquest}\n       POSTGRES_DB: ${POSTGRES_DB:-cookquest}\n       PGPASSWORD: ${POSTGRES_PASSWORD:-cookquest}\n     entrypoint: >\n       sh -c \"while true; do sh /backup.sh; sleep 86400; done\"\n     depends_on:\n       postgres:\n         condition: service_healthy\n     networks:\n       - backend\n   ```\n\n3. **Restore instructions** in `DEPLOY.md`:\n   ```bash\n   gunzip -c backups/cookquest_20260308.sql.gz | docker exec -i cookquest-postgres psql -U cookquest cookquest\n   ```\n\n### Subtasks\n1. Create `scripts/backup-db.sh`\n2. Add backup service to docker-compose.yml\n3. Create `backups/` directory with `.gitkeep`\n4. Add restore instructions to DEPLOY.md\n5. Add `backups/` to `.gitignore`\n\n### Depends on\n- none\n\n### Acceptance criteria\n- Given the backup service is running, a gzipped SQL dump is created daily\n- Given backups older than 7 days, they are automatically deleted\n- Given a backup file, the restore command works correctly\n\n### Files to create/modify\n- `scripts/backup-db.sh` \u2014 NEW\n- `docker-compose.yml` \u2014 add backup service\n- `.gitignore` \u2014 add backups/\n- `DEPLOY.md` \u2014 add restore instructions",
+    "files": [
+      "scripts/backup-db.sh",
+      "docker-compose.yml",
+      ".gitignore",
+      "DEPLOY.md"
+    ],
+    "createdAt": "2026-03-08T12:00:04.000Z",
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-03-08T17:00:00.000Z",
+    "completedAt": "2026-03-08T17:15:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_089",
+    "title": "[Frontend] Add missing og-image.jpg and verify PWA manifest",
+    "status": "done",
+    "priority": 6,
+    "type": "ui-fix",
+    "description": "## MEDIUM \u2014 Missing Open Graph image and incomplete PWA manifest\n\n### What's wrong\n`app/layout.tsx` references:\n- `/og-image.jpg` \u2014 does NOT exist in `public/`\n- `/manifest.json` \u2014 exists but may be incomplete\n- `/icon-192.png` \u2014 may not exist\n\nMissing OG image means social sharing (Twitter, Slack, Discord) shows a blank preview. Missing PWA icons mean the app can't be installed on mobile.\n\n### What to fix\n1. **Create `public/og-image.jpg`** \u2014 1200x630px branded image with CookQuest logo, tagline, warm cooking colors. Can be a simple gradient with text overlay.\n2. **Verify `public/manifest.json`** has correct:\n   - `name`, `short_name`, `description`\n   - `start_url: '/'`\n   - `display: 'standalone'`\n   - `theme_color: '#0F172A'` (matches viewport config)\n   - `background_color: '#0F172A'`\n   - `icons` array with 192x192 and 512x512 PNG icons\n3. **Create PWA icons** if missing:\n   - `public/icon-192.png` (192x192)\n   - `public/icon-512.png` (512x512)\n4. **Add `public/robots.txt`**:\n   ```\n   User-agent: *\n   Allow: /\n   Sitemap: https://cookquest.app/sitemap.xml\n   ```\n\n### Subtasks\n1. Create or source og-image.jpg (1200x630)\n2. Verify/fix manifest.json\n3. Create PWA icon PNGs if missing\n4. Create robots.txt\n5. Verify `favicon.svg` renders correctly\n\n### Depends on\n- none\n\n### Acceptance criteria\n- Given a social share of the app URL, the OG image renders in previews\n- Given manifest.json is loaded, Chrome DevTools > Application > Manifest shows no errors\n- Given robots.txt is requested, it returns valid content\n\n### Files to create/modify\n- `public/og-image.jpg` \u2014 NEW\n- `public/manifest.json` \u2014 verify/fix\n- `public/icon-192.png` \u2014 NEW if missing\n- `public/icon-512.png` \u2014 NEW if missing\n- `public/robots.txt` \u2014 NEW",
+    "files": [
+      "public/og-image.jpg",
+      "public/manifest.json",
+      "public/icon-192.png",
+      "public/icon-512.png",
+      "public/robots.txt"
+    ],
+    "createdAt": "2026-03-08T12:00:05.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T17:00:00.000Z",
+    "completedAt": "2026-03-08T17:20:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_090",
+    "title": "[Infra] Create docker-compose.prod.yml with production overrides",
+    "status": "done",
+    "priority": 4,
+    "type": "infrastructure",
+    "description": "## HIGH \u2014 Single docker-compose.yml tries to serve both dev and prod\n\n### What's wrong\nThe current `docker-compose.yml` uses `${VAR:-dev_default}` patterns which is fragile. Production needs:\n- No exposed DB/Redis ports to host\n- Restart policies\n- Log rotation\n- Resource limits tuned for production\n- Image tags for GHCR pulls instead of local builds\n\n### What to build\nCreate `docker-compose.prod.yml` as a production override:\n\n```yaml\n# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d\nservices:\n  postgres:\n    ports: []  # Remove host port binding\n    logging:\n      driver: json-file\n      options:\n        max-size: \"10m\"\n        max-file: \"3\"\n\n  redis:\n    ports: []  # Remove host port binding\n    logging:\n      driver: json-file\n      options:\n        max-size: \"10m\"\n        max-file: \"3\"\n\n  cookquest-web:\n    ports: []  # Only nginx exposes ports\n    logging:\n      driver: json-file\n      options:\n        max-size: \"10m\"\n        max-file: \"3\"\n\n  cookquest-api:\n    ports: []  # Only nginx exposes ports\n    logging:\n      driver: json-file\n      options:\n        max-size: \"10m\"\n        max-file: \"3\"\n```\n\n### Subtasks\n1. Create `docker-compose.prod.yml` with production overrides\n2. Add log rotation to all services\n3. Remove host port bindings for internal services\n4. Document usage in `DEPLOY.md`\n\n### Depends on\n- task_085 (nginx must exist to handle external traffic)\n\n### Acceptance criteria\n- Given `docker compose -f docker-compose.yml -f docker-compose.prod.yml up`, only nginx ports (80/443) are exposed\n- Given services are running, logs rotate and don't fill disk\n- Given production config, postgres and redis are not accessible from host\n\n### Files to create/modify\n- `docker-compose.prod.yml` \u2014 NEW\n- `DEPLOY.md` \u2014 add usage instructions",
+    "files": [
+      "docker-compose.prod.yml",
+      "DEPLOY.md"
+    ],
+    "createdAt": "2026-03-08T12:00:06.000Z",
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-03-08T17:40:00.000Z",
+    "completedAt": "2026-03-08T17:55:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_091",
+    "title": "[Backend] Add production logging, error tracking, and health monitoring",
+    "status": "done",
+    "priority": 6,
+    "type": "enhancement",
+    "description": "## MEDIUM \u2014 No production observability\n\n### What's wrong\nThe backend uses `pino` for logging (good), but:\n- No structured log aggregation or export\n- No error tracking (Sentry or similar)\n- `/ready` endpoint exists but no external monitoring calls it\n- No request duration metrics\n\n### What to fix\n1. **Ensure pino outputs JSON in production** (it does by default, verify no `pino-pretty` in prod)\n2. **Add request duration logging** \u2014 pino-http already does this, verify it's working\n3. **Add `/metrics` endpoint** with basic stats:\n   ```json\n   {\n     \"uptime\": 3600,\n     \"requests_total\": 1234,\n     \"errors_total\": 5,\n     \"db_pool\": { \"total\": 10, \"idle\": 8, \"waiting\": 0 },\n     \"memory\": { \"rss\": 52428800, \"heapUsed\": 30000000 }\n   }\n   ```\n4. **Add simple uptime monitoring script** `scripts/health-check.sh`:\n   ```bash\n   #!/bin/bash\n   HEALTH_URL=\"http://localhost:3003/ready\"\n   STATUS=$(curl -s -o /dev/null -w '%{http_code}' $HEALTH_URL)\n   if [ \"$STATUS\" != \"200\" ]; then\n     echo \"ALERT: CookQuest API unhealthy (HTTP $STATUS)\"\n     # Could send webhook to Slack/Discord here\n   fi\n   ```\n5. **Verify `pino-pretty` is NOT in production dependencies** (it's in devDependencies \u2014 good)\n\n### Subtasks\n1. Add `/metrics` endpoint to index.ts\n2. Create `scripts/health-check.sh`\n3. Verify pino outputs JSON in production (no pino-pretty)\n4. Document monitoring setup in DEPLOY.md\n\n### Depends on\n- none\n\n### Acceptance criteria\n- Given production mode, logs are JSON-formatted (not pretty-printed)\n- Given `/metrics` is called, basic server stats are returned\n- Given health-check.sh runs and API is down, it outputs an alert message\n\n### Files to create/modify\n- `backend/node-services/api-server/src/index.ts` \u2014 add /metrics endpoint\n- `scripts/health-check.sh` \u2014 NEW\n- `DEPLOY.md` \u2014 add monitoring section",
+    "files": [
+      "backend/node-services/api-server/src/index.ts",
+      "scripts/health-check.sh",
+      "DEPLOY.md"
+    ],
+    "createdAt": "2026-03-08T12:00:07.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T17:30:00.000Z",
+    "completedAt": "2026-03-08T17:50:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_092",
+    "title": "[UI] Fix sign-in popup \u2014 input labels invisible on white background",
+    "status": "done",
+    "priority": 8,
+    "type": "bug",
+    "description": "## Sign-in modal input labels are invisible\n\n### What's wrong\nIn the sign-in/register popup modal, the form field labels (Email, Password) and input text are not visible. The labels appear to be white or very light text on a white modal background, making them completely unreadable.\n\n### Screenshot\nThe modal has a white background with the \"Welcome Back\" title visible in dark text, but the input field labels below are invisible \u2014 users can't tell which field is which.\n\n### What to fix\n- Ensure input labels have proper dark text color (e.g. `text-foreground` or `text-gray-700`)\n- Ensure input field text and placeholder text are visible against the white modal background\n- Test in both light and dark mode\n- Check that the modal's color scheme works with the app's dark theme (the rest of the app uses a dark background)\n\n### Root cause (likely)\nThe auth modal components probably use `text-foreground` which resolves to a light color in dark mode, but the modal background is forced white \u2014 creating a white-on-white contrast issue.\n\n### Files to investigate/modify\n- `components/auth/` \u2014 sign-in and register form components\n- `app/globals.css` \u2014 CSS variable definitions for foreground/background in dark mode\n- Any dialog/modal wrapper that sets the modal background\n\n### Acceptance criteria\n- Given a user opens the sign-in popup, the Email and Password labels are clearly visible\n- Given a user types in the input fields, the text is readable\n- Works in both light and dark mode",
+    "files": [
+      "components/auth/",
+      "app/globals.css"
+    ],
+    "createdAt": "2026-03-08T11:05:00.000Z",
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-03-08T18:00:00.000Z",
+    "completedAt": "2026-03-08T18:10:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_093",
+    "title": "[UI] Fix recipe detail page \u2014 low contrast text in dark mode",
+    "status": "todo",
+    "priority": 9,
+    "type": "bug",
+    "description": "## Recipe detail page text is barely readable in dark mode\n\n### What's wrong\nOn the recipe detail page (`/recipe/[recipeId]`), multiple text elements have extremely low contrast against the dark background:\n\n1. **Instructions text** \u2014 step descriptions like \"Bring a pot of water to a rolling boil\" are a dim gray, nearly invisible\n2. **Ingredient quantities** \u2014 \"2 eggs\", \"water\", \"pinch salt\", \"ice\" are low contrast\n3. **Pro Tips text** \u2014 all tip text is dim gray and hard to read\n4. **Ingredient details** \u2014 the \"\u2014 large\", \"\u2014 enough to cover eggs\", \"\u2014 ice water for cooling\" suffixes are slightly better but still too dim\n\n### What to fix\n- Instructions step text should use `text-foreground` or equivalent high-contrast color\n- Ingredient names and quantities should be clearly readable\n- Pro tips text should have proper contrast\n- Ensure all body text meets WCAG AA contrast ratio (4.5:1 minimum)\n\n### Files to modify\n- `app/recipe/[recipeId]/page.tsx` \u2014 recipe detail page component\n\n### Acceptance criteria\n- All text on the recipe page is clearly readable in dark mode\n- Ingredient names, instruction steps, and pro tips all have sufficient contrast\n- Still looks good in light mode (no regressions)",
+    "files": [
+      "app/recipe/[recipeId]/page.tsx"
+    ],
+    "createdAt": "2026-03-08T11:10:00.000Z",
+    "assignedTo": null,
+    "assignedAt": null,
+    "completedAt": null,
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_094",
+    "title": "[UI] Full dark mode audit \u2014 fix all low-contrast text across the app",
+    "status": "done",
+    "priority": 9,
+    "type": "bug",
+    "description": "## Comprehensive dark mode contrast audit\n\n### What's wrong\nMultiple pages across the app have text that is barely readable in dark mode. The app defaults to dark mode but many components use hardcoded gray text classes (e.g. `text-gray-500`, `text-muted-foreground`) that don't have enough contrast against dark backgrounds.\n\n### Pages and components to audit\n1. **Home page (`app/page.tsx`)** \u2014 check skill cards, recipe cards, stats, streak text\n2. **Recipe detail page (`app/recipe/[recipeId]/page.tsx`)** \u2014 instructions, ingredients, tips (known bad)\n3. **Skill detail page (`app/skill/[skillId]/page.tsx`)** \u2014 learning path nodes, descriptions\n4. **Recipes browse page (`app/recipes/page.tsx`)** \u2014 recipe list, filters, descriptions\n5. **Sign-in modal (`components/auth/`)** \u2014 labels invisible on white modal (task_092)\n6. **All card components** \u2014 `recipe-card.tsx`, `skill-card.tsx`, `core-loop-hero-card.tsx`, `daily-quest-card.tsx`\n7. **Completion toast** \u2014 `completion-toast.tsx`\n8. **Level up modal** \u2014 `level-up-modal.tsx`\n\n### What to fix\n- Replace all instances of low-contrast text colors with proper dark-mode-aware alternatives\n- Use `text-foreground` for primary text, `text-muted-foreground` only if it has sufficient contrast\n- Check `globals.css` \u2014 if `--muted-foreground` HSL value is too dim in dark mode, increase its lightness\n- Ensure all text meets WCAG AA (4.5:1 for body text, 3:1 for large text)\n- Do NOT change the dark theme aesthetic \u2014 just improve readability\n\n### Approach\n1. Start with `app/globals.css` \u2014 check and fix the CSS custom property values for dark mode\n2. Then sweep through each page/component listed above\n3. Test each page visually in dark mode after changes\n\n### Files to audit/modify\n- `app/globals.css` \u2014 CSS variables (dark mode foreground/muted values)\n- `app/page.tsx`\n- `app/recipe/[recipeId]/page.tsx`\n- `app/skill/[skillId]/page.tsx`\n- `app/recipes/page.tsx`\n- `components/recipe-card.tsx`\n- `components/skill-card.tsx`\n- `components/core-loop-hero-card.tsx`\n- `components/daily-quest-card.tsx`\n- `components/completion-toast.tsx`\n- `components/level-up-modal.tsx`\n- `components/recipe-filter-bar.tsx`\n\n### Acceptance criteria\n- Every page in the app has readable text in dark mode\n- No white-on-white or gray-on-dark contrast issues remain\n- WCAG AA contrast ratios met for all body text\n- Light mode is not regressed",
+    "files": [
+      "app/globals.css",
+      "app/page.tsx",
+      "app/recipe/[recipeId]/page.tsx",
+      "app/skill/[skillId]/page.tsx",
+      "app/recipes/page.tsx",
+      "components/recipe-card.tsx",
+      "components/skill-card.tsx",
+      "components/core-loop-hero-card.tsx",
+      "components/daily-quest-card.tsx",
+      "components/completion-toast.tsx",
+      "components/level-up-modal.tsx",
+      "components/recipe-filter-bar.tsx"
+    ],
+    "createdAt": "2026-03-08T11:10:00.000Z",
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-03-08T18:15:00.000Z",
+    "completedAt": "2026-03-08T18:45:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_095",
+    "title": "[UI] Enlarge PhotoNode to show uploaded images clearly",
+    "status": "done",
+    "priority": 5,
+    "type": "ui-fix",
+    "description": "## HIGH \u2014 Photo nodes are too small to see uploaded images\n\n### What's wrong\nPhotoNode uses `w-20 h-20` (80px) for regular nodes and `w-24 h-24` (96px) for checkpoints. Uploaded photos are crammed into tiny circles and users can't appreciate their cooking photos.\n\n### What to fix\nIn `components/photo-node.tsx`:\n1. When `photoUrl` exists, use larger sizes: `w-32 h-32` (regular) / `w-36 h-36` (checkpoint)\n2. When no photo (camera placeholder), keep current small sizes\n3. Use `rounded-2xl` instead of `rounded-full` for photo nodes \u2014 photos display better with more rectangular area\n4. Scale up the upload button proportionally for larger nodes\n5. Add a subtle hover scale effect on photo nodes\n6. Increase label width from `w-[120px]` to `w-[140px]` for photo nodes\n7. Increase label offset to accommodate larger node size\n\n### Subtasks\n1. Add conditional sizing logic based on `photoUrl` presence\n2. Change shape from circle to rounded rectangle when photo exists\n3. Scale upload button and camera icon proportionally\n4. Add hover effect for photo nodes\n5. Adjust label positioning for larger nodes\n\n### Depends on\nnone\n\n### Acceptance criteria\n- Given a cookbook node with an uploaded photo, the node is ~128px and the photo is clearly visible\n- Given a cookbook node without a photo, the node stays at current small size with camera icon\n- The upload button is proportionally sized and positioned correctly\n- Photo nodes have a subtle hover zoom effect\n- Labels don't overlap with enlarged nodes\n\n### Files to modify\n- `components/photo-node.tsx` \u2014 enlarge nodes with photos",
+    "files": [
+      "components/photo-node.tsx"
+    ],
+    "createdAt": "2026-03-08T11:10:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T11:12:16.135311+00:00",
+    "completedAt": "2026-03-08T11:12:59.232308+00:00",
+    "retryCount": 0,
+    "maxRetries": 3
+  },
+  {
+    "id": "task_096",
+    "title": "[UI] Increase cookbook mode path spacing for larger photo nodes",
+    "status": "done",
+    "priority": 5,
+    "type": "ui-fix",
+    "description": "## HIGH \u2014 Cookbook mode path spacing too tight for enlarged photo nodes\n\n### What's wrong\n`LearningPath` uses `NODE_SPACING = 180` for all modes. After task_095 enlarges photo nodes, cookbook mode needs more vertical spacing to prevent node overlap.\n\n### What to fix\nIn `components/learning-path.tsx`:\n1. Use larger `NODE_SPACING` when `mode === 'cookbook'` (e.g., 240px)\n2. Adjust the path SVG curves to work with increased spacing\n3. Ensure chef character messages still position correctly between nodes\n4. Update total height calculation for the taller layout\n\n### Subtasks\n1. Add conditional NODE_SPACING for cookbook mode\n2. Verify SVG path curves render smoothly with new spacing\n3. Test chef message positioning between nodes\n4. Verify trophy/end section positioning\n\n### Depends on\ntask_095\n\n### Acceptance criteria\n- Given cookbook mode with enlarged photo nodes, nodes don't overlap vertically\n- SVG path curves are smooth between nodes\n- Chef character messages are centered between nodes\n- Trophy section is positioned correctly at the bottom\n\n### Files to modify\n- `components/learning-path.tsx` \u2014 increase cookbook mode spacing",
+    "files": [
+      "components/learning-path.tsx"
+    ],
+    "createdAt": "2026-03-08T11:10:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T11:12:59.232308+00:00",
+    "completedAt": "2026-03-08T11:12:59.232308+00:00",
     "retryCount": 0,
     "maxRetries": 3
   }

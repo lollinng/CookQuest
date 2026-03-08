@@ -98,3 +98,51 @@ export async function getSkillProgress(): Promise<DetailedSkillProgress[]> {
   const data = await apiClient<SkillProgressResponse>('/progress/skills')
   return data.skills
 }
+
+// ---------------------------------------------------------------------------
+// Completion API
+// ---------------------------------------------------------------------------
+
+export interface CompletionResult {
+  recipe_id: string
+  already_completed: boolean
+  xp_earned: number
+  user: {
+    level: number
+    current_xp: number
+    xp_to_next_level: number
+    total_xp: number
+    streak_days: number
+    total_recipes_completed: number
+  }
+  skill_progress: {
+    skill_id: string
+    completed: number
+    total: number
+    percentage: number
+  }
+  level_up: { new_level: number; previous_level: number } | null
+  skills_unlocked: Array<{ id: string; name: string; icon: string; color: string }>
+  streak_updated: boolean
+}
+
+/**
+ * Mark a recipe as completed on the server.
+ * Returns the full completion payload with XP, streak, skill progress, etc.
+ */
+export async function completeRecipe(recipeId: string): Promise<CompletionResult> {
+  return apiClient<CompletionResult>(`/recipes/${recipeId}/progress`, {
+    method: 'POST',
+    body: { completed: true },
+  })
+}
+
+/**
+ * Mark a recipe as uncompleted on the server.
+ */
+export async function uncompleteRecipe(recipeId: string): Promise<CompletionResult> {
+  return apiClient<CompletionResult>(`/recipes/${recipeId}/progress`, {
+    method: 'POST',
+    body: { completed: false },
+  })
+}

@@ -9,8 +9,6 @@ import rateLimit from 'express-rate-limit'
 import path from 'path'
 
 import { errorHandler } from './middleware/error-handler'
-import { authMiddleware } from './middleware/auth'
-import { validateRequest } from './middleware/validation'
 import { DatabaseService } from './services/database'
 import { RedisService } from './services/redis'
 import { logger } from './services/logger'
@@ -29,7 +27,11 @@ const WEAK_SECRETS = [
 ]
 
 if (process.env.NODE_ENV === 'production') {
-  const required = ['JWT_SECRET', 'DATABASE_URL', 'FRONTEND_URL']
+  const required = ['JWT_SECRET', 'FRONTEND_URL']
+  // Accept either DATABASE_URL or INSTANCE_CONNECTION_NAME (Cloud SQL socket)
+  if (!process.env.DATABASE_URL && !process.env.INSTANCE_CONNECTION_NAME) {
+    required.push('DATABASE_URL')
+  }
   const missing = required.filter((key) => !process.env[key])
   if (missing.length > 0) {
     logger.fatal({ missing }, 'Missing required environment variables')
@@ -55,6 +57,18 @@ if (process.env.NODE_ENV === 'production') {
 
 const app = express()
 const PORT = process.env.PORT || 3003
+
+// ── Request/error counters for /metrics ──
+let requestsTotal = 0
+let errorsTotal = 0
+
+app.use((req, res, next) => {
+  requestsTotal++
+  res.on('finish', () => {
+    if (res.statusCode >= 500) errorsTotal++
+  })
+  next()
+})
 
 // Serve uploaded user photos as static files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
@@ -138,7 +152,7 @@ app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true, limit: '1mb' }))
 
 // Structured request logging
-app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }))
+app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' || req.url === '/metrics' } }))
 
 // Liveness probe — lightweight, always responds if process is alive
 app.get('/health', (req, res) => {
@@ -164,6 +178,26 @@ app.get('/ready', async (req, res) => {
       redis: redisHealthy ? 'ok' : 'failing',
     },
     pool: DatabaseService.getPoolStats(),
+  })
+})
+
+// Metrics endpoint — server stats for monitoring dashboards
+app.get('/metrics', (req, res) => {
+  const mem = process.memoryUsage()
+  res.json({
+    uptime: Math.floor(process.uptime()),
+    requests_total: requestsTotal,
+    errors_total: errorsTotal,
+    db_pool: DatabaseService.getPoolStats(),
+    memory: {
+      rss: mem.rss,
+      heapUsed: mem.heapUsed,
+      heapTotal: mem.heapTotal,
+      external: mem.external,
+    },
+    node_version: process.version,
+    env: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString(),
   })
 })
 

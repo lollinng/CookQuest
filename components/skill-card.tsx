@@ -20,9 +20,10 @@ interface SkillCardProps {
   skill: Skill
   progress: SkillProgress
   isLocked?: boolean
+  isNewlyUnlocked?: boolean
 }
 
-export function SkillCard({ skill, progress, isLocked = false }: SkillCardProps) {
+export function SkillCard({ skill, progress, isLocked = false, isNewlyUnlocked = false }: SkillCardProps) {
   const isCompleted = progress.percentage === 100
   const progressIndicatorColor: Record<string, string> = {
     blue: 'bg-gradient-to-r from-blue-400 to-blue-600',
@@ -40,27 +41,28 @@ export function SkillCard({ skill, progress, isLocked = false }: SkillCardProps)
   }
 
   const bgColorClasses = {
-    blue: 'bg-blue-50',
-    orange: 'bg-orange-50',
-    purple: 'bg-purple-50',
-    emerald: 'bg-emerald-50',
-    amber: 'bg-amber-50',
+    blue: 'bg-cq-surface',
+    orange: 'bg-cq-surface',
+    purple: 'bg-cq-surface',
+    emerald: 'bg-cq-surface',
+    amber: 'bg-cq-surface',
   }
 
   const card = (
-    <Card className={`
+    <Card data-testid="skill-card" className={`
       relative overflow-hidden transition-all duration-200
       ${isLocked
         ? 'opacity-60 cursor-not-allowed grayscale-[30%]'
         : 'hover:shadow-lg cursor-pointer hover:scale-[1.02]'
       }
-      ${isCompleted ? 'ring-2 ring-green-400' : ''}
-      ${bgColorClasses[skill.color as keyof typeof bgColorClasses] || 'bg-gray-50'}
+      ${isCompleted ? 'ring-2 ring-cq-success' : ''}
+      ${isNewlyUnlocked && !isLocked ? 'ring-2 ring-green-300 shadow-lg shadow-green-500/20 animate-[unlock_0.6s_ease-out]' : ''}
+      ${bgColorClasses[skill.color as keyof typeof bgColorClasses] || 'bg-cq-surface'}
     `}>
       {/* Background gradient */}
       <div className={`
         absolute top-0 left-0 w-full h-2 bg-gradient-to-r
-        ${isLocked ? 'from-gray-400 to-gray-500' : colorClasses[skill.color as keyof typeof colorClasses] || 'from-gray-500 to-gray-600'}
+        ${isLocked ? 'from-gray-600 to-gray-700' : colorClasses[skill.color as keyof typeof colorClasses] || 'from-gray-500 to-gray-600'}
       `} />
 
       <CardHeader className="pb-3 pt-6">
@@ -68,24 +70,31 @@ export function SkillCard({ skill, progress, isLocked = false }: SkillCardProps)
           <div className="flex items-center gap-3">
             <div className={`
               w-12 h-12 rounded-xl bg-gradient-to-r flex items-center justify-center text-white text-xl
-              ${isLocked ? 'from-gray-400 to-gray-500' : colorClasses[skill.color as keyof typeof colorClasses] || 'from-gray-500 to-gray-600'}
+              ${isLocked ? 'from-gray-600 to-gray-700' : colorClasses[skill.color as keyof typeof colorClasses] || 'from-gray-500 to-gray-600'}
             `}>
               {isLocked ? <Lock className="size-5" /> : skill.icon}
             </div>
             <div>
               <CardTitle className="text-lg">{skill.name}</CardTitle>
-              <p className="text-sm text-gray-600 mt-1">{skill.description}</p>
+              <p className="text-sm text-cq-text-secondary mt-1">{skill.description}</p>
             </div>
           </div>
-          {isLocked && (
-            <Badge variant="secondary" className="bg-gray-200 text-gray-600 border-gray-300">
-              <Lock className="size-3 mr-1" />
-              Locked
-            </Badge>
-          )}
-          {isCompleted && !isLocked && (
-            <CheckCircle className="text-green-500 size-6" />
-          )}
+          <div className="flex items-center gap-2">
+            {isNewlyUnlocked && !isLocked && (
+              <Badge className="bg-green-500 text-white border-green-500 text-xs font-bold px-2 py-0.5 animate-pulse">
+                New!
+              </Badge>
+            )}
+            {isLocked && (
+              <Badge variant="secondary" className="bg-cq-border text-cq-text-muted border-cq-border">
+                <Lock className="size-3 mr-1" />
+                Locked
+              </Badge>
+            )}
+            {isCompleted && !isLocked && (
+              <CheckCircle className="text-green-500 size-6" />
+            )}
+          </div>
         </div>
       </CardHeader>
 
@@ -94,20 +103,20 @@ export function SkillCard({ skill, progress, isLocked = false }: SkillCardProps)
           <>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Progress</span>
-                <span className="font-medium text-gray-500">
+                <span className="text-cq-text-muted">Progress</span>
+                <span className="font-medium text-cq-text-muted">
                   0/{progress.total} completed
                 </span>
               </div>
               <Progress value={0} className="h-2" indicatorClassName={progressIndicatorColor[skill.color]} />
             </div>
-            <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-3">
-              <Lock className="size-4 text-gray-500 flex-shrink-0" />
-              <span className="text-sm text-gray-600">
+            <div className="flex items-center gap-2 bg-cq-bg rounded-lg p-3">
+              <Lock className="size-4 text-cq-text-muted flex-shrink-0" />
+              <span className="text-sm text-cq-text-secondary">
                 Complete Basic Cooking to unlock this skill
               </span>
             </div>
-            <div className="text-xs text-gray-500 pt-2 border-t">
+            <div className="text-xs text-cq-text-muted pt-2 border-t border-cq-border">
               {skill.recipes.length} recipes available after unlock
             </div>
           </>
@@ -116,21 +125,18 @@ export function SkillCard({ skill, progress, isLocked = false }: SkillCardProps)
             {/* Progress */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Progress</span>
+                <span className="text-cq-text-secondary">Progress</span>
                 <span className="font-medium">
-                  {progress.completed}/{progress.total} completed
+                  {progress.completed} / {progress.total} recipes completed
                 </span>
               </div>
               <Progress value={progress.percentage} className="h-2" indicatorClassName={progressIndicatorColor[skill.color]} />
-              <div className="text-xs text-gray-500">
-                {progress.percentage}% complete
-              </div>
             </div>
 
             {/* Status */}
             <div className="flex items-center justify-between">
               {isCompleted ? (
-                <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                <Badge variant="default" className="bg-green-500/20 text-green-400 border-green-500/30">
                   Mastered
                 </Badge>
               ) : (
@@ -139,13 +145,13 @@ export function SkillCard({ skill, progress, isLocked = false }: SkillCardProps)
                 </Badge>
               )}
 
-              <div className="flex items-center gap-1 text-sm text-gray-500">
+              <div className="flex items-center gap-1 text-sm text-cq-text-muted">
                 View recipes <ArrowRight className="size-3" />
               </div>
             </div>
 
             {/* Quick stats */}
-            <div className="text-xs text-gray-500 pt-2 border-t">
+            <div className="text-xs text-cq-text-muted pt-2 border-t border-cq-border">
               {skill.recipes.length} recipes available
             </div>
           </>

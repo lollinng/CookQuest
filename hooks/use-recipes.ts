@@ -1,6 +1,7 @@
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import type { Recipe, SkillType } from '@/lib/types'
-import { getRecipes, getRecipeById, getRecipesBySkill, updateRecipeProgress } from '@/lib/api/recipes'
+import { useQuery, useQueryClient, useMutation, keepPreviousData } from '@tanstack/react-query'
+import type { Recipe, SkillType, StructuredIngredient } from '@/lib/types'
+import { getRecipes, getRecipeById, getRecipesBySkill, type RecipeFilters } from '@/lib/api/recipes'
+import { completeRecipe as apiCompleteRecipe, uncompleteRecipe as apiUncompleteRecipe, type CompletionResult } from '@/lib/api/progress'
 import { getSkills, getSkillById } from '@/lib/api/skills'
 import { getRandomTip, getDailyTip } from '@/lib/api/tips'
 import { apiClient, getToken, API_BASE_URL } from '@/lib/api/client'
@@ -18,6 +19,17 @@ function mapRecipe(raw: any): Recipe {
     emoji: raw.emoji,
     xpReward: raw.xp_reward || raw.xpReward || 100,
     ingredients: raw.ingredients || [],
+    structuredIngredients: (raw.structured_ingredients || raw.structuredIngredients || []).map((si: any): StructuredIngredient => ({
+      id: si.id,
+      name: si.name,
+      category: si.category,
+      amount: si.amount != null ? Number(si.amount) : null,
+      unit: si.unit,
+      preparation: si.preparation,
+      optional: si.optional,
+      sortOrder: si.sort_order ?? si.sortOrder ?? 0,
+      notes: si.notes,
+    })),
     instructions: raw.instructions || [],
     tips: raw.tips || [],
     nutritionFacts: raw.nutritionFacts || raw.nutrition_facts,
@@ -59,6 +71,19 @@ export function useRecipes() {
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+  })
+}
+
+export function useFilteredRecipes(filters: RecipeFilters) {
+  return useQuery({
+    queryKey: recipeKeys.list(filters),
+    queryFn: async () => {
+      const data = await getRecipes(filters)
+      return { recipes: data.recipes.map(mapRecipe), pagination: data.pagination }
+    },
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -218,4 +243,39 @@ export function useInvalidateRecipes() {
     invalidateRecipe: (id: string) => queryClient.invalidateQueries({ queryKey: recipeKeys.detail(id) }),
     invalidateSkill: (skillId: string) => queryClient.invalidateQueries({ queryKey: recipeKeys.skill(skillId) }),
   }
+}
+
+/**
+ * Mutation hook for completing/uncompleting recipes.
+ *
+ * For logged-in users: calls the server POST /recipes/:id/progress
+ * For anonymous users: returns null (caller should use Zustand store directly)
+ */
+export function useCompleteRecipe() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (recipeId: string): Promise<CompletionResult> => {
+      return apiCompleteRecipe(recipeId)
+    },
+    onSuccess: (_data, recipeId) => {
+      // Invalidate affected queries so they refetch with fresh data
+      queryClient.invalidateQueries({ queryKey: recipeKeys.all })
+      queryClient.invalidateQueries({ queryKey: recipeKeys.detail(recipeId) })
+    },
+  })
+}
+
+export function useUncompleteRecipe() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (recipeId: string): Promise<CompletionResult> => {
+      return apiUncompleteRecipe(recipeId)
+    },
+    onSuccess: (_data, recipeId) => {
+      queryClient.invalidateQueries({ queryKey: recipeKeys.all })
+      queryClient.invalidateQueries({ queryKey: recipeKeys.detail(recipeId) })
+    },
+  })
 }

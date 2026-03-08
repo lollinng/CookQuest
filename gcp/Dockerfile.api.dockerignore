@@ -1,0 +1,22 @@
+node_modules
+.next
+.git
+*.md
+coverage
+__tests__
+e2e
+.env
+.env.*
+uploads
+backups
+scripts
+claude-agents
+.eslintcache
+*.tsbuildinfo
+.DS_Store
+.vscode
+.idea
+# Include backend/ (unlike root .dockerignore)
+backend/node-services/api-server/node_modules
+backend/node-services/api-server/dist
+backend/node-services/api-server/uploads
