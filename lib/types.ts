@@ -131,6 +131,15 @@ export interface SkillTrophy {
   mastered: boolean
 }
 
+export interface LeaderboardEntry {
+  rank: number
+  id: number
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  recipesCompleted: number
+}
+
 export interface FollowUser {
   id: number
   username: string

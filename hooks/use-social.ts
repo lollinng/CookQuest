@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy } from '@/lib/types'
+import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy, LeaderboardEntry } from '@/lib/types'
 import {
   followUser as apiFollowUser,
   unfollowUser as apiUnfollowUser,
@@ -15,6 +15,8 @@ import {
   deleteComment as apiDeleteComment,
   getUserSkillTrophies,
   uploadAvatar as apiUploadAvatar,
+  getWorldLeaderboard,
+  getFriendsLeaderboard,
 } from '@/lib/api/social'
 
 // Query keys
@@ -118,6 +120,24 @@ export function usePostComments(postId: number) {
     enabled: postId > 0,
     staleTime: 30 * 1000,
     gcTime: 2 * 60 * 1000,
+  })
+}
+
+export function useWorldLeaderboard(limit = 10) {
+  return useQuery({
+    queryKey: [...socialKeys.all, 'leaderboard', 'world', limit],
+    queryFn: () => getWorldLeaderboard(limit),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  })
+}
+
+export function useFriendsLeaderboard(limit = 10) {
+  return useQuery({
+    queryKey: [...socialKeys.all, 'leaderboard', 'friends', limit],
+    queryFn: () => getFriendsLeaderboard(limit),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   })
 }
 

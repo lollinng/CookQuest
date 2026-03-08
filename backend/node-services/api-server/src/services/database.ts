@@ -898,6 +898,24 @@ class DatabaseServiceClass {
       logger.info('Seeded 3 community users with posts, progress & mutual follows')
     }
 
+    // Comment likes table (migration 015)
+    if (!(await this.isMigrationApplied('015_comment_likes'))) {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS comment_likes (
+          id SERIAL PRIMARY KEY,
+          comment_id INTEGER NOT NULL REFERENCES post_comments(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(comment_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_comment_likes_comment ON comment_likes(comment_id);
+        CREATE INDEX IF NOT EXISTS idx_comment_likes_user ON comment_likes(user_id);
+        ALTER TABLE post_comments ADD COLUMN IF NOT EXISTS likes_count INTEGER DEFAULT 0;
+      `)
+      await this.recordMigration('015_comment_likes')
+      logger.info('Comment likes migration applied')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
@@ -1489,6 +1507,35 @@ class DatabaseServiceClass {
     return rows
   }
 
+  async getWorldLeaderboard(limit: number = 10): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT u.id, u.username, u.display_name, u.avatar_url,
+         COALESCE((SELECT COUNT(*) FROM user_recipe_progress
+           WHERE user_id = u.id AND status = 'completed')::int, 0) AS recipes_completed
+       FROM users u
+       WHERE u.is_active = TRUE
+       ORDER BY recipes_completed DESC, u.created_at ASC
+       LIMIT $1`,
+      [limit]
+    )
+    return rows
+  }
+
+  async getFriendsLeaderboard(userId: number, limit: number = 10): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT u.id, u.username, u.display_name, u.avatar_url,
+         COALESCE((SELECT COUNT(*) FROM user_recipe_progress
+           WHERE user_id = u.id AND status = 'completed')::int, 0) AS recipes_completed
+       FROM users u
+       WHERE u.is_active = TRUE
+         AND (u.id = $1 OR u.id IN (SELECT following_id FROM user_follows WHERE follower_id = $1))
+       ORDER BY recipes_completed DESC, u.created_at ASC
+       LIMIT $2`,
+      [userId, limit]
+    )
+    return rows
+  }
+
   async getFeed(userId: number, limit: number = 5): Promise<any[]> {
     const { rows } = await this.pool.query(
       `SELECT
@@ -1537,6 +1584,20 @@ class DatabaseServiceClass {
       [userId, recipeId]
     )
     return rows.length > 0
+  }
+
+  async deletePost(postId: number, userId: number): Promise<'deleted' | 'forbidden' | 'not_found'> {
+    return this.transaction(async (client) => {
+      const { rows } = await client.query(
+        'SELECT id, user_id FROM user_posts WHERE id = $1',
+        [postId]
+      )
+      if (rows.length === 0) return 'not_found'
+      if (rows[0].user_id !== userId) return 'forbidden'
+      // Comments are CASCADE-deleted via FK on post_comments
+      await client.query('DELETE FROM user_posts WHERE id = $1', [postId])
+      return 'deleted'
+    })
   }
 
   // ── Social: Comments ──
@@ -1597,18 +1658,38 @@ class DatabaseServiceClass {
     })
   }
 
-  async getComments(postId: number, limit: number = 50): Promise<any[]> {
+  async getComments(postId: number, limit: number = 50, currentUserId?: number): Promise<any[]> {
     const { rows } = await this.pool.query(
       `SELECT pc.id, pc.post_id, pc.user_id, u.username, u.display_name, u.avatar_url,
-              pc.content, pc.created_at
+              pc.content, COALESCE(pc.likes_count, 0) AS likes_count,
+              EXISTS(SELECT 1 FROM comment_likes cl WHERE cl.comment_id = pc.id AND cl.user_id = $3) AS is_liked,
+              pc.created_at
        FROM post_comments pc
        JOIN users u ON u.id = pc.user_id
        WHERE pc.post_id = $1
        ORDER BY pc.created_at ASC
        LIMIT $2`,
-      [postId, limit]
+      [postId, limit, currentUserId ?? 0]
     )
     return rows
+  }
+
+  async toggleCommentLike(commentId: number, userId: number): Promise<{ liked: boolean; likesCount: number }> {
+    return this.transaction(async (client) => {
+      const { rows: existing } = await client.query(
+        'SELECT id FROM comment_likes WHERE comment_id = $1 AND user_id = $2',
+        [commentId, userId]
+      )
+      if (existing.length > 0) {
+        await client.query('DELETE FROM comment_likes WHERE comment_id = $1 AND user_id = $2', [commentId, userId])
+        await client.query('UPDATE post_comments SET likes_count = GREATEST(COALESCE(likes_count, 0) - 1, 0) WHERE id = $1', [commentId])
+      } else {
+        await client.query('INSERT INTO comment_likes (comment_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [commentId, userId])
+        await client.query('UPDATE post_comments SET likes_count = COALESCE(likes_count, 0) + 1 WHERE id = $1', [commentId])
+      }
+      const { rows } = await client.query('SELECT COALESCE(likes_count, 0) AS likes_count FROM post_comments WHERE id = $1', [commentId])
+      return { liked: existing.length === 0, likesCount: rows[0]?.likes_count ?? 0 }
+    })
   }
 
   async getCommentCount(postId: number): Promise<number> {

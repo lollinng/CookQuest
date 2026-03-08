@@ -13,6 +13,49 @@ const router = Router()
 const userIdValidation = param('id').isInt({ min: 1 }).withMessage('Invalid user ID')
 const searchValidation = query('q').isString().isLength({ min: 1, max: 100 }).withMessage('Search query required (1-100 chars)')
 
+// ── Leaderboard ──
+
+// GET /api/v1/leaderboard/world?limit=10 — Top users globally by recipes completed
+router.get('/leaderboard/world',
+  authMiddleware,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 10, 1), 50)
+    const rows = await DatabaseService.getWorldLeaderboard(limit)
+    res.json({
+      success: true,
+      data: rows.map((r: any, i: number) => ({
+        rank: i + 1,
+        id: r.id,
+        username: r.username,
+        displayName: r.display_name,
+        avatarUrl: r.avatar_url,
+        recipesCompleted: r.recipes_completed,
+      }))
+    })
+  })
+)
+
+// GET /api/v1/leaderboard/friends?limit=10 — Top users among followed + self
+router.get('/leaderboard/friends',
+  authMiddleware,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.id
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 10, 1), 50)
+    const rows = await DatabaseService.getFriendsLeaderboard(userId, limit)
+    res.json({
+      success: true,
+      data: rows.map((r: any, i: number) => ({
+        rank: i + 1,
+        id: r.id,
+        username: r.username,
+        displayName: r.display_name,
+        avatarUrl: r.avatar_url,
+        recipesCompleted: r.recipes_completed,
+      }))
+    })
+  })
+)
+
 // POST /api/v1/users/:id/follow — Follow a user
 router.post('/users/:id/follow',
   authMiddleware,
@@ -326,6 +369,32 @@ router.get('/users/:id/posts',
 const postIdValidation = param('postId').isInt({ min: 1 }).withMessage('Invalid post ID')
 const commentIdValidation = param('commentId').isInt({ min: 1 }).withMessage('Invalid comment ID')
 
+// DELETE /api/v1/posts/:postId — Delete own post
+router.delete('/posts/:postId',
+  authMiddleware,
+  validateRequest([postIdValidation]),
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const postId = parseInt(req.params.postId, 10)
+    const userId = req.user!.id
+
+    const result = await DatabaseService.deletePost(postId, userId)
+    if (result === 'not_found') {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Post not found' }
+      })
+    }
+    if (result === 'forbidden') {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Cannot delete another user\'s post' }
+      })
+    }
+
+    res.status(204).send()
+  })
+)
+
 // POST /api/v1/posts/:postId/comments — Add a comment
 router.post('/posts/:postId/comments',
   authMiddleware,
@@ -380,7 +449,8 @@ router.get('/posts/:postId/comments',
     }
 
     const limit = Math.min(parseInt(req.query.limit as string, 10) || 50, 100)
-    const comments = await DatabaseService.getComments(postId, limit)
+    const currentUserId = req.user?.id
+    const comments = await DatabaseService.getComments(postId, limit, currentUserId)
 
     res.json({
       success: true,
@@ -392,6 +462,8 @@ router.get('/posts/:postId/comments',
         displayName: c.display_name,
         avatarUrl: c.avatar_url,
         content: c.content,
+        likesCount: c.likes_count,
+        isLiked: c.is_liked,
         createdAt: c.created_at,
       }))
     })
@@ -434,6 +506,33 @@ router.delete('/posts/:postId/comments/:commentId',
     }
 
     res.json({ success: true })
+  })
+)
+
+// POST /api/v1/posts/:postId/comments/:commentId/like — Toggle like on a comment
+router.post('/posts/:postId/comments/:commentId/like',
+  authMiddleware,
+  validateRequest([postIdValidation, commentIdValidation]),
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const commentId = parseInt(req.params.commentId, 10)
+    const userId = req.user!.id
+
+    // Verify comment exists and belongs to the post
+    const postId = parseInt(req.params.postId, 10)
+    const post = await DatabaseService.getPostById(postId)
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Post not found' }
+      })
+    }
+
+    const result = await DatabaseService.toggleCommentLike(commentId, userId)
+
+    res.json({
+      success: true,
+      data: result
+    })
   })
 )
 

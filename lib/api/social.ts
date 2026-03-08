@@ -1,5 +1,5 @@
 import { apiClient, API_BASE_URL, getToken, ApiError } from './client'
-import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy } from '../types'
+import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy, LeaderboardEntry } from '../types'
 
 export async function followUser(userId: number): Promise<{ following: boolean }> {
   return apiClient<{ following: boolean }>(`/users/${userId}/follow`, { method: 'POST' })
@@ -86,4 +86,16 @@ export async function uploadAvatar(file: File): Promise<{ avatarUrl: string }> {
 
 export async function deleteAvatar(): Promise<void> {
   return apiClient<void>('/users/me/avatar', { method: 'DELETE' })
+}
+
+export async function getWorldLeaderboard(limit = 10): Promise<LeaderboardEntry[]> {
+  return apiClient<LeaderboardEntry[]>('/leaderboard/world', {
+    params: { limit: String(limit) },
+  })
+}
+
+export async function getFriendsLeaderboard(limit = 10): Promise<LeaderboardEntry[]> {
+  return apiClient<LeaderboardEntry[]>('/leaderboard/friends', {
+    params: { limit: String(limit) },
+  })
 }
