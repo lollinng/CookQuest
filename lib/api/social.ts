@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { UserProfile, UserPost, FollowUser } from '../types'
+import type { UserProfile, UserPost, FollowUser, PostComment } from '../types'
 
 export async function followUser(userId: number): Promise<{ following: boolean }> {
   return apiClient<{ following: boolean }>(`/users/${userId}/follow`, { method: 'POST' })
@@ -33,4 +33,19 @@ export async function getFeed(): Promise<UserPost[]> {
 
 export async function getUserPosts(userId: number): Promise<UserPost[]> {
   return apiClient<UserPost[]>(`/users/${userId}/posts`)
+}
+
+export async function getPostComments(postId: number): Promise<PostComment[]> {
+  return apiClient<PostComment[]>(`/posts/${postId}/comments`)
+}
+
+export async function addComment(postId: number, content: string): Promise<PostComment> {
+  return apiClient<PostComment>(`/posts/${postId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  })
+}
+
+export async function deleteComment(postId: number, commentId: number): Promise<void> {
+  return apiClient<void>(`/posts/${postId}/comments/${commentId}`, { method: 'DELETE' })
 }

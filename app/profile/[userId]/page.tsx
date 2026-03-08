@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { ArrowLeft, ChefHat, Camera, Trophy, Clock } from 'lucide-react';
+import { CommentSection } from '@/components/post-comments';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
@@ -341,7 +342,10 @@ export default function ProfilePage() {
         ) : recentPosts.length > 0 ? (
           <div>
             {recentPosts.map((post) => (
-              <ActivityItem key={post.id} post={post} />
+              <div key={post.id}>
+                <ActivityItem post={post} />
+                <CommentSection postId={post.id} commentsCount={post.commentsCount || 0} />
+              </div>
             ))}
           </div>
         ) : (

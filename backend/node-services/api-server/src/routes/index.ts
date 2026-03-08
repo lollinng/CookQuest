@@ -102,7 +102,10 @@ export function initializeRoutes(app: Express) {
           'GET /users/:id': 'Get user public profile (public, auth adds isFollowing)',
           'GET /feed': 'Activity feed from followed users (auth required, top 5)',
           'POST /posts': 'Create a post (auth required)',
-          'GET /users/:id/posts': 'User recent posts (public, limit 10)'
+          'GET /users/:id/posts': 'User recent posts (public, limit 10)',
+          'POST /posts/:postId/comments': 'Add a comment to a post (auth required)',
+          'GET /posts/:postId/comments': 'Get comments for a post (auth required)',
+          'DELETE /posts/:postId/comments/:commentId': 'Delete own comment (auth required)'
         }
       },
       documentation: `${req.protocol}://${req.get('host')}/api/docs`

@@ -757,6 +757,25 @@ class DatabaseServiceClass {
       logger.info('Alpha access migration applied')
     }
 
+    // Post comments table (migration 013)
+    const commentsApplied = await this.isMigrationApplied('013_post_comments')
+    if (!commentsApplied) {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS post_comments (
+          id SERIAL PRIMARY KEY,
+          post_id INTEGER NOT NULL REFERENCES user_posts(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          content TEXT NOT NULL CHECK (char_length(content) BETWEEN 1 AND 500),
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_post_comments_post ON post_comments(post_id);
+        CREATE INDEX IF NOT EXISTS idx_post_comments_created ON post_comments(created_at ASC);
+        ALTER TABLE user_posts ADD COLUMN IF NOT EXISTS comments_count INTEGER DEFAULT 0;
+      `)
+      await this.recordMigration('013_post_comments')
+      logger.info('Post comments migration applied')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
@@ -1313,7 +1332,7 @@ class DatabaseServiceClass {
       `SELECT
         up.id, up.user_id, u.username, u.display_name, u.avatar_url,
         up.post_type, up.recipe_id, r.title AS recipe_title, r.image_url AS recipe_image_url,
-        up.photo_url, up.caption, up.created_at
+        up.photo_url, up.caption, COALESCE(up.comments_count, 0) AS comments_count, up.created_at
        FROM user_posts up
        JOIN user_follows uf ON uf.following_id = up.user_id AND uf.follower_id = $1
        JOIN users u ON u.id = up.user_id
@@ -1330,7 +1349,7 @@ class DatabaseServiceClass {
       `SELECT
         up.id, up.user_id, u.username, u.display_name, u.avatar_url,
         up.post_type, up.recipe_id, r.title AS recipe_title, r.image_url AS recipe_image_url,
-        up.photo_url, up.caption, up.created_at
+        up.photo_url, up.caption, COALESCE(up.comments_count, 0) AS comments_count, up.created_at
        FROM user_posts up
        JOIN users u ON u.id = up.user_id
        LEFT JOIN recipes r ON r.id = up.recipe_id
@@ -1356,6 +1375,86 @@ class DatabaseServiceClass {
       [userId, recipeId]
     )
     return rows.length > 0
+  }
+
+  // ── Social: Comments ──
+
+  async getPostById(postId: number): Promise<any | null> {
+    const { rows } = await this.pool.query(
+      'SELECT id, user_id FROM user_posts WHERE id = $1',
+      [postId]
+    )
+    return rows[0] || null
+  }
+
+  async addComment(postId: number, userId: number, content: string): Promise<any> {
+    return this.transaction(async (client) => {
+      const { rows } = await client.query(
+        `INSERT INTO post_comments (post_id, user_id, content)
+         VALUES ($1, $2, $3)
+         RETURNING id, post_id, user_id, content, created_at`,
+        [postId, userId, content]
+      )
+      await client.query(
+        'UPDATE user_posts SET comments_count = COALESCE(comments_count, 0) + 1 WHERE id = $1',
+        [postId]
+      )
+      // Fetch user info for the response
+      const { rows: userRows } = await client.query(
+        'SELECT username, display_name, avatar_url FROM users WHERE id = $1',
+        [userId]
+      )
+      const comment = rows[0]
+      const user = userRows[0]
+      return {
+        ...comment,
+        username: user.username,
+        display_name: user.display_name,
+        avatar_url: user.avatar_url,
+      }
+    })
+  }
+
+  async deleteComment(commentId: number, userId: number): Promise<boolean> {
+    return this.transaction(async (client) => {
+      const { rows } = await client.query(
+        'SELECT id, post_id, user_id FROM post_comments WHERE id = $1',
+        [commentId]
+      )
+      if (rows.length === 0) return false
+      const comment = rows[0]
+      if (comment.user_id !== userId) {
+        throw new Error('FORBIDDEN')
+      }
+      await client.query('DELETE FROM post_comments WHERE id = $1', [commentId])
+      await client.query(
+        'UPDATE user_posts SET comments_count = GREATEST(COALESCE(comments_count, 0) - 1, 0) WHERE id = $1',
+        [comment.post_id]
+      )
+      return true
+    })
+  }
+
+  async getComments(postId: number, limit: number = 50): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT pc.id, pc.post_id, pc.user_id, u.username, u.display_name, u.avatar_url,
+              pc.content, pc.created_at
+       FROM post_comments pc
+       JOIN users u ON u.id = pc.user_id
+       WHERE pc.post_id = $1
+       ORDER BY pc.created_at ASC
+       LIMIT $2`,
+      [postId, limit]
+    )
+    return rows
+  }
+
+  async getCommentCount(postId: number): Promise<number> {
+    const { rows } = await this.pool.query(
+      'SELECT COALESCE(comments_count, 0) AS count FROM user_posts WHERE id = $1',
+      [postId]
+    )
+    return rows[0]?.count ?? 0
   }
 
   // Generic query helpers (used by routes that haven't been fully migrated)

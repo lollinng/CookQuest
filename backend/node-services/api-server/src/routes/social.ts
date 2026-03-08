@@ -193,6 +193,7 @@ function mapPost(row: any) {
     recipeImageUrl: row.recipe_image_url,
     photoUrl: row.photo_url,
     caption: row.caption,
+    commentsCount: row.comments_count || 0,
     createdAt: row.created_at,
   }
 }
@@ -245,6 +246,122 @@ router.get('/users/:id/posts',
       success: true,
       data: posts.map(mapPost)
     })
+  })
+)
+
+// ── Post Comments ──
+
+const postIdValidation = param('postId').isInt({ min: 1 }).withMessage('Invalid post ID')
+const commentIdValidation = param('commentId').isInt({ min: 1 }).withMessage('Invalid comment ID')
+
+// POST /api/v1/posts/:postId/comments — Add a comment
+router.post('/posts/:postId/comments',
+  authMiddleware,
+  validateRequest([
+    postIdValidation,
+    body('content').isString().trim().isLength({ min: 1, max: 500 }).withMessage('Content required (1-500 chars)'),
+  ]),
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const postId = parseInt(req.params.postId, 10)
+    const userId = req.user!.id
+    const { content } = req.body
+
+    const post = await DatabaseService.getPostById(postId)
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Post not found' }
+      })
+    }
+
+    const comment = await DatabaseService.addComment(postId, userId, content.trim())
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: comment.id,
+        postId: comment.post_id,
+        userId: comment.user_id,
+        username: comment.username,
+        displayName: comment.display_name,
+        avatarUrl: comment.avatar_url,
+        content: comment.content,
+        createdAt: comment.created_at,
+      }
+    })
+  })
+)
+
+// GET /api/v1/posts/:postId/comments — Get comments for a post
+router.get('/posts/:postId/comments',
+  authMiddleware,
+  validateRequest([postIdValidation]),
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const postId = parseInt(req.params.postId, 10)
+
+    const post = await DatabaseService.getPostById(postId)
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Post not found' }
+      })
+    }
+
+    const limit = Math.min(parseInt(req.query.limit as string, 10) || 50, 100)
+    const comments = await DatabaseService.getComments(postId, limit)
+
+    res.json({
+      success: true,
+      data: comments.map(c => ({
+        id: c.id,
+        postId: c.post_id,
+        userId: c.user_id,
+        username: c.username,
+        displayName: c.display_name,
+        avatarUrl: c.avatar_url,
+        content: c.content,
+        createdAt: c.created_at,
+      }))
+    })
+  })
+)
+
+// DELETE /api/v1/posts/:postId/comments/:commentId — Delete own comment
+router.delete('/posts/:postId/comments/:commentId',
+  authMiddleware,
+  validateRequest([postIdValidation, commentIdValidation]),
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const postId = parseInt(req.params.postId, 10)
+    const commentId = parseInt(req.params.commentId, 10)
+    const userId = req.user!.id
+
+    const post = await DatabaseService.getPostById(postId)
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Post not found' }
+      })
+    }
+
+    try {
+      const deleted = await DatabaseService.deleteComment(commentId, userId)
+      if (!deleted) {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Comment not found' }
+        })
+      }
+    } catch (err: any) {
+      if (err.message === 'FORBIDDEN') {
+        return res.status(403).json({
+          success: false,
+          error: { message: 'Cannot delete another user\'s comment' }
+        })
+      }
+      throw err
+    }
+
+    res.json({ success: true })
   })
 )
 

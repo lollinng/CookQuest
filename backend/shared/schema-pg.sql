@@ -336,10 +336,25 @@ CREATE TABLE IF NOT EXISTS user_posts (
   recipe_id TEXT REFERENCES recipes(id) ON DELETE SET NULL,
   photo_url TEXT,
   caption TEXT,
+  comments_count INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_user_posts_user ON user_posts(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_posts_created ON user_posts(created_at DESC);
+
+-- ================================
+-- Post Comments
+-- ================================
+
+CREATE TABLE IF NOT EXISTS post_comments (
+  id SERIAL PRIMARY KEY,
+  post_id INTEGER NOT NULL REFERENCES user_posts(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL CHECK (char_length(content) BETWEEN 1 AND 500),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_post_comments_post ON post_comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_post_comments_created ON post_comments(created_at ASC);
 
 -- ================================
 -- User Favorites (Watchlist)

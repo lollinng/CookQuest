@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Users } from 'lucide-react';
+import { Users, MessageCircle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useFeed } from '@/hooks/use-social';
 import type { UserPost } from '@/lib/types';
@@ -166,9 +166,20 @@ function FeedItem({ post }: { post: UserPost }) {
             <span className="font-semibold">{post.username}</span>{' '}
             <span className="text-cq-text-secondary">{getActionText(post)}</span>
           </p>
-          <p className="text-xs text-cq-text-secondary mt-0.5">
-            {formatRelativeTime(post.createdAt)}
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-xs text-cq-text-secondary">
+              {formatRelativeTime(post.createdAt)}
+            </span>
+            {post.commentsCount > 0 && (
+              <Link
+                href={`/people/${post.userId}`}
+                className="flex items-center gap-0.5 text-xs text-cq-text-secondary hover:text-cq-primary transition-colors"
+              >
+                <MessageCircle className="size-3" />
+                <span>{post.commentsCount}</span>
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Thumbnail */}

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import type { UserProfile, UserPost, FollowUser } from '@/lib/types'
+import type { UserProfile, UserPost, FollowUser, PostComment } from '@/lib/types'
 import {
   followUser as apiFollowUser,
   unfollowUser as apiUnfollowUser,
@@ -9,6 +9,9 @@ import {
   searchUsers,
   getFeed,
   getUserPosts,
+  getPostComments,
+  addComment as apiAddComment,
+  deleteComment as apiDeleteComment,
 } from '@/lib/api/social'
 
 // Query keys
@@ -20,6 +23,7 @@ export const socialKeys = {
   following: (userId: number) => [...socialKeys.all, 'following', userId] as const,
   search: (q: string) => [...socialKeys.all, 'search', q] as const,
   userPosts: (userId: number) => [...socialKeys.all, 'posts', userId] as const,
+  comments: (postId: number) => [...socialKeys.all, 'comments', postId] as const,
 }
 
 // ── Queries ──
@@ -83,7 +87,48 @@ export function useUserPosts(userId: number) {
   })
 }
 
+export function usePostComments(postId: number) {
+  return useQuery({
+    queryKey: socialKeys.comments(postId),
+    queryFn: () => getPostComments(postId),
+    enabled: postId > 0,
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+  })
+}
+
 // ── Mutations ──
+
+export function useAddComment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ postId, content }: { postId: number; content: string }) => {
+      return apiAddComment(postId, content)
+    },
+    onSuccess: (_data, { postId }) => {
+      queryClient.invalidateQueries({ queryKey: socialKeys.comments(postId) })
+      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
+      // Invalidate all user posts queries (we don't know which user's post it is)
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+    },
+  })
+}
+
+export function useDeleteComment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ postId, commentId }: { postId: number; commentId: number }) => {
+      return apiDeleteComment(postId, commentId)
+    },
+    onSuccess: (_data, { postId }) => {
+      queryClient.invalidateQueries({ queryKey: socialKeys.comments(postId) })
+      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+    },
+  })
+}
 
 export function useFollowUser() {
   const queryClient = useQueryClient()
@@ -192,3 +237,4 @@ export function useUnfollowUser() {
     },
   })
 }
+

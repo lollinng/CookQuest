@@ -105,6 +105,18 @@ export interface UserPost {
   recipeImageUrl: string | null
   photoUrl: string | null
   caption: string | null
+  commentsCount: number
+  createdAt: string
+}
+
+export interface PostComment {
+  id: number
+  postId: number
+  userId: number
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  content: string
   createdAt: string
 }
 
