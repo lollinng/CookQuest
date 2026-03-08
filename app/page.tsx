@@ -1,14 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { ChefHat, Flame, Clock, Target } from 'lucide-react'
+import { ChefHat, Flame, Clock, Target, Heart } from 'lucide-react'
 import { SkillCard } from '@/components/skill-card'
 import { CookingTip } from '@/components/cooking-tip'
 import { RecipeCard } from '@/components/recipe-card'
 import { CoreLoopHeroCard } from '@/components/core-loop-hero-card'
 import { useRecipeStore, useStoreHydrated } from '@/lib/stores/recipe-store'
-import { useRecipes, useSkills } from '@/hooks/use-recipes'
+import { useRecipes, useSkills, useFavoriteRecipes } from '@/hooks/use-recipes'
 import { useCoreLoopState } from '@/hooks/use-core-loop'
+import { useAuth } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -31,6 +32,8 @@ export default function Dashboard() {
 
   const { data: recipes, isLoading, isError } = useRecipes()
   const { data: skills, isLoading: skillsLoading } = useSkills()
+  const { isAuthenticated } = useAuth()
+  const { data: favorites } = useFavoriteRecipes()
 
   const coreLoop = useCoreLoopState()
   const [bannerDismissed, setBannerDismissed] = useState(false)
@@ -233,6 +236,39 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Your Favorites */}
+      {isAuthenticated && favorites && favorites.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold flex items-center gap-2 text-cq-text-primary">
+              <Heart className="size-6 text-rose-500 fill-rose-500" />
+              Your Favorites
+            </h2>
+            <Link href="/favorites">
+              <Button variant="outline" size="sm" className="border-cq-border text-cq-text-secondary hover:bg-cq-surface-hover hover:text-cq-text-primary">
+                View all
+              </Button>
+            </Link>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {favorites.slice(0, 4).map((recipe, index) => (
+              <div
+                key={recipe.id}
+                className="animate-fade-in"
+                style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'backwards' }}
+              >
+                <RecipeCard
+                  recipe={{ ...recipe, isFavorited: true }}
+                  isCompleted={hydrated && isRecipeCompleted(recipe.id)}
+                  onToggleCompletion={toggleRecipeCompletion}
+                  compact
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Today's Cooking Tip */}
       <div className="animate-bounce-subtle" style={{ animationDelay: '400ms', animationFillMode: 'backwards' }}>

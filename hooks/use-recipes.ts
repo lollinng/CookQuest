@@ -4,6 +4,7 @@ import { getRecipes, getRecipeById, getRecipesBySkill, type RecipeFilters } from
 import { completeRecipe as apiCompleteRecipe, uncompleteRecipe as apiUncompleteRecipe, type CompletionResult } from '@/lib/api/progress'
 import { getSkills, getSkillById } from '@/lib/api/skills'
 import { getRandomTip, getDailyTip } from '@/lib/api/tips'
+import { addFavorite, removeFavorite, getFavoriteRecipes } from '@/lib/api/favorites'
 import { apiClient, getToken, API_BASE_URL } from '@/lib/api/client'
 
 // Map backend snake_case recipe to frontend camelCase
@@ -33,6 +34,7 @@ function mapRecipe(raw: any): Recipe {
     instructions: raw.instructions || [],
     tips: raw.tips || [],
     nutritionFacts: raw.nutritionFacts || raw.nutrition_facts,
+    isFavorited: raw.is_favorited ?? raw.isFavorited,
   }
 }
 
@@ -59,6 +61,10 @@ export const tipKeys = {
 
 export const photoKeys = {
   userPhotos: ['userPhotos'] as const,
+}
+
+export const favoriteKeys = {
+  all: ['favorites'] as const,
 }
 
 // Hooks
@@ -276,6 +282,38 @@ export function useUncompleteRecipe() {
     onSuccess: (_data, recipeId) => {
       queryClient.invalidateQueries({ queryKey: recipeKeys.all })
       queryClient.invalidateQueries({ queryKey: recipeKeys.detail(recipeId) })
+    },
+  })
+}
+
+// ── Favorites ──
+
+export function useFavoriteRecipes() {
+  return useQuery({
+    queryKey: favoriteKeys.all,
+    queryFn: async () => {
+      const data = await getFavoriteRecipes()
+      return data.recipes.map(mapRecipe)
+    },
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  })
+}
+
+export function useToggleFavorite() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ recipeId, isFavorited }: { recipeId: string; isFavorited: boolean }) => {
+      if (isFavorited) {
+        return removeFavorite(recipeId)
+      } else {
+        return addFavorite(recipeId)
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: favoriteKeys.all })
+      queryClient.invalidateQueries({ queryKey: recipeKeys.all })
     },
   })
 }

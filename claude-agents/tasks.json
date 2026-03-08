@@ -703,10 +703,10 @@
     "description": "## Add recipe favorites (watchlist) \u2014 Frontend\n\n### What to build\nHeart/bookmark button on recipe cards, a dedicated /favorites page, and a \"Your Favorites\" section on the home page.\n\n### Dependencies\n- task_097 (backend favorites API must exist)\n\n### Types (lib/types.ts)\n- Extend Recipe interface: add `isFavorited?: boolean`\n\n### API module (lib/api/favorites.ts) \u2014 NEW\n- `getFavoriteRecipes(): Promise<Recipe[]>` \u2014 GET /users/me/favorites\n- `addFavorite(recipeId: string): Promise<{ favorited: boolean }>` \u2014 POST /recipes/:id/favorite\n- `removeFavorite(recipeId: string): Promise<{ favorited: boolean }>` \u2014 DELETE /recipes/:id/favorite\n\n### Query hooks (hooks/use-recipes.ts)\n- `favoriteKeys = { all: ['favorites'] as const }`\n- `useFavoriteRecipes()` \u2014 fetches user's favorites list\n- `useToggleFavorite()` \u2014 mutation, optimistic update, invalidates recipeKeys + favoriteKeys\n\n### Components\n1. `components/favorite-button.tsx` \u2014 NEW: Heart icon button (filled when favorited, animated toggle). Props: `recipeId: string, isFavorited: boolean, size?: 'sm' | 'md'`\n2. Update `components/recipe-card.tsx` \u2014 Add FavoriteButton in card header (top-left, opposite to completion toggle)\n\n### Pages\n1. `app/favorites/page.tsx` \u2014 NEW: \"My Watchlist\" page with grid of favorited RecipeCards. Empty state: \"No favorites yet \u2014 tap the heart on recipes you want to try!\"\n2. Update `app/page.tsx` \u2014 Add \"Your Favorites\" section (show up to 4 favorited recipes in a horizontal scroll or grid, with \"View all\" link to /favorites). Only show when user is logged in and has favorites.\n\n### Acceptance criteria\n- Given a logged-in user viewing a recipe card, then a heart icon is visible\n- Given the user taps the heart, then it fills with animation and the recipe is added to favorites\n- Given the user navigates to /favorites, then all favorited recipes are listed\n- Given the home page loads for a user with 2 favorites, then \"Your Favorites\" section shows those 2 recipes\n- Given the user is not logged in, the heart button prompts login or is hidden\n- Responsive: works on 390px mobile and 1440px desktop\n\n### Files\n- `lib/types.ts` \u2014 extend Recipe\n- `lib/api/favorites.ts` \u2014 NEW API module\n- `hooks/use-recipes.ts` \u2014 add favorite hooks\n- `components/favorite-button.tsx` \u2014 NEW component\n- `components/recipe-card.tsx` \u2014 integrate favorite button\n- `app/favorites/page.tsx` \u2014 NEW page\n- `app/page.tsx` \u2014 add favorites section",
     "type": "feature",
     "priority": 5,
-    "status": "todo",
-    "assignedTo": null,
-    "assignedAt": null,
-    "completedAt": null,
+    "status": "done",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T16:25:00.000Z",
+    "completedAt": "2026-03-08T16:35:00.000Z",
     "dependencies": [
       "task_097"
     ],

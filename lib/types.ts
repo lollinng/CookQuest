@@ -30,6 +30,7 @@ export interface Recipe {
     carbs: string
     fat: string
   }
+  isFavorited?: boolean
 }
 
 export type SkillType = 'basic-cooking' | 'heat-control' | 'flavor-building' | 'air-fryer' | 'indian-cuisine'

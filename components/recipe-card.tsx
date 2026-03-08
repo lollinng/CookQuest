@@ -8,6 +8,7 @@ import { getDifficultyColor } from '@/lib/utils'
 import type { Recipe } from '@/lib/types'
 import Link from 'next/link'
 import { RecipeImage } from '@/components/recipe-image'
+import { FavoriteButton } from '@/components/favorite-button'
 
 interface RecipeCardProps {
   recipe: Recipe
@@ -85,14 +86,21 @@ export function RecipeCard({ recipe, isCompleted, onToggleCompletion, compact = 
             </div>
           )}
 
-          {/* Recipe Emoji */}
-          {recipe.emoji && (
-            <div className="absolute top-3 left-3">
+          {/* Recipe Emoji & Favorite */}
+          <div className="absolute top-3 left-3 flex items-center gap-2">
+            {recipe.emoji && (
               <div className="bg-cq-surface rounded-full p-2 shadow-lg">
                 <span className="text-xl">{recipe.emoji}</span>
               </div>
-            </div>
-          )}
+            )}
+            {!isLocked && (
+              <FavoriteButton
+                recipeId={recipe.id}
+                isFavorited={recipe.isFavorited ?? false}
+                size={compact ? 'sm' : 'sm'}
+              />
+            )}
+          </div>
         </div>
 
         <CardContent className={`${compact ? 'p-3 space-y-2' : 'p-4 space-y-3'}`}>
