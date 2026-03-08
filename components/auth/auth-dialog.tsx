@@ -59,7 +59,7 @@ export function AuthDialog({
         </DialogTrigger>
       )}
 
-      <DialogContent className="theme-light sm:max-w-[420px] p-0 border-orange-200/50 overflow-hidden gap-0 bg-white">
+      <DialogContent className="theme-light sm:max-w-[420px] p-0 border-orange-200/50 overflow-hidden gap-0 bg-white text-gray-900">
         <DialogHeader className="sr-only">
           <DialogTitle>
             {view === 'login' ? 'Sign In' : 'Create Account'}

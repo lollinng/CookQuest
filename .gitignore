@@ -88,3 +88,6 @@ uploads/
 # Local environment variables
 .env.local
 .vercel
+
+# Docker local dev override
+docker-compose.override.yml
