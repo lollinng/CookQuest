@@ -78,15 +78,19 @@ router.get('/',
     const total = recipes.length
     const paginatedRecipes = recipes.slice(offset, offset + Number(limit))
 
-    // If user is authenticated, add their progress
+    // If user is authenticated, add their progress and favorite status
     let recipesWithProgress = paginatedRecipes
     if (req.user) {
-      const userProgress = await DatabaseService.getUserProgress(req.user.id)
+      const [userProgress, favoriteIds] = await Promise.all([
+        DatabaseService.getUserProgress(req.user.id),
+        DatabaseService.getUserFavoriteIds(req.user.id)
+      ])
       const progressMap = new Map(userProgress.map(p => [p.recipe_id, p]))
-      
+
       recipesWithProgress = paginatedRecipes.map(recipe => ({
         ...recipe,
-        user_progress: progressMap.get(recipe.id) || null
+        user_progress: progressMap.get(recipe.id) || null,
+        is_favorited: favoriteIds.has(recipe.id)
       }))
     }
 
@@ -131,10 +135,14 @@ router.get('/:id',
 
     let recipeWithProgress: Record<string, any> = recipe
     if (req.user) {
-      const progress = await DatabaseService.getRecipeProgress(req.user.id, id)
+      const [progress, favoriteIds] = await Promise.all([
+        DatabaseService.getRecipeProgress(req.user.id, id),
+        DatabaseService.getUserFavoriteIds(req.user.id)
+      ])
       recipeWithProgress = {
         ...recipe,
-        user_progress: progress
+        user_progress: progress,
+        is_favorited: favoriteIds.has(id)
       }
     }
 
@@ -301,12 +309,16 @@ router.get('/skill/:skillId',
 
     let recipesWithProgress = recipes
     if (req.user) {
-      const userProgress = await DatabaseService.getUserProgress(req.user.id)
+      const [userProgress, favoriteIds] = await Promise.all([
+        DatabaseService.getUserProgress(req.user.id),
+        DatabaseService.getUserFavoriteIds(req.user.id)
+      ])
       const progressMap = new Map(userProgress.map(p => [p.recipe_id, p]))
-      
+
       recipesWithProgress = recipes.map(recipe => ({
         ...recipe,
-        user_progress: progressMap.get(recipe.id) || null
+        user_progress: progressMap.get(recipe.id) || null,
+        is_favorited: favoriteIds.has(recipe.id)
       }))
     }
 

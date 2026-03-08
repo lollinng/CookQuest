@@ -34,6 +34,8 @@ FILE_MAP = {
     'PROJECT_STRUCTURE.md': 'docs/PROJECT_STRUCTURE.md',
     'ATTRIBUTIONS.md': 'docs/ATTRIBUTIONS.md',
     'WORKFLOW.md': 'docs/WORKFLOW.md',
+    'USAGE.md': 'docs/USAGE.md',
+    'gcp/GCP-DEPLOYMENT.md': 'docs/GCP-DEPLOYMENT.md',
     'guidelines/Guidelines.md': 'guidelines/Guidelines.md',
     'claude-agents/tasks.json': 'agent-system/tasks.json',
     'claude-agents/agent-config.json': 'agent-system/agent-config.json',

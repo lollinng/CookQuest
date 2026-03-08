@@ -8,6 +8,7 @@ import { progressRoutes } from './progress'
 import { tipRoutes } from './tips'
 import { photoRoutes } from './photos'
 import { ingredientRoutes } from './ingredients'
+import { favoriteRoutes } from './favorites'
 
 export function initializeRoutes(app: Express) {
   // API version prefix
@@ -25,6 +26,9 @@ export function initializeRoutes(app: Express) {
 
   // Photos — handles /api/v1/recipes/:id/photos and /api/v1/users/me/photos
   app.use(apiPrefix, photoRoutes)
+
+  // Favorites — handles /api/v1/recipes/:id/favorite and /api/v1/users/me/favorites
+  app.use(apiPrefix, favoriteRoutes)
 
   // API documentation endpoint
   app.get(`${apiPrefix}`, (req, res) => {
@@ -72,6 +76,11 @@ export function initializeRoutes(app: Express) {
           'GET /ingredients': 'List all ingredients (with category/search filters)',
           'GET /ingredients/:id': 'Get ingredient with recipes that use it',
           'GET /ingredients/:id/recipes': 'Get recipes using this ingredient'
+        },
+        favorites: {
+          'POST /recipes/:id/favorite': 'Add recipe to favorites (auth required)',
+          'DELETE /recipes/:id/favorite': 'Remove recipe from favorites (auth required)',
+          'GET /users/me/favorites': 'List favorited recipes (auth required)'
         }
       },
       documentation: `${req.protocol}://${req.get('host')}/api/docs`

@@ -691,6 +691,24 @@ class DatabaseServiceClass {
       logger.info('Ingredient seed data migration applied')
     }
 
+    // User favorites table (migration 010)
+    const favoritesApplied = await this.isMigrationApplied('010_user_favorites')
+    if (!favoritesApplied) {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS user_favorites (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          recipe_id TEXT NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+          added_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(user_id, recipe_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_favorites_user ON user_favorites(user_id);
+        CREATE INDEX IF NOT EXISTS idx_user_favorites_recipe ON user_favorites(recipe_id);
+      `)
+      await this.recordMigration('010_user_favorites')
+      logger.info('User favorites migration applied')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
@@ -1058,6 +1076,44 @@ class DatabaseServiceClass {
   async cleanExpiredSessions(): Promise<number> {
     const result = await this.pool.query('DELETE FROM user_sessions WHERE expires_at < NOW()')
     return result.rowCount || 0
+  }
+
+  // ── Favorites ──
+
+  async addFavorite(userId: number, recipeId: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO user_favorites (user_id, recipe_id)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id, recipe_id) DO NOTHING`,
+      [userId, recipeId]
+    )
+  }
+
+  async removeFavorite(userId: number, recipeId: string): Promise<void> {
+    await this.pool.query(
+      'DELETE FROM user_favorites WHERE user_id = $1 AND recipe_id = $2',
+      [userId, recipeId]
+    )
+  }
+
+  async getUserFavorites(userId: number): Promise<Recipe[]> {
+    const { rows } = await this.pool.query(
+      `SELECT r.*, uf.added_at AS favorited_at
+       FROM user_favorites uf
+       JOIN recipes r ON r.id = uf.recipe_id
+       WHERE uf.user_id = $1
+       ORDER BY uf.added_at DESC`,
+      [userId]
+    )
+    return rows.map(r => this._mapRecipe(r))
+  }
+
+  async getUserFavoriteIds(userId: number): Promise<Set<string>> {
+    const { rows } = await this.pool.query(
+      'SELECT recipe_id FROM user_favorites WHERE user_id = $1',
+      [userId]
+    )
+    return new Set(rows.map(r => r.recipe_id))
   }
 
   // Generic query helpers (used by routes that haven't been fully migrated)
