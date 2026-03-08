@@ -1,4 +1,4 @@
-import { apiClient } from './client'
+import { apiClient, API_BASE_URL, getToken, ApiError } from './client'
 import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy } from '../types'
 
 export async function followUser(userId: number): Promise<{ following: boolean }> {
@@ -44,7 +44,7 @@ export async function getPostComments(postId: number): Promise<PostComment[]> {
 export async function addComment(postId: number, content: string): Promise<PostComment> {
   return apiClient<PostComment>(`/posts/${postId}/comments`, {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: { content },
   })
 }
 
@@ -54,4 +54,30 @@ export async function deleteComment(postId: number, commentId: number): Promise<
 
 export async function getUserSkillTrophies(userId: number): Promise<SkillTrophy[]> {
   return apiClient<SkillTrophy[]>(`/users/${userId}/skill-trophies`)
+}
+
+export async function uploadAvatar(file: File): Promise<{ avatarUrl: string }> {
+  const formData = new FormData()
+  formData.append('avatar', file)
+
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(`${API_BASE_URL}/users/me/avatar`, {
+    method: 'PATCH',
+    headers,
+    body: formData,
+    credentials: 'include',
+  })
+
+  const json = await res.json()
+  if (!json.success) {
+    throw new ApiError(json.error?.message || 'Avatar upload failed', res.status)
+  }
+  return json.data
+}
+
+export async function deleteAvatar(): Promise<void> {
+  return apiClient<void>('/users/me/avatar', { method: 'DELETE' })
 }

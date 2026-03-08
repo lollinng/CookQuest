@@ -13,6 +13,7 @@ import {
   addComment as apiAddComment,
   deleteComment as apiDeleteComment,
   getUserSkillTrophies,
+  uploadAvatar as apiUploadAvatar,
 } from '@/lib/api/social'
 
 // Query keys
@@ -246,6 +247,19 @@ export function useUnfollowUser() {
       queryClient.invalidateQueries({ queryKey: socialKeys.followers(userId) })
       queryClient.invalidateQueries({ queryKey: socialKeys.following(userId) })
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'search'] })
+    },
+  })
+}
+
+export function useUploadAvatar() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: apiUploadAvatar,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'profile'] })
+      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
     },
   })
 }

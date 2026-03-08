@@ -1,19 +1,32 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
-import { ArrowLeft, ChefHat, Camera, Trophy, Clock } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { ArrowLeft, ChefHat, Camera, Trophy, Clock, Loader2 } from 'lucide-react';
 import { CommentSection } from '@/components/post-comments';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { useAuth } from '@/lib/auth-context';
 import {
   useUserProfile,
   useUserPosts,
+  useUserSkillTrophies,
+  useUserFollowers,
+  useUserFollowing,
   useFollowUser,
   useUnfollowUser,
+  useUploadAvatar,
 } from '@/hooks/use-social';
-import type { UserPost } from '@/lib/types';
+import type { FollowUser } from '@/lib/types';
+import { toast } from 'sonner';
+import type { UserPost, SkillTrophy } from '@/lib/types';
 import Link from 'next/link';
 
 // ── Helpers ──
@@ -48,24 +61,74 @@ function Avatar({
   avatarUrl,
   displayName,
   username,
+  isOwnProfile = false,
+  onAvatarChange,
+  isUploading = false,
 }: {
   avatarUrl: string | null;
   displayName: string | null;
   username: string;
+  isOwnProfile?: boolean;
+  onAvatarChange?: (file: File) => void;
+  isUploading?: boolean;
 }) {
-  if (avatarUrl) {
-    return (
-      <img
-        src={avatarUrl}
-        alt={displayName || username}
-        className="size-20 rounded-full object-cover border-2 border-cq-border"
-      />
-    );
-  }
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  return (
+  const handleClick = () => {
+    if (isOwnProfile && !isUploading && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onAvatarChange) {
+      onAvatarChange(file);
+    }
+    // Reset so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const avatarContent = avatarUrl ? (
+    <img
+      src={avatarUrl}
+      alt={displayName || username}
+      className="size-20 rounded-full object-cover border-2 border-cq-border"
+    />
+  ) : (
     <div className="size-20 rounded-full bg-cq-primary flex items-center justify-center text-white text-2xl font-bold border-2 border-cq-border">
       {getInitial(displayName, username)}
+    </div>
+  );
+
+  if (!isOwnProfile) return avatarContent;
+
+  return (
+    <div className="relative group">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={isUploading}
+        className="relative rounded-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-cq-primary"
+      >
+        {avatarContent}
+        {isUploading ? (
+          <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+            <Loader2 className="size-6 text-white animate-spin" />
+          </div>
+        ) : (
+          <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+            <Camera className="size-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        )}
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleFileChange}
+      />
     </div>
   );
 }
@@ -125,6 +188,111 @@ function FollowButton({
   );
 }
 
+// ── Follow List Modal ──
+
+function UserListItem({
+  user,
+  currentUserId,
+  onClose,
+}: {
+  user: FollowUser;
+  currentUserId?: number;
+  onClose: () => void;
+}) {
+  const initial = getInitial(user.displayName || null, user.username);
+
+  return (
+    <div className="flex items-center gap-3 py-3 px-2 hover:bg-white/5 rounded-lg transition-colors">
+      <Link href={`/profile/${user.id}`} onClick={onClose} className="flex items-center gap-3 flex-1 min-w-0">
+        {user.avatarUrl ? (
+          <img
+            src={user.avatarUrl}
+            alt={user.displayName || user.username}
+            className="size-10 rounded-full object-cover border border-cq-border shrink-0"
+          />
+        ) : (
+          <div className="size-10 rounded-full bg-cq-primary flex items-center justify-center text-white text-sm font-bold border border-cq-border shrink-0">
+            {initial}
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-cq-text-primary truncate">
+            {user.displayName || user.username}
+          </p>
+          <p className="text-xs text-cq-text-muted">@{user.username}</p>
+        </div>
+      </Link>
+      {currentUserId && currentUserId !== user.id && (
+        <FollowButton userId={user.id} isFollowing={user.isFollowing ?? false} />
+      )}
+    </div>
+  );
+}
+
+function FollowListModal({
+  userId,
+  type,
+  count,
+}: {
+  userId: number;
+  type: 'followers' | 'following';
+  count: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const { user: currentUser } = useAuth();
+
+  const followersQuery = useUserFollowers(userId);
+  const followingQuery = useUserFollowing(userId);
+  const { data, isLoading } = type === 'followers' ? followersQuery : followingQuery;
+
+  const title = type === 'followers' ? 'Followers' : 'Following';
+  const emptyMessage = type === 'followers' ? 'No followers yet' : 'Not following anyone yet';
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="text-center cursor-pointer hover:opacity-80 transition-opacity">
+          <div className="text-lg font-bold text-cq-text-primary">{count}</div>
+          <div className="text-sm text-cq-text-secondary">{title}</div>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="bg-cq-surface border-cq-border max-h-[70vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="text-cq-text-primary">{title}</DialogTitle>
+        </DialogHeader>
+        <div className="overflow-y-auto -mx-6 px-6">
+          {isLoading ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 py-2">
+                  <Skeleton className="size-10 rounded-full" />
+                  <div className="flex-1 space-y-1">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : data && data.length > 0 ? (
+            <div>
+              {data.map((user) => (
+                <UserListItem
+                  key={user.id}
+                  user={user}
+                  currentUserId={currentUser?.id}
+                  onClose={() => setOpen(false)}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-cq-text-muted py-8 text-center">{emptyMessage}</p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Activity Item ──
 
 function ActivityItem({ post }: { post: UserPost }) {
@@ -174,6 +342,75 @@ function ActivityItem({ post }: { post: UserPost }) {
         <Clock className="size-3" />
         {relativeTime(post.createdAt)}
       </div>
+    </div>
+  );
+}
+
+// ── Trophy Card ──
+
+function TrophyCard({ trophy }: { trophy: SkillTrophy }) {
+  const isMastered = trophy.mastered;
+
+  return (
+    <div
+      className={`relative rounded-xl border p-3 text-center transition-all ${
+        isMastered
+          ? 'border-amber-500/50 bg-gradient-to-b from-amber-500/20 to-amber-600/10 shadow-lg shadow-amber-500/20'
+          : 'border-cq-border bg-cq-surface grayscale opacity-60'
+      }`}
+    >
+      <div className="text-3xl mb-1">{trophy.icon}</div>
+      <div className={`text-xs font-medium truncate ${
+        isMastered ? 'text-cq-text-primary' : 'text-cq-text-muted'
+      }`}>
+        {trophy.skillName}
+      </div>
+      {isMastered ? (
+        <div className="text-[10px] font-bold text-amber-400 mt-1 uppercase tracking-wider">
+          Mastered
+        </div>
+      ) : (
+        <>
+          <div className="text-[10px] text-cq-text-muted mt-1">
+            {trophy.completed}/{trophy.total}
+          </div>
+          <div className="mt-1.5 h-1 rounded-full bg-cq-border overflow-hidden">
+            <div
+              className="h-full rounded-full bg-cq-text-muted transition-all"
+              style={{ width: `${trophy.percentage}%` }}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Trophies Section ──
+
+function TrophiesSection({ userId }: { userId: number }) {
+  const { data: trophies, isLoading } = useUserSkillTrophies(userId);
+
+  return (
+    <div className="bg-cq-surface border border-cq-border rounded-xl p-6">
+      <h2 className="text-base font-semibold text-cq-text-primary mb-4 flex items-center gap-2">
+        <Trophy className="size-4 text-amber-400" />
+        Trophies
+      </h2>
+
+      {isLoading ? (
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+          {trophies?.map((trophy) => (
+            <TrophyCard key={trophy.skillId} trophy={trophy} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -229,7 +466,19 @@ export default function ProfilePage() {
     isLoading: postsLoading,
   } = useUserPosts(userId);
 
+  const uploadAvatarMutation = useUploadAvatar();
   const isOwnProfile = currentUser?.id === userId;
+
+  const handleAvatarChange = (file: File) => {
+    uploadAvatarMutation.mutate(file, {
+      onSuccess: () => {
+        toast.success('Avatar updated!');
+      },
+      onError: (err) => {
+        toast.error(err.message || 'Failed to upload avatar');
+      },
+    });
+  };
 
   // Invalid userId
   if (isNaN(userId) || userId <= 0) {
@@ -283,6 +532,9 @@ export default function ProfilePage() {
             avatarUrl={profile.avatarUrl}
             displayName={profile.displayName}
             username={profile.username}
+            isOwnProfile={isOwnProfile}
+            onAvatarChange={handleAvatarChange}
+            isUploading={uploadAvatarMutation.isPending}
           />
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-cq-text-primary truncate">
@@ -300,19 +552,9 @@ export default function ProfilePage() {
 
         {/* Stats row */}
         <div className="flex items-center gap-6 mt-6 pt-4 border-t border-cq-border">
-          <div className="text-center">
-            <div className="text-lg font-bold text-cq-text-primary">
-              {profile.followersCount}
-            </div>
-            <div className="text-sm text-cq-text-secondary">Followers</div>
-          </div>
+          <FollowListModal userId={userId} type="followers" count={profile.followersCount} />
           <div className="text-cq-text-muted">·</div>
-          <div className="text-center">
-            <div className="text-lg font-bold text-cq-text-primary">
-              {profile.followingCount}
-            </div>
-            <div className="text-sm text-cq-text-secondary">Following</div>
-          </div>
+          <FollowListModal userId={userId} type="following" count={profile.followingCount} />
           <div className="text-cq-text-muted">·</div>
           <div className="text-center">
             <div className="text-lg font-bold text-cq-text-primary">
@@ -322,6 +564,9 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Trophies section */}
+      <TrophiesSection userId={userId} />
 
       {/* Recent Activity card */}
       <div className="bg-cq-surface border border-cq-border rounded-xl p-6">
