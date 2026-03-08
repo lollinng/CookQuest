@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
-import { UserMenu } from '@/components/auth/user-menu'
 import { SkillUnlockBanner, shouldShowUnlockBanner } from '@/components/skill-unlock-banner'
 import { AnimatedCounter } from '@/components/animated-counter'
 import { DailyQuestCard } from '@/components/daily-quest-card'
@@ -99,7 +98,6 @@ export default function Dashboard() {
                   {coreLoop.overallProgress.completed} of {coreLoop.overallProgress.total} recipes completed
                 </div>
               </div>
-              <UserMenu />
             </div>
           </div>
         </CardHeader>
@@ -149,6 +147,39 @@ export default function Dashboard() {
           totalCompleted={coreLoop.overallProgress.completed}
           totalRecipes={coreLoop.overallProgress.total}
         />
+      )}
+
+      {/* Your Favorites */}
+      {isAuthenticated && favorites && favorites.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold flex items-center gap-2 text-cq-text-primary">
+              <Heart className="size-6 text-rose-500 fill-rose-500" />
+              Your Favorites
+            </h2>
+            <Link href="/favorites">
+              <Button variant="outline" size="sm" className="border-cq-border text-cq-text-secondary hover:bg-cq-surface-hover hover:text-cq-text-primary">
+                View all
+              </Button>
+            </Link>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {favorites.slice(0, 4).map((recipe, index) => (
+              <div
+                key={recipe.id}
+                className="animate-fade-in"
+                style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'backwards' }}
+              >
+                <RecipeCard
+                  recipe={{ ...recipe, isFavorited: true }}
+                  isCompleted={hydrated && isRecipeCompleted(recipe.id)}
+                  onToggleCompletion={toggleRecipeCompletion}
+                  compact
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="grid lg:grid-cols-3 gap-8">
@@ -236,39 +267,6 @@ export default function Dashboard() {
           )}
         </div>
       </div>
-
-      {/* Your Favorites */}
-      {isAuthenticated && favorites && favorites.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold flex items-center gap-2 text-cq-text-primary">
-              <Heart className="size-6 text-rose-500 fill-rose-500" />
-              Your Favorites
-            </h2>
-            <Link href="/favorites">
-              <Button variant="outline" size="sm" className="border-cq-border text-cq-text-secondary hover:bg-cq-surface-hover hover:text-cq-text-primary">
-                View all
-              </Button>
-            </Link>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {favorites.slice(0, 4).map((recipe, index) => (
-              <div
-                key={recipe.id}
-                className="animate-fade-in"
-                style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'backwards' }}
-              >
-                <RecipeCard
-                  recipe={{ ...recipe, isFavorited: true }}
-                  isCompleted={hydrated && isRecipeCompleted(recipe.id)}
-                  onToggleCompletion={toggleRecipeCompletion}
-                  compact
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Today's Cooking Tip */}
       <div className="animate-bounce-subtle" style={{ animationDelay: '400ms', animationFillMode: 'backwards' }}>

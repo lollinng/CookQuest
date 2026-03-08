@@ -311,7 +311,54 @@ export function useToggleFavorite() {
         return addFavorite(recipeId)
       }
     },
-    onSuccess: () => {
+    onMutate: async ({ recipeId, isFavorited }) => {
+      // Cancel outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: recipeKeys.all })
+      await queryClient.cancelQueries({ queryKey: favoriteKeys.all })
+
+      // Snapshot previous values
+      const previousRecipes = queryClient.getQueryData<Recipe[]>(recipeKeys.all)
+      const previousFavorites = queryClient.getQueryData<Recipe[]>(favoriteKeys.all)
+
+      // Optimistically update recipe list
+      queryClient.setQueryData<Recipe[]>(recipeKeys.all, (old) =>
+        old?.map(r => r.id === recipeId ? { ...r, isFavorited: !isFavorited } : r)
+      )
+
+      // Optimistically update recipe detail
+      queryClient.setQueryData(recipeKeys.detail(recipeId), (old: Recipe | undefined) =>
+        old ? { ...old, isFavorited: !isFavorited } : old
+      )
+
+      // Optimistically update favorites list
+      if (isFavorited) {
+        // Removing from favorites
+        queryClient.setQueryData<Recipe[]>(favoriteKeys.all, (old) =>
+          old?.filter(r => r.id !== recipeId)
+        )
+      } else {
+        // Adding to favorites — add from recipe list if available
+        const recipe = previousRecipes?.find(r => r.id === recipeId)
+        if (recipe) {
+          queryClient.setQueryData<Recipe[]>(favoriteKeys.all, (old) =>
+            old ? [{ ...recipe, isFavorited: true }, ...old] : [{ ...recipe, isFavorited: true }]
+          )
+        }
+      }
+
+      return { previousRecipes, previousFavorites }
+    },
+    onError: (_err, { recipeId }, context) => {
+      // Roll back on error
+      if (context?.previousRecipes) {
+        queryClient.setQueryData(recipeKeys.all, context.previousRecipes)
+      }
+      if (context?.previousFavorites) {
+        queryClient.setQueryData(favoriteKeys.all, context.previousFavorites)
+      }
+    },
+    onSettled: () => {
+      // Refetch to ensure server state is in sync
       queryClient.invalidateQueries({ queryKey: favoriteKeys.all })
       queryClient.invalidateQueries({ queryKey: recipeKeys.all })
     },

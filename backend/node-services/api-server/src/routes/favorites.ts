@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { param } from 'express-validator'
 import { DatabaseService } from '../services/database'
+import { RedisService } from '../services/redis'
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
 import { validateRequest } from '../middleware/validation'
 import { asyncHandler } from '../middleware/error-handler'
@@ -29,6 +30,7 @@ router.post('/recipes/:id/favorite',
     }
 
     await DatabaseService.addFavorite(userId, recipeId)
+    await RedisService.deleteByPattern('recipes:*')
 
     res.json({
       success: true,
@@ -46,6 +48,7 @@ router.delete('/recipes/:id/favorite',
     const recipeId = req.params.id
 
     await DatabaseService.removeFavorite(userId, recipeId)
+    await RedisService.deleteByPattern('recipes:*')
 
     res.json({
       success: true,

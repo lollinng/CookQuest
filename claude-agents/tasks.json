@@ -721,5 +721,80 @@
     ],
     "createdAt": "2026-03-08T16:00:00.000Z",
     "source": "inbox"
+  },
+  {
+    "id": "task_099",
+    "title": "[Bug] Favorite heart button doesn't turn red + optimistic UI fix",
+    "status": "done",
+    "priority": 2,
+    "type": "bug-fix",
+    "description": "## CRITICAL \u2014 Heart button stays outline after clicking\n\n### What's wrong\nThe FavoriteButton uses `recipe.isFavorited` from the server response, but:\n1. The `mapRecipe()` function in `hooks/use-recipes.ts` maps `is_favorited` from the API, but the recipe list endpoint caches responses in Redis for 5 minutes. After toggling, the stale cached response still has `is_favorited: false`.\n2. The `useToggleFavorite` mutation invalidates queries but doesn't do optimistic updates \u2014 so the UI waits for a refetch that returns stale cached data.\n3. On the home page `recentRecipes` come from `useRecipes()` which doesn't re-map `isFavorited` after the toggle.\n\n### What to fix\n1. **Add optimistic update to `useToggleFavorite`**: Use `onMutate` to optimistically update the recipe's `isFavorited` in all relevant query caches (`recipeKeys.all`, `recipeKeys.detail`, `favoriteKeys.all`). Roll back in `onError`.\n2. **Invalidate Redis cache**: The backend `POST/DELETE /recipes/:id/favorite` should call `RedisService.invalidatePattern('recipes:*')` so the next fetch gets fresh data with correct `is_favorited`.\n3. **Alternative simpler approach**: Track favorites client-side in a separate query (`favoriteKeys.all`) that returns a Set of recipe IDs, and derive `isFavorited` from that Set instead of relying on the recipe list endpoint.\n\n### Recommended approach (simplest)\nIn `FavoriteButton`, after mutation succeeds, the `useToggleFavorite` hook should:\n- Optimistically toggle `isFavorited` in the recipe query cache\n- Update `favoriteKeys.all` cache\n- Also invalidate the backend Redis cache from the favorite route\n\n### Backend fix\nIn `backend/node-services/api-server/src/routes/favorites.ts`:\n```typescript\n// After addFavorite / removeFavorite, bust the recipe list cache:\nawait RedisService.invalidatePattern('recipes:*')\n```\n\n### Frontend fix\nIn `hooks/use-recipes.ts` `useToggleFavorite`:\n```typescript\nonMutate: async ({ recipeId, isFavorited }) => {\n  // Cancel outgoing refetches\n  await queryClient.cancelQueries({ queryKey: recipeKeys.all })\n  // Snapshot previous value\n  const previous = queryClient.getQueryData(recipeKeys.all)\n  // Optimistically update\n  queryClient.setQueryData(recipeKeys.all, (old: Recipe[] | undefined) =>\n    old?.map(r => r.id === recipeId ? { ...r, isFavorited: !isFavorited } : r)\n  )\n  return { previous }\n},\nonError: (_err, _vars, context) => {\n  queryClient.setQueryData(recipeKeys.all, context?.previous)\n},\n```\n\n### Files to modify\n- `hooks/use-recipes.ts` \u2014 optimistic update in useToggleFavorite\n- `backend/node-services/api-server/src/routes/favorites.ts` \u2014 bust Redis cache\n\n### Acceptance criteria\n- Given a logged-in user on the home page, when they tap the heart, then it immediately turns rose/red filled\n- Given the user refreshes the page, the heart stays filled (server has correct state)\n- Given the user unfavorites, the heart immediately goes back to outline",
+    "files": [
+      "hooks/use-recipes.ts",
+      "backend/node-services/api-server/src/routes/favorites.ts"
+    ],
+    "createdAt": "2026-03-08T16:40:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T16:42:00.000Z",
+    "completedAt": "2026-03-08T16:48:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3,
+    "source": "user-feedback"
+  },
+  {
+    "id": "task_100",
+    "title": "[Feature] Add favorite button to recipe detail page",
+    "status": "done",
+    "priority": 3,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 No way to favorite a recipe from its detail page\n\n### What's wrong\nThe recipe detail page (`app/recipe/[recipeId]/page.tsx`) has no favorite button. Users must go back to the card list to favorite a recipe, which is bad UX.\n\n### What to build\nAdd a FavoriteButton to the recipe detail page header area, next to the metadata badges (time, difficulty, XP).\n\n### Implementation\n1. Import `FavoriteButton` from `@/components/favorite-button`\n2. The `recipe` object from `useRecipeDetail` already has `isFavorited` mapped via `mapRecipe()`\n3. Place the button in the metadata row (`<div className='flex flex-wrap items-center gap-4 mb-6'>`) after the existing badges\n4. Use `size='md'` for the detail page (larger than card)\n\n### Code change in `app/recipe/[recipeId]/page.tsx`\nIn the metadata flex row (around line 180), add:\n```tsx\n<FavoriteButton\n  recipeId={recipe.id}\n  isFavorited={recipe.isFavorited ?? false}\n  size=\"md\"\n/>\n```\n\nAlso import FavoriteButton at the top.\n\n### Acceptance criteria\n- Given a logged-in user on `/recipe/deep-fry`, then a heart icon button is visible in the recipe header\n- Given the user taps it, the heart fills rose and the recipe is added to favorites\n- Given a non-logged-in user, the heart button is not shown\n\n### Files to modify\n- `app/recipe/[recipeId]/page.tsx` \u2014 add FavoriteButton import and usage",
+    "files": [
+      "app/recipe/[recipeId]/page.tsx"
+    ],
+    "createdAt": "2026-03-08T16:40:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T16:48:00.000Z",
+    "completedAt": "2026-03-08T16:55:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3,
+    "source": "user-feedback"
+  },
+  {
+    "id": "task_101",
+    "title": "[Feature] Add persistent top navbar with favorites icon across all pages",
+    "status": "done",
+    "priority": 4,
+    "type": "enhancement",
+    "description": "## HIGH \u2014 No global navigation or favorites access point\n\n### What's wrong\nThere's no persistent top navbar. Users can only access favorites from the home page section. Like e-commerce sites, there should be a top bar with a heart/favorites icon visible on every page.\n\n### What to build\nCreate a `components/top-nav.tsx` component and add it to `app/layout.tsx`.\n\n### Design\n```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502  \ud83c\udf73 CookQuest          [\u2661 3]  [Recipes]  [\ud83d\udc64] \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n- Left: CookQuest logo/text (links to `/`)\n- Right: Heart icon with favorite count badge (links to `/favorites`), Recipes link (to `/recipes`), UserMenu\n- Sticky top, blurred background (`bg-cq-bg/80 backdrop-blur-md`)\n- Border bottom: `border-b border-cq-border`\n- Height: `h-14`\n- Mobile: compact, icons only on right side\n\n### Implementation\n1. Create `components/top-nav.tsx`\n2. Use `useFavoriteRecipes()` to get count (show badge only when > 0 and authenticated)\n3. Use `useAuth()` for auth state\n4. Move `UserMenu` from the home page header into the top nav\n5. In `app/layout.tsx`, add `<TopNav />` inside `<Providers>` above `<main>`\n6. In `app/page.tsx`, remove the duplicate `UserMenu` from the header card (it's now in the navbar)\n\n### Tailwind classes\n- Container: `sticky top-0 z-50 bg-cq-bg/80 backdrop-blur-md border-b border-cq-border`\n- Inner: `container mx-auto px-4 h-14 flex items-center justify-between`\n- Logo: `text-xl font-bold text-cq-text-primary flex items-center gap-2`\n- Fav icon: `relative` with `Heart` icon, badge as `absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] rounded-full size-4 flex items-center justify-center`\n\n### Acceptance criteria\n- Given any page in the app, the top navbar is visible with CookQuest branding and navigation icons\n- Given a logged-in user with 3 favorites, the heart icon shows a '3' badge\n- Given the user clicks the heart icon, they navigate to /favorites\n- The navbar is sticky and stays visible on scroll\n- Mobile responsive (icons shrink, text hides)\n\n### Files to create/modify\n- `components/top-nav.tsx` \u2014 NEW component\n- `app/layout.tsx` \u2014 add TopNav\n- `app/page.tsx` \u2014 remove duplicate UserMenu from header",
+    "files": [
+      "components/top-nav.tsx",
+      "app/layout.tsx",
+      "app/page.tsx"
+    ],
+    "createdAt": "2026-03-08T16:40:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T16:48:00.000Z",
+    "completedAt": "2026-03-08T16:55:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3,
+    "source": "user-feedback"
+  },
+  {
+    "id": "task_102",
+    "title": "[UI] Move 'Your Favorites' section above skills grid on home page",
+    "status": "done",
+    "priority": 5,
+    "type": "ui-fix",
+    "description": "## MEDIUM \u2014 Favorites section is buried below the fold\n\n### What's wrong\nThe 'Your Favorites' section is currently placed between the skills grid and the cooking tip \u2014 below the fold on most screens. It should be more prominent.\n\n### What to fix\nMove the 'Your Favorites' section to appear immediately after the Daily Quest Card, before the skills/recipes grid.\n\n### In `app/page.tsx`\nCut the entire `{/* Your Favorites */}` block and paste it between the `{/* Daily Quest Card */}` section and the `<div className='grid lg:grid-cols-3 gap-8'>` grid.\n\n### Acceptance criteria\n- Given a logged-in user with favorites, 'Your Favorites' appears above the Cooking Skills section\n- Given a user without favorites or not logged in, the section does not render (no empty space)\n- The section uses horizontal scroll on mobile (`overflow-x-auto flex gap-4` or the existing grid)\n\n### Files to modify\n- `app/page.tsx` \u2014 move the favorites section block",
+    "files": [
+      "app/page.tsx"
+    ],
+    "createdAt": "2026-03-08T16:40:00.000Z",
+    "assignedTo": "implementer-agent-main",
+    "assignedAt": "2026-03-08T16:48:00.000Z",
+    "completedAt": "2026-03-08T16:55:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3,
+    "source": "user-feedback"
   }
 ]

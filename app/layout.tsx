@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { TopNav } from '@/components/top-nav'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -53,6 +54,7 @@ export default function RootLayout({
         <Providers>
           <ErrorBoundary>
             <div className="min-h-screen bg-cq-bg">
+              <TopNav />
               <main className="container mx-auto px-4 py-6">
                 {children}
               </main>

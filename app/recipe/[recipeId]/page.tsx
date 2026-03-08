@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { showCompletionToast, showUncompleteToast } from '@/components/completion-toast'
 import Link from 'next/link'
 import { RecipeImage } from '@/components/recipe-image'
+import { FavoriteButton } from '@/components/favorite-button'
 import { SectionErrorBoundary } from '@/components/section-error-boundary'
 
 const SKILL_NAMES: Record<string, string> = {
@@ -199,6 +200,11 @@ export default function RecipeDetail() {
               <Users className="size-4 text-muted-foreground" />
               <span className="text-sm">Serves 2-4</span>
             </div>
+            <FavoriteButton
+              recipeId={recipe.id}
+              isFavorited={recipe.isFavorited ?? false}
+              size="md"
+            />
           </div>
 
           {/* Completion Toggle */}

@@ -110,6 +110,27 @@ class RedisServiceClass {
     }
   }
 
+  async deleteByPattern(pattern: string): Promise<void> {
+    if (!this.isConnected) return
+
+    try {
+      if (this.client instanceof InMemoryCache) {
+        await this.client.deleteByPattern(pattern)
+      } else {
+        // Use SCAN to find matching keys, then delete
+        const keys: string[] = []
+        for await (const key of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+          keys.push(key)
+        }
+        if (keys.length > 0) {
+          await this.client.del(keys)
+        }
+      }
+    } catch (error) {
+      logger.error({ err: error, pattern }, 'Redis deleteByPattern error')
+    }
+  }
+
   // Utility methods for common patterns
   async cacheResponse(key: string, data: any, ttlSeconds: number = 300): Promise<void> {
     await this.set(key, JSON.stringify(data), ttlSeconds)
@@ -162,6 +183,15 @@ class InMemoryCache {
 
   async ping(): Promise<string> {
     return 'PONG'
+  }
+
+  async deleteByPattern(pattern: string): Promise<void> {
+    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$')
+    for (const key of this.cache.keys()) {
+      if (regex.test(key)) {
+        this.cache.delete(key)
+      }
+    }
   }
 
   // Cleanup expired items periodically
