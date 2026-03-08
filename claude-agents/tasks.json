@@ -1067,5 +1067,23 @@
     "completedAt": null,
     "retryCount": 0,
     "maxRetries": 3
+  },
+  {
+    "id": "task_118",
+    "title": "[Bug] Friends feed empty — photo uploads don't create user_posts entries",
+    "status": "done",
+    "priority": 3,
+    "type": "bug-fix",
+    "description": "## HIGH — Friends Activity feed is always empty even when following users who uploaded photos\n\n### Bug Report\n**Reported via:** screenshot + description\n**Page/Route:** Friends dropdown (top nav) + /people page\n**Viewport:** all\n**Browser:** Chrome\n\n### Classification\n| Field | Value |\n|-------|-------|\n| Type | logic |\n| Phase | code |\n| Reproducibility | Always |\n| Regression | No (latent — photo uploads never created posts) |\n| Impact scope | All logged-in users who follow others |\n| Blocked workflows | Friends Activity feed, social engagement loop |\n| Security | None |\n\n### Environment\n- OS: macOS 14.3\n- Browser: Chrome\n- Viewport: desktop\n- Production: cook-quest-six.vercel.app + cookquest-api Cloud Run\n\n### Steps to Reproduce\n1. Login as admin@cookquest.dev\n2. Go to /people, search for 'Lolling'\n3. Follow Lolling (shows 'Following')\n4. Lolling has uploaded a recipe photo via the cookbook mode\n5. Click 'Friends' in top nav\n6. Friends Activity dropdown shows 'Follow people to see their cooking activity!'\n\n### Expected Behavior\nFriends Activity dropdown should show Lolling's photo upload as a feed item (e.g., 'Lolling shared a photo of Dal Tadka').\n\n### Actual Behavior\nFeed is empty because the `getFeed` query joins `user_posts` with `user_follows`, but photo uploads only insert into `user_recipe_photos` — they never create a `user_posts` row.\n\n### Root Cause Analysis\n**File:** `backend/node-services/api-server/src/routes/photos.ts:161`\n\nThe photo upload handler at line 161 calls `DatabaseService.upsertRecipePhoto()` but does NOT call `DatabaseService.createPost()` to create a `user_posts` entry with `post_type = 'photo_upload'`.\n\nCompare with recipe completion in `routes/recipes.ts:212` which correctly calls `createPost()` after marking a recipe complete.\n\n### Suggested Fix\nAfter the successful `upsertRecipePhoto()` call in `photos.ts:161`, add:\n```typescript\nawait DatabaseService.createPost(userId, 'photo_upload', recipeId, photoUrl, null)\n```\n\nAlso consider: should this be idempotent? If the user re-uploads a photo for the same recipe, should it create a duplicate post? Probably use `hasRecipeCompletionPost`-style check but for `photo_upload` type, or use an upsert pattern.\n\n### Screenshot Evidence\nUser-provided screenshot showing empty Friends Activity dropdown despite following a user.\n\n### Definition of Done\n- [ ] Photo uploads create a `user_posts` entry with `post_type = 'photo_upload'`\n- [ ] Friends feed shows photo upload posts from followed users\n- [ ] No duplicate posts on re-upload (idempotent)\n- [ ] No regressions in existing E2E suite\n- [ ] Visual verification: Friends dropdown shows the post after following + photo upload\n\n### Files to modify\n- `backend/node-services/api-server/src/routes/photos.ts` — add createPost call after upsertRecipePhoto",
+    "files": [
+      "backend/node-services/api-server/src/routes/photos.ts",
+      "backend/node-services/api-server/src/services/database.ts"
+    ],
+    "createdAt": "2026-03-08T19:42:00.000Z",
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-03-08T19:43:00.000Z",
+    "completedAt": "2026-03-08T19:45:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
   }
 ]

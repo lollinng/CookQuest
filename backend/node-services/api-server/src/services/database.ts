@@ -1350,6 +1350,14 @@ class DatabaseServiceClass {
     return rows.length > 0
   }
 
+  async hasPhotoUploadPost(userId: number, recipeId: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM user_posts WHERE user_id = $1 AND recipe_id = $2 AND post_type = 'photo_upload' LIMIT 1`,
+      [userId, recipeId]
+    )
+    return rows.length > 0
+  }
+
   // Generic query helpers (used by routes that haven't been fully migrated)
   async all(query: string, params: any[] = []): Promise<any[]> {
     const { rows } = await this.pool.query(query, params)

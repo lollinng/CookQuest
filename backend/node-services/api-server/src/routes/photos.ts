@@ -160,6 +160,12 @@ router.post('/recipes/:id/photos', authMiddleware, (req: Request, res: Response,
 
     await DatabaseService.upsertRecipePhoto(userId, recipeId, photoUrl, filename)
 
+    // Create a feed post for the photo upload (idempotent — skip if one already exists)
+    const hasPost = await DatabaseService.hasPhotoUploadPost(userId, recipeId)
+    if (!hasPost) {
+      await DatabaseService.createPost(userId, 'photo_upload', recipeId, photoUrl, undefined)
+    }
+
     res.json({ success: true, data: { photo_url: photoUrl, recipe_id: recipeId } })
   } catch (error: any) {
     logger.error({ err: error }, 'Photo upload error')
