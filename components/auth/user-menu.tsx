@@ -124,9 +124,11 @@ export function UserMenu() {
               </Link>
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem className="cursor-pointer text-cq-text-primary focus:bg-cq-surface-hover focus:text-cq-text-primary">
-            <UserIcon className="h-4 w-4" />
-            <span>Profile</span>
+          <DropdownMenuItem asChild className="cursor-pointer text-cq-text-primary focus:bg-cq-surface-hover focus:text-cq-text-primary">
+            <Link href={`/profile/${user.id}`}>
+              <UserIcon className="h-4 w-4" />
+              <span>Profile</span>
+            </Link>
           </DropdownMenuItem>
         </DropdownMenuGroup>
 

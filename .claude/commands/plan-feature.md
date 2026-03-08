@@ -51,6 +51,12 @@ Split the requirement into **implementation-sized tasks** (each task = 1-3 files
 - **Alternate even/odd** — pair tasks so both agents have work:
   - Even IDs (task_076, task_078) → agent 2
   - Odd IDs (task_075, task_077) → agent main
+- **Cross-lane independence (CRITICAL)** — Even tasks MUST NEVER depend on odd tasks, and odd tasks MUST NEVER depend on even tasks. This allows both agents to work fully in parallel without blocking each other.
+  - ✅ Even → Even dependency is OK (task_078 depends on task_076)
+  - ✅ Odd → Odd dependency is OK (task_077 depends on task_075)
+  - ❌ Even → Odd dependency is FORBIDDEN (task_078 must NOT depend on task_075)
+  - ❌ Odd → Even dependency is FORBIDDEN (task_077 must NOT depend on task_076)
+  - To achieve this, split work so each lane (even/odd) has a self-contained vertical slice. For example: if backend is odd and frontend is even, make sure the frontend task doesn't depend on the backend task — instead, have the frontend task define its own API contract/types and handle the case where the backend isn't ready yet.
 
 ## Step 5: Write Task Specs
 
