@@ -1,12 +1,19 @@
 # Bootstrap Agent Session
 
-You are starting a new CookQuest agent session. Follow these steps exactly.
+You are starting a new CookQuest agent session. Follow these steps exactly. **Fully autonomous — no confirmation prompts.**
 
-## Step 1: Determine Identity
+## Step 1: Register Identity (Auto)
 
-If `$ARGUMENTS` contains "main" or "1", you are `implementer-agent-main` (odd tasks).
-If `$ARGUMENTS` contains "2", you are `implementer-agent-2` (even tasks).
-If `$ARGUMENTS` is empty, ask the user: "Which agent am I? (main = odd tasks, 2 = even tasks)"
+Priority order:
+1. If `$ARGUMENTS` contains "main" or "1" → you are `implementer-agent-main` (odd tasks)
+2. If `$ARGUMENTS` contains "2" → you are `implementer-agent-2` (even tasks)
+3. If `$ARGUMENTS` is empty → read `claude-agents/agent-roster.json`. If `current` is non-null, use that identity. If null, default to `implementer-agent-main`.
+
+**No prompt.** Write your identity to `claude-agents/agent-roster.json`:
+- Set `current` to your agent name (e.g., `"implementer-agent-main"`)
+- Set `lastSessionStart` to current ISO timestamp
+
+Show: "Registered as **{agent-name}** ({odd|even} tasks)"
 
 ## Step 2: Check Infrastructure
 
@@ -16,6 +23,18 @@ Run these health checks in parallel:
 - `curl -s http://localhost:3000` or `http://localhost:3002` — frontend running
 
 If any service is down, tell the user and suggest `docker compose up -d` or `npm run dev`.
+
+## Step 2.5: Sync Obsidian Vault
+
+Run: `python3 scripts/obsidian-sync.py sync 2>/dev/null || true`
+
+Read `claude-agents/task-inbox.md`. If it has content below the separator (not just the template/comments):
+1. For each task idea, run the PM pipeline: clarify, scope, write task spec
+2. Append formatted tasks to `claude-agents/tasks.json`
+3. Clear `claude-agents/task-inbox.md` (reset to template with just the header and separator)
+4. Run `python3 scripts/obsidian-sync.py push 2>/dev/null || true`
+
+Show: "Processed {N} inbox items → added task_{X} through task_{Y}" (or "Inbox empty" if nothing to process)
 
 ## Step 3: Read Task Queue
 
@@ -30,7 +49,7 @@ Filter tasks by:
 2. Even/odd rule: if you are `implementer-agent-main`, pick odd-numbered task IDs (task_001, task_003, ...). If `implementer-agent-2`, pick even-numbered (task_002, task_004, ...).
 3. Highest priority first (lower number = higher priority). Tiebreak: lowest task ID.
 
-Show the selected task details and ask: "I'll pick up **{task title}** ({task ID}). Proceed?"
+Show the selected task details, then **immediately assign and begin** — no "Proceed?" prompt.
 
 ## Step 5: Assign & Begin Pipeline
 

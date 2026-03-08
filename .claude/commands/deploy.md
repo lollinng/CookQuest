@@ -12,7 +12,7 @@ Categorize changes:
 - **Both**: changes in both categories
 - **Infra/config-only**: files in `gcp/`, `docker-compose*`, `.github/`, `scripts/` — inform user, no deploy needed
 
-Tell the user what will be deployed:
+Show deploy summary (informational — no confirmation needed):
 ```
 Deploy Summary
 ──────────────────────
@@ -21,7 +21,7 @@ Backend (Cloud Run):  YES / NO / SKIP
 ──────────────────────
 ```
 
-Ask: "Proceed with deployment? (y/n)" — wait for confirmation before continuing.
+Proceed immediately.
 
 ## Step 1: Verify Build
 
@@ -51,9 +51,8 @@ git status
 
 If there are uncommitted changes:
 1. Show the user what's uncommitted
-2. Ask: "Commit these changes before deploying? (y/n)"
-3. If yes, stage relevant files and create a commit with a descriptive message
-4. Push to `main`: `git push origin main`
+2. Auto-commit: stage relevant files and create a commit with a descriptive message
+3. Push to `main`: `git push origin main`
 
 If already clean and pushed, skip this step.
 

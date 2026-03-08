@@ -1026,9 +1026,9 @@ class DatabaseServiceClass {
   }
 
   // Photo methods
-  async getUserRecipePhotos(userId: number): Promise<{ recipe_id: string; photo_url: string; uploaded_at: string }[]> {
+  async getUserRecipePhotos(userId: number): Promise<{ recipe_id: string; photo_url: string; storage_key: string | null; uploaded_at: string }[]> {
     const { rows } = await this.pool.query(
-      'SELECT recipe_id, photo_url, uploaded_at FROM user_recipe_photos WHERE user_id = $1 ORDER BY uploaded_at DESC',
+      'SELECT recipe_id, photo_url, storage_key, uploaded_at FROM user_recipe_photos WHERE user_id = $1 ORDER BY uploaded_at DESC',
       [userId]
     )
     return rows

@@ -1,12 +1,14 @@
 import { Storage } from '@google-cloud/storage';
 import path from 'path';
 import fs from 'fs/promises';
-import { mkdirSync } from 'fs';
+import { mkdirSync, createReadStream } from 'fs';
+import { Readable } from 'stream';
 import { logger } from './logger';
 
 export interface StorageService {
   upload(buffer: Buffer, filename: string, contentType: string): Promise<string>;
   delete(storageKey: string): Promise<void>;
+  stream(storageKey: string): Promise<Readable>;
 }
 
 // --- Google Cloud Storage implementation ---
@@ -34,6 +36,18 @@ class GcsStorageService implements StorageService {
     });
 
     return `https://storage.googleapis.com/${this.bucketName}/${filename}`;
+  }
+
+  async stream(storageKey: string): Promise<Readable> {
+    const bucket = this.storage.bucket(this.bucketName);
+    const file = bucket.file(storageKey);
+    const [exists] = await file.exists();
+    if (!exists) {
+      const err: any = new Error('File not found');
+      err.code = 404;
+      throw err;
+    }
+    return file.createReadStream();
   }
 
   async delete(storageKey: string): Promise<void> {
@@ -65,6 +79,12 @@ class LocalStorageService implements StorageService {
     const filePath = path.join(this.uploadsDir, filename);
     await fs.writeFile(filePath, buffer);
     return `${this.baseUrl}/uploads/${filename}`;
+  }
+
+  async stream(storageKey: string): Promise<Readable> {
+    const filePath = path.join(this.uploadsDir, storageKey);
+    await fs.access(filePath); // throws ENOENT if missing
+    return createReadStream(filePath);
   }
 
   async delete(storageKey: string): Promise<void> {

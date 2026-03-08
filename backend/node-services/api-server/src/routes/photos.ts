@@ -7,7 +7,6 @@ import { getStorageService } from '../services/storage'
 import { logger } from '../services/logger'
 
 const router = Router()
-router.use(authMiddleware)
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
@@ -48,8 +47,59 @@ function validateBufferContent(buffer: Buffer, declaredMime: string): boolean {
   )
 }
 
+/** Build the proxy URL for a photo filename */
+function buildPhotoProxyUrl(req: Request, filename: string): string {
+  const baseUrl = process.env.API_BASE_URL || `${req.protocol}://${req.get('host')}`
+  return `${baseUrl}/api/v1/photos/${filename}`
+}
+
+/** Rewrite a stored photo_url to use the proxy if it's a direct GCS URL */
+function rewritePhotoUrl(req: Request, photo: { photo_url: string; storage_key?: string | null }): string {
+  if (photo.storage_key) {
+    return buildPhotoProxyUrl(req, photo.storage_key)
+  }
+  // Fallback: extract filename from GCS URL
+  const gcsMatch = photo.photo_url.match(/storage\.googleapis\.com\/[^/]+\/(.+)$/)
+  if (gcsMatch) {
+    return buildPhotoProxyUrl(req, gcsMatch[1])
+  }
+  return photo.photo_url
+}
+
+// ── Public endpoint: serve photos via proxy ──
+// GET /api/v1/photos/:filename
+// No auth required — photos are semi-public (UUID filenames are unguessable)
+router.get('/photos/:filename', async (req: Request, res: Response) => {
+  const { filename } = req.params
+
+  // Strict filename validation — prevent path traversal
+  if (!/^r?-?[a-f0-9-]+\.(jpg|jpeg|png|webp)$/.test(filename)) {
+    return res.status(400).json({ success: false, error: { message: 'Invalid filename' } })
+  }
+
+  try {
+    const storage = getStorageService()
+    const stream = await storage.stream(filename)
+
+    const ext = filename.split('.').pop()
+    const contentType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+
+    res.set('Content-Type', contentType)
+    res.set('Cache-Control', 'public, max-age=31536000, immutable')
+    stream.pipe(res)
+  } catch (err: any) {
+    if (err.code === 404 || err.code === 'ENOENT') {
+      return res.status(404).json({ success: false, error: { message: 'Photo not found' } })
+    }
+    logger.error({ err, filename }, 'Photo stream error')
+    res.status(500).json({ success: false, error: { message: 'Failed to serve photo' } })
+  }
+})
+
+// ── Protected endpoints below ──
+
 // POST /api/v1/recipes/:id/photos
-router.post('/recipes/:id/photos', (req: Request, res: Response, next: NextFunction) => {
+router.post('/recipes/:id/photos', authMiddleware, (req: Request, res: Response, next: NextFunction) => {
   upload.single('photo')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       return res.status(400).json({ success: false, error: { message: err.message } })
@@ -103,7 +153,10 @@ router.post('/recipes/:id/photos', (req: Request, res: Response, next: NextFunct
 
     // Upload via storage service (GCS or local disk)
     const storage = getStorageService()
-    const photoUrl = await storage.upload(finalBuffer, filename, 'image/jpeg')
+    await storage.upload(finalBuffer, filename, 'image/jpeg')
+
+    // Store proxy URL (not direct GCS URL) so photos always serve through our API
+    const photoUrl = buildPhotoProxyUrl(req, filename)
 
     await DatabaseService.upsertRecipePhoto(userId, recipeId, photoUrl, filename)
 
@@ -115,11 +168,18 @@ router.post('/recipes/:id/photos', (req: Request, res: Response, next: NextFunct
 })
 
 // GET /api/v1/users/me/photos
-router.get('/users/me/photos', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/users/me/photos', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id
     const photos = await DatabaseService.getUserRecipePhotos(userId)
-    res.json({ success: true, data: { photos } })
+
+    // Rewrite any old direct GCS URLs to use the proxy
+    const rewritten = photos.map(p => ({
+      ...p,
+      photo_url: rewritePhotoUrl(req, p),
+    }))
+
+    res.json({ success: true, data: { photos: rewritten } })
   } catch (error: any) {
     logger.error({ err: error }, 'Get photos error')
     res.status(500).json({ success: false, error: { message: 'Failed to fetch photos' } })
@@ -127,7 +187,7 @@ router.get('/users/me/photos', async (req: AuthenticatedRequest, res: Response) 
 })
 
 // DELETE /api/v1/recipes/:id/photos
-router.delete('/recipes/:id/photos', async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/recipes/:id/photos', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id
     const recipeId = req.params.id

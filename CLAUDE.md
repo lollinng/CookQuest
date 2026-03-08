@@ -113,6 +113,19 @@ When the user asks to run a UI/UX audit, review the app visually, or create impr
 
 **Trigger phrases:** "run UI audit", "check the UI", "UX improvements", "make it more professional", "ui/ux agent", "visual review", "screenshot audit"
 
+## Bug Triage Agent
+
+When the user reports a bug, provides a screenshot of an issue, or asks to file a bug ticket:
+
+1. **Read** `claude-agents/bug-triage-agent.md` — it contains the full triage process, priority guide, and task schema
+2. **Investigate** the code to pinpoint the likely source (file paths, line numbers)
+3. **Reproduce** with Playwright — write a test at `e2e/bug-repro-{task-id}.spec.ts` that FAILS on the bug
+4. **Screenshot** evidence to `e2e/screenshots/bug-{task-id}.png`
+5. **Create ticket** in `claude-agents/tasks.json` with type `"bug-fix"` and title starting with `[Bug]`
+6. **Do NOT fix the bug** — only triage and ticket. Implementer agents handle fixes.
+
+**Trigger phrases:** "report bug", "file a bug", "bug report", "found a bug", "this is broken", "screenshot bug", "triage bug", "/report-bug"
+
 ## Normal Workflow (ONLY for bugs, refactors, questions — NOT for new features)
 **Only use this workflow when the request is clearly NOT a new feature/deliverable.**
 - Read the relevant code first before making changes
@@ -277,3 +290,5 @@ These commands are available via `/command-name` in Claude Code:
 | `/deploy` | Deploy to production — Frontend (Vercel) + Backend (GCP Cloud Run) |
 | `/ui-audit` | Run UI/UX auditor workflow (screenshots, review, create tasks) |
 | `/plan-feature` | PM agent: take a requirement, break it into tasks, write to tasks.json |
+| `/report-bug` | Bug triage: screenshot + description → investigate, reproduce, create ticket |
+| `/watch-inbox` | Sync vault, process inbox ideas into tasks, auto-pick and implement |

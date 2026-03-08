@@ -120,3 +120,7 @@ Next available: task_{first_unblocked} ({even|odd} → agent {name})
 - **Never change task status** — that's the implementer's job
 - **Keep descriptions self-contained** — an implementer agent should be able to complete the task without asking questions
 - **Match CookQuest conventions** — 2-space indent, single quotes, semicolons, shadcn/ui, Tailwind, PostgreSQL `$N` params
+
+## Step 8: Sync Dashboard
+
+Run: `python3 scripts/obsidian-sync.py push 2>/dev/null || true`

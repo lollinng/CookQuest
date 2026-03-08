@@ -1,6 +1,6 @@
 # Pick Next Task
 
-Read the task queue and assign yourself the next available task.
+Read the task queue and assign yourself the next available task. **Fully autonomous — no confirmation prompts.**
 
 ## Step 1: Read Queue
 
@@ -8,15 +8,19 @@ Read `claude-agents/tasks.json`. Filter to tasks where:
 - `status` is `"todo"`
 - `assignedTo` is null or empty string
 
-## Step 2: Apply Even/Odd Rule
+## Step 2: Detect Identity (Auto)
 
-If `$ARGUMENTS` contains "main" or "odd", filter to odd-numbered task IDs (task_001, task_003, task_005, ...).
-If `$ARGUMENTS` contains "2" or "even", filter to even-numbered task IDs (task_002, task_004, task_006, ...).
-If `$ARGUMENTS` is empty, ask: "Which agent are you? (main/odd or 2/even)"
+Priority order:
+1. If `$ARGUMENTS` contains "main" or "odd" → filter to **odd**-numbered task IDs
+2. If `$ARGUMENTS` contains "2" or "even" → filter to **even**-numbered task IDs
+3. If `$ARGUMENTS` is empty → read `claude-agents/agent-roster.json`, use the `current` agent's `handles` field (odd or even)
+4. Fallback (no roster or `current` is null) → default to `implementer-agent-main` (odd)
 
 The numeric suffix determines even/odd: `task_052` → 52 → even → agent 2.
 
-## Step 3: Select Task
+Show: "Auto-detected: **{agent-name}** → {odd|even} tasks" (informational only, no prompt)
+
+## Step 3: Select & Assign Task
 
 From the filtered list:
 1. Sort by `priority` ascending (lower = higher priority)
@@ -33,11 +37,7 @@ Files: {files list}
 Dependencies: {dependencies or "none"}
 ```
 
-Ask: "Assign this task to myself and begin? (y/n)"
-
-## Step 4: Assign
-
-If confirmed, update `claude-agents/tasks.json`:
+**Immediately assign** — update `claude-agents/tasks.json`:
 ```json
 {
   "assignedTo": "{your-agent-name}",
@@ -46,4 +46,12 @@ If confirmed, update `claude-agents/tasks.json`:
 }
 ```
 
-Then begin the 6-step pipeline from CLAUDE.md.
+If no eligible tasks found, show "No available tasks for {odd|even} queue." and stop.
+
+## Step 4: Begin Pipeline
+
+Immediately start the 6-step pipeline (PM → Architect → Test → Dev → Review → DevOps) as defined in CLAUDE.md.
+
+## Step 5: Sync Dashboard
+
+Run: `python3 scripts/obsidian-sync.py push 2>/dev/null || true`

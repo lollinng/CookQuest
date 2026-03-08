@@ -75,6 +75,17 @@
       }
     }
   },
+  "bugTriage": {
+    "enabled": true,
+    "maxOpenTickets": 10,
+    "requireScreenshot": false,
+    "requirePlaywrightRepro": true,
+    "reproTestDir": "e2e",
+    "screenshotDir": "e2e/screenshots",
+    "testConfig": "e2e/playwright-audit.config.ts",
+    "ticketPrefix": "[Bug]",
+    "ticketType": "bug-fix"
+  },
   "featureKeywords": [
     "make", "build", "create", "add", "implement", "develop",
     "set up", "setup", "configure", "enable", "integrate",

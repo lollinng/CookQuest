@@ -47,3 +47,7 @@ implementer-agent-main: X in_progress
 implementer-agent-2:    X in_progress
 unassigned todo:        X
 ```
+
+## Step: Sync Dashboard
+
+Run: `python3 scripts/obsidian-sync.py push 2>/dev/null || true`
