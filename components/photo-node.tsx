@@ -13,6 +13,8 @@ interface PhotoNodeProps {
   isUploading: boolean
   labelSide: 'left' | 'right'
   recipe: { title: string; time: string }
+  photoNumber?: number
+  totalPhotos?: number
 }
 
 export function PhotoNode({
@@ -24,6 +26,8 @@ export function PhotoNode({
   isUploading,
   labelSide,
   recipe,
+  photoNumber = 1,
+  totalPhotos = 0,
 }: PhotoNodeProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const hasPhoto = !!photoUrl
@@ -91,6 +95,13 @@ export function PhotoNode({
               )}
             </div>
 
+            {/* Photo number badge */}
+            {hasPhoto && totalPhotos > 0 && (
+              <div className="absolute top-0 left-0 bg-black/60 text-white text-xs font-medium rounded-full px-1.5 py-0.5 -translate-x-1 -translate-y-1">
+                {photoNumber}/{totalPhotos > 3 ? 3 : totalPhotos}
+              </div>
+            )}
+
             {/* Upload button overlay at bottom-right */}
             <button
               onClick={() => inputRef.current?.click()}
@@ -136,7 +147,7 @@ export function PhotoNode({
         </div>
         {!isLocked && !hasPhoto && (
           <div className="mt-1 text-xs text-amber-600 font-medium">
-            Tap camera to add photo
+            {totalPhotos > 0 ? `Add photo ${photoNumber}/3` : 'Tap camera to add photo'}
           </div>
         )}
       </div>

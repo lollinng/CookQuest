@@ -1287,6 +1287,42 @@ class DatabaseServiceClass {
       logger.info('Indian cooking plan Week 5 recipes seeded')
     }
 
+    // Migration 021: Multi-photo support (up to 3 photos per recipe)
+    if (!(await this.isMigrationApplied('021_multi_photo'))) {
+      await this.pool.query(`
+        ALTER TABLE user_recipe_photos ADD COLUMN IF NOT EXISTS photo_number SMALLINT NOT NULL DEFAULT 1;
+      `)
+      // Drop old unique constraint if exists, add new composite one
+      await this.pool.query(`
+        ALTER TABLE user_recipe_photos DROP CONSTRAINT IF EXISTS user_recipe_photos_user_id_recipe_id_key;
+      `)
+      await this.pool.query(`
+        DO $$ BEGIN
+          ALTER TABLE user_recipe_photos ADD CONSTRAINT user_recipe_photos_user_id_recipe_id_photo_number_key
+            UNIQUE(user_id, recipe_id, photo_number);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+        END $$;
+      `)
+      await this.pool.query(`
+        DO $$ BEGIN
+          ALTER TABLE user_recipe_photos ADD CONSTRAINT user_recipe_photos_photo_number_check
+            CHECK (photo_number BETWEEN 1 AND 3);
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+      `)
+      await this.recordMigration('021_multi_photo')
+      logger.info('Migration 021: Multi-photo support applied')
+    }
+
+    // Migration 022: Add onboarding tracking column
+    if (!(await this.isMigrationApplied('022_onboarding'))) {
+      await this.pool.query(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS has_completed_onboarding BOOLEAN DEFAULT false;
+      `)
+      await this.recordMigration('022_onboarding')
+      logger.info('Migration 022: Onboarding column applied')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
@@ -1644,24 +1680,51 @@ class DatabaseServiceClass {
   }
 
   // Photo methods
-  async getUserRecipePhotos(userId: number): Promise<{ recipe_id: string; photo_url: string; storage_key: string | null; uploaded_at: string }[]> {
+  async getUserRecipePhotos(userId: number): Promise<{ recipe_id: string; photo_url: string; storage_key: string | null; photo_number: number; uploaded_at: string }[]> {
     const { rows } = await this.pool.query(
-      'SELECT recipe_id, photo_url, storage_key, uploaded_at FROM user_recipe_photos WHERE user_id = $1 ORDER BY uploaded_at DESC',
+      'SELECT recipe_id, photo_url, storage_key, COALESCE(photo_number, 1) AS photo_number, uploaded_at FROM user_recipe_photos WHERE user_id = $1 ORDER BY recipe_id, photo_number',
       [userId]
     )
     return rows
   }
 
-  async upsertRecipePhoto(userId: number, recipeId: string, photoUrl: string, storageKey: string): Promise<void> {
-    await this.pool.query(
-      `INSERT INTO user_recipe_photos (user_id, recipe_id, photo_url, storage_key)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (user_id, recipe_id) DO UPDATE
-         SET photo_url   = EXCLUDED.photo_url,
-             storage_key = EXCLUDED.storage_key,
-             uploaded_at = CURRENT_TIMESTAMP`,
-      [userId, recipeId, photoUrl, storageKey]
+  async addRecipePhoto(userId: number, recipeId: string, photoUrl: string, storageKey: string): Promise<{ photo_url: string; recipe_id: string; photo_number: number }> {
+    // Check count
+    const { rows: countRows } = await this.pool.query(
+      'SELECT COUNT(*)::int AS cnt FROM user_recipe_photos WHERE user_id = $1 AND recipe_id = $2',
+      [userId, recipeId]
     )
+    if (countRows[0].cnt >= 3) {
+      throw new Error('Maximum 3 photos per recipe')
+    }
+
+    // Get next photo_number
+    const { rows: maxRows } = await this.pool.query(
+      'SELECT COALESCE(MAX(photo_number), 0) + 1 AS next_num FROM user_recipe_photos WHERE user_id = $1 AND recipe_id = $2',
+      [userId, recipeId]
+    )
+    const photoNumber = Math.min(maxRows[0].next_num, 3)
+
+    const { rows } = await this.pool.query(
+      `INSERT INTO user_recipe_photos (user_id, recipe_id, photo_url, storage_key, photo_number)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING photo_url, recipe_id, photo_number`,
+      [userId, recipeId, photoUrl, storageKey, photoNumber]
+    )
+    return rows[0]
+  }
+
+  /** @deprecated Use addRecipePhoto instead */
+  async upsertRecipePhoto(userId: number, recipeId: string, photoUrl: string, storageKey: string): Promise<void> {
+    await this.addRecipePhoto(userId, recipeId, photoUrl, storageKey)
+  }
+
+  async deleteRecipePhotoByNumber(userId: number, recipeId: string, photoNumber: number): Promise<{ storageKey: string } | null> {
+    const { rows } = await this.pool.query(
+      'DELETE FROM user_recipe_photos WHERE user_id = $1 AND recipe_id = $2 AND photo_number = $3 RETURNING storage_key',
+      [userId, recipeId, photoNumber]
+    )
+    return rows[0] ? { storageKey: rows[0].storage_key } : null
   }
 
   async deleteRecipePhoto(userId: number, recipeId: string): Promise<{ storageKey: string } | null> {
@@ -1670,6 +1733,21 @@ class DatabaseServiceClass {
       [userId, recipeId]
     )
     return rows[0] ? { storageKey: rows[0].storage_key } : null
+  }
+
+  async getRecipePhotoCount(userId: number, recipeId: string): Promise<number> {
+    const { rows } = await this.pool.query(
+      'SELECT COUNT(*)::int AS cnt FROM user_recipe_photos WHERE user_id = $1 AND recipe_id = $2',
+      [userId, recipeId]
+    )
+    return rows[0].cnt
+  }
+
+  async updatePostPhotoUrl(userId: number, recipeId: string, photoUrl: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE user_posts SET photo_url = $1 WHERE user_id = $2 AND recipe_id = $3 AND post_type = 'photo_upload'`,
+      [photoUrl, userId, recipeId]
+    )
   }
 
   // Session cleanup — remove expired sessions
@@ -1879,7 +1957,13 @@ class DatabaseServiceClass {
         up.photo_url, up.caption, COALESCE(up.comments_count, 0) AS comments_count,
         COALESCE(up.likes_count, 0) AS likes_count,
         EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = up.id AND pl.user_id = $2) AS is_liked,
-        up.created_at
+        up.created_at,
+        COALESCE(
+          (SELECT json_agg(urp.photo_url ORDER BY urp.photo_number)
+           FROM user_recipe_photos urp
+           WHERE urp.user_id = up.user_id AND urp.recipe_id = up.recipe_id),
+          '[]'::json
+        ) AS photos
        FROM user_posts up
        JOIN users u ON u.id = up.user_id
        LEFT JOIN recipes r ON r.id = up.recipe_id
@@ -1928,7 +2012,13 @@ class DatabaseServiceClass {
         up.photo_url, up.caption, COALESCE(up.comments_count, 0) AS comments_count,
         COALESCE(up.likes_count, 0) AS likes_count,
         EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = up.id AND pl.user_id = $1) AS is_liked,
-        up.created_at
+        up.created_at,
+        COALESCE(
+          (SELECT json_agg(urp.photo_url ORDER BY urp.photo_number)
+           FROM user_recipe_photos urp
+           WHERE urp.user_id = up.user_id AND urp.recipe_id = up.recipe_id),
+          '[]'::json
+        ) AS photos
        FROM user_posts up
        JOIN user_follows uf ON uf.following_id = up.user_id AND uf.follower_id = $1
        JOIN users u ON u.id = up.user_id

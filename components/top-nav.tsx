@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { Bell, ChefHat, Flame, Heart, Newspaper, Users, UtensilsCrossed } from 'lucide-react';
 import { UserMenu } from '@/components/auth/user-menu';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useAuth } from '@/lib/auth-context';
 import { useFavoriteRecipes } from '@/hooks/use-recipes';
 import { useUnreadNotificationCount } from '@/hooks/use-social';
@@ -48,89 +47,37 @@ export function TopNav() {
           </Link>
 
           {/* Favorites link */}
-          {isAuthenticated ? (
-            <Link
-              href="/favorites"
-              data-testid="nav-favorites-link"
-              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-rose-400 hover:bg-cq-surface-hover transition-colors"
-            >
-              <Heart className={`size-4 ${favCount > 0 ? 'text-rose-500 fill-rose-500' : ''}`} />
-              <span className="hidden sm:inline">Favorites</span>
-              {favCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-bold rounded-full size-4 flex items-center justify-center leading-none">
-                  {favCount > 9 ? '9+' : favCount}
-                </span>
-              )}
-            </Link>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link
-                  href="/favorites"
-                  data-testid="nav-favorites-link"
-                  className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-muted opacity-60 hover:opacity-80 hover:bg-cq-surface-hover transition-all"
-                >
-                  <Heart className="size-4" />
-                  <span className="hidden sm:inline">Favorites</span>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-cq-surface text-cq-text-primary border border-cq-border">
-                Sign in to save favorites
-              </TooltipContent>
-            </Tooltip>
-          )}
+          <Link
+            href="/favorites"
+            data-testid="nav-favorites-link"
+            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-rose-400 hover:bg-cq-surface-hover transition-colors"
+          >
+            <Heart className={`size-4 ${favCount > 0 ? 'text-rose-500 fill-rose-500' : ''}`} />
+            <span className="hidden sm:inline">Favorites</span>
+            {favCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-bold rounded-full size-4 flex items-center justify-center leading-none">
+                {favCount > 9 ? '9+' : favCount}
+              </span>
+            )}
+          </Link>
 
           {/* People link */}
-          {isAuthenticated ? (
-            <Link
-              href="/people"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-cq-text-primary hover:bg-cq-surface-hover transition-colors"
-            >
-              <Users className="size-4" />
-              <span className="hidden sm:inline">People</span>
-            </Link>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link
-                  href="/people"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-muted opacity-60 hover:opacity-80 hover:bg-cq-surface-hover transition-all"
-                >
-                  <Users className="size-4" />
-                  <span className="hidden sm:inline">People</span>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-cq-surface text-cq-text-primary border border-cq-border">
-                Sign in to find people
-              </TooltipContent>
-            </Tooltip>
-          )}
+          <Link
+            href="/people"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-cq-text-primary hover:bg-cq-surface-hover transition-colors"
+          >
+            <Users className="size-4" />
+            <span className="hidden sm:inline">People</span>
+          </Link>
 
           {/* Feed link */}
-          {isAuthenticated ? (
-            <Link
-              href="/feed"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-cq-text-primary hover:bg-cq-surface-hover transition-colors"
-            >
-              <Newspaper className="size-4" />
-              <span className="hidden sm:inline">Feed</span>
-            </Link>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link
-                  href="/feed"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-muted opacity-60 hover:opacity-80 hover:bg-cq-surface-hover transition-all"
-                >
-                  <Newspaper className="size-4" />
-                  <span className="hidden sm:inline">Feed</span>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-cq-surface text-cq-text-primary border border-cq-border">
-                Sign in to see your feed
-              </TooltipContent>
-            </Tooltip>
-          )}
+          <Link
+            href="/feed"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-cq-text-primary hover:bg-cq-surface-hover transition-colors"
+          >
+            <Newspaper className="size-4" />
+            <span className="hidden sm:inline">Feed</span>
+          </Link>
 
           {/* Notifications bell */}
           {isAuthenticated && (

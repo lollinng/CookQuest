@@ -1,7 +1,7 @@
 'use client'
 
 import { Check, Lock, Star, Crown } from 'lucide-react'
-import type { Recipe } from '@/lib/types'
+import type { Recipe, RecipePhoto } from '@/lib/types'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { PhotoNode } from './photo-node'
@@ -14,7 +14,7 @@ interface LearningPathProps {
   skillIcon: string
   skillName: string
   mode?: 'learn' | 'cookbook'
-  userPhotos?: Map<string, string>
+  userPhotos?: Map<string, RecipePhoto[]>
   onPhotoUpload?: (recipeId: string, file: File) => void
   uploadingRecipeId?: string | null
 }
@@ -287,6 +287,49 @@ export function LearningPath({
   const currentIndex = recipes.findIndex(r => !isRecipeCompleted(r.id))
   const isCookbook = mode === 'cookbook'
 
+  // In cookbook mode, build expanded node list (multiple photo nodes per recipe)
+  type CookbookNode = {
+    recipe: Recipe
+    recipeIndex: number
+    photoUrl: string | undefined
+    photoNumber: number
+    totalPhotos: number
+    isAddNode: boolean // empty "add photo" placeholder
+  }
+
+  const cookbookNodes: CookbookNode[] = []
+  if (isCookbook) {
+    for (let ri = 0; ri < recipes.length; ri++) {
+      const recipe = recipes[ri]
+      const photos = userPhotos?.get(recipe.id) || []
+      const total = photos.length
+      // Render a node for each existing photo
+      for (const photo of photos) {
+        cookbookNodes.push({
+          recipe,
+          recipeIndex: ri,
+          photoUrl: photo.photoUrl,
+          photoNumber: photo.photoNumber,
+          totalPhotos: total,
+          isAddNode: false,
+        })
+      }
+      // If under 3, add one empty upload node
+      if (total < 3) {
+        cookbookNodes.push({
+          recipe,
+          recipeIndex: ri,
+          photoUrl: undefined,
+          photoNumber: total + 1,
+          totalPhotos: total,
+          isAddNode: true,
+        })
+      }
+    }
+  }
+
+  const nodeCount = isCookbook ? cookbookNodes.length : recipes.length
+
   // Chef messages config
   const chefMessages = [
     { afterIndex: 0, position: 'right' as const, message: "Nice work! You're on your way!" },
@@ -299,11 +342,14 @@ export function LearningPath({
   const spacing = isCookbook ? COOKBOOK_NODE_SPACING : NODE_SPACING
   const positions: { x: number; y: number }[] = []
   let cumulativeY = START_Y
-  for (let i = 0; i < recipes.length; i++) {
+  for (let i = 0; i < nodeCount; i++) {
     positions.push({ x: getNodePosition(i, containerWidth).x, y: cumulativeY })
     cumulativeY += spacing
-    const hasChef = chefMessages.some(cm => cm.afterIndex === i && isRecipeCompleted(recipes[i].id))
-    if (hasChef) cumulativeY += CHEF_EXTRA
+    // Chef messages only in learn mode (based on recipe index)
+    if (!isCookbook) {
+      const hasChef = chefMessages.some(cm => cm.afterIndex === i && isRecipeCompleted(recipes[i].id))
+      if (hasChef) cumulativeY += CHEF_EXTRA
+    }
   }
 
   const trophyPos = { x: 0, y: cumulativeY }
@@ -354,7 +400,10 @@ export function LearningPath({
           {allPoints.map((point, i) => {
             if (i >= allPoints.length - 1) return null
             const next = allPoints[i + 1]
-            const isComp = i < recipes.length && isRecipeCompleted(recipes[i].id)
+            // For cookbook mode, get recipe completion from cookbookNodes
+            const isComp = isCookbook
+              ? (i < cookbookNodes.length && isRecipeCompleted(cookbookNodes[i].recipe.id))
+              : (i < recipes.length && isRecipeCompleted(recipes[i].id))
             const midY = (point.y + next.y) / 2
             return (
               <path
@@ -375,37 +424,59 @@ export function LearningPath({
         </svg>
 
         {/* Nodes */}
-        {recipes.map((recipe, index) => {
-          const pos = positions[index]
-          const isCompleted = isRecipeCompleted(recipe.id)
-          const isLocked = index > 0 && !isRecipeCompleted(recipes[index - 1].id) && !isCompleted
-          const isCurrent = index === currentIndex
-          const labelSide = getLabelSide(pos.x, index)
-          const isCheckpoint = index % 3 === 0
+        {isCookbook ? (
+          cookbookNodes.map((node, index) => {
+            const pos = positions[index]
+            if (!pos) return null
+            const isCompleted = isRecipeCompleted(node.recipe.id)
+            const isLocked = node.recipeIndex > 0 && !isRecipeCompleted(recipes[node.recipeIndex - 1].id) && !isCompleted
+            const labelSide = getLabelSide(pos.x, index)
+            const isCheckpoint = node.recipeIndex % 3 === 0 && node.photoNumber === 1
 
-          return (
-            <div
-              key={recipe.id}
-              className="absolute"
-              style={{
-                left: centerX + pos.x,
-                top: pos.y,
-                transform: 'translate(-50%, -50%)',
-              }}
-            >
-              {isCookbook ? (
+            return (
+              <div
+                key={`${node.recipe.id}-${node.photoNumber}`}
+                className="absolute"
+                style={{
+                  left: centerX + pos.x,
+                  top: pos.y,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
                 <PhotoNode
-                  recipeId={recipe.id}
-                  photoUrl={userPhotos?.get(recipe.id)}
+                  recipeId={node.recipe.id}
+                  photoUrl={node.photoUrl}
                   isLocked={isLocked}
                   isCompleted={isCompleted}
                   isCheckpoint={isCheckpoint}
                   onUpload={onPhotoUpload || (() => {})}
-                  isUploading={uploadingRecipeId === recipe.id}
+                  isUploading={uploadingRecipeId === node.recipe.id}
                   labelSide={labelSide}
-                  recipe={{ title: recipe.title, time: recipe.time }}
+                  recipe={{ title: node.recipe.title, time: node.recipe.time }}
+                  photoNumber={node.photoNumber}
+                  totalPhotos={node.totalPhotos}
                 />
-              ) : (
+              </div>
+            )
+          })
+        ) : (
+          recipes.map((recipe, index) => {
+            const pos = positions[index]
+            const isCompleted = isRecipeCompleted(recipe.id)
+            const isLocked = index > 0 && !isRecipeCompleted(recipes[index - 1].id) && !isCompleted
+            const isCurrent = index === currentIndex
+            const labelSide = getLabelSide(pos.x, index)
+
+            return (
+              <div
+                key={recipe.id}
+                className="absolute"
+                style={{
+                  left: centerX + pos.x,
+                  top: pos.y,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
                 <PathNode
                   recipe={recipe}
                   isCompleted={isCompleted}
@@ -416,10 +487,10 @@ export function LearningPath({
                   onToggle={onToggleCompletion}
                   labelSide={labelSide}
                 />
-              )}
-            </div>
-          )
-        })}
+              </div>
+            )
+          })
+        )}
 
         {/* Chef messages between nodes */}
         {chefMessages.map((cm, i) => {

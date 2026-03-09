@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Heart, MessageCircle, Trophy } from 'lucide-react';
 import { CommentSection } from '@/components/post-comments';
+import { PhotoCarousel } from '@/components/photo-carousel';
 import { useTogglePostLike } from '@/hooks/use-social';
 import { useAuth } from '@/lib/auth-context';
 import { getAvatarColor, getInitials, formatRelativeTime, getActionText } from '@/lib/social-helpers';
@@ -46,14 +47,27 @@ export function FeedPostCard({ post }: { post: UserPost }) {
         </div>
       ) : (
         <>
-          {(post.photoUrl || post.recipeImageUrl) && (
-            <img
-              src={post.photoUrl || post.recipeImageUrl!}
-              alt={post.recipeTitle || 'Post image'}
-              className="w-full aspect-[4/3] object-cover"
-              loading="lazy"
-            />
-          )}
+          {(() => {
+            // Build photos array with fallback for backwards compat
+            const photos = (post.photos && post.photos.length > 0)
+              ? post.photos
+              : [post.photoUrl || post.recipeImageUrl].filter(Boolean) as string[]
+
+            if (photos.length > 1) {
+              return <PhotoCarousel photos={photos} />
+            } else if (photos.length === 1) {
+              return (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={photos[0]}
+                  alt={post.recipeTitle || 'Post image'}
+                  className="w-full aspect-[4/3] object-cover"
+                  loading="lazy"
+                />
+              )
+            }
+            return null
+          })()}
         </>
       )}
 

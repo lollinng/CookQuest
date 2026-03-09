@@ -79,6 +79,16 @@ export interface UserStats {
   skillsMastered: number
 }
 
+// ── Photos ──
+
+export interface RecipePhoto {
+  id: number
+  recipeId: string
+  photoUrl: string
+  photoNumber: number
+  uploadedAt: string
+}
+
 // ── Social ──
 
 export interface UserProfile {
@@ -104,6 +114,7 @@ export interface UserPost {
   recipeTitle: string | null
   recipeImageUrl: string | null
   photoUrl: string | null
+  photos: string[]
   caption: string | null
   commentsCount: number
   likesCount: number

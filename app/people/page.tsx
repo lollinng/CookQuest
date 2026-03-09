@@ -13,6 +13,8 @@ import {
   useFriendsLeaderboard,
 } from '@/hooks/use-social';
 import { useAuth } from '@/lib/auth-context';
+import { DemoModeBanner } from '@/components/onboarding/demo-mode-banner';
+import { useDemoPeople } from '@/hooks/use-onboarding';
 import type { LeaderboardEntry } from '@/lib/types';
 
 function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
@@ -119,11 +121,44 @@ function LeaderboardSection() {
   );
 }
 
+function DemoPeopleSection() {
+  const { data: demoPeople } = useDemoPeople();
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+      <h1 className="text-2xl font-bold text-cq-text-primary">Find People</h1>
+      <DemoModeBanner
+        title="Find and follow home cooks!"
+        subtitle="Join to discover people, see their progress, and cook together."
+      />
+      {demoPeople && (
+        <div className="flex flex-col gap-3">
+          {demoPeople.map((person, i) => (
+            <div key={i} className="bg-cq-surface border border-cq-border rounded-xl p-4 flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={person.avatarUrl} alt={person.username} className="size-10 rounded-full object-cover" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-cq-text-primary truncate">{person.displayName}</p>
+                <p className="text-xs text-cq-text-secondary">@{person.username} &middot; {person.recipesCompleted} recipes &middot; {person.streakDays}d streak</p>
+              </div>
+              <Link href="/onboarding">
+                <button className="bg-cq-primary text-white rounded-lg px-4 py-1.5 text-sm font-medium hover:opacity-90 transition-opacity">
+                  Sign up to follow
+                </button>
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PeoplePage() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
 
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { data: results, isLoading } = useSearchUsers(debouncedQuery);
   const followMutation = useFollowUser();
   const unfollowMutation = useUnfollowUser();
@@ -145,6 +180,10 @@ export default function PeoplePage() {
   const showLoading = !showDefault && isLoading;
   const showEmpty = !showDefault && !isLoading && results && results.length === 0;
   const showResults = !showDefault && !isLoading && results && results.length > 0;
+
+  if (!isAuthenticated) {
+    return <DemoPeopleSection />;
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">

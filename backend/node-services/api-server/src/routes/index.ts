@@ -12,6 +12,8 @@ import { ingredientRoutes } from './ingredients'
 import { favoriteRoutes } from './favorites'
 import { socialRoutes } from './social'
 import { adminRoutes } from './admin'
+import { onboardingRoutes } from './onboarding'
+import { demoRoutes } from './demo'
 
 export function initializeRoutes(app: Express) {
   // API version prefix
@@ -26,6 +28,12 @@ export function initializeRoutes(app: Express) {
 
   // Admin routes (auth + admin gate, handled inside admin.ts)
   app.use(`${apiPrefix}/admin`, adminRoutes)
+
+  // Onboarding routes (auth required)
+  app.use(`${apiPrefix}/onboarding`, authMiddleware, onboardingRoutes)
+
+  // Demo routes (public, no auth required)
+  app.use(`${apiPrefix}/demo`, demoRoutes)
 
   // Protected routes (authentication + alpha access required)
   // authMiddleware runs first to populate req.user, then allowedMiddleware checks isAllowed

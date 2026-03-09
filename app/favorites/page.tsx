@@ -8,6 +8,8 @@ import { RecipeCard } from '@/components/recipe-card'
 import { useFavoriteRecipes } from '@/hooks/use-recipes'
 import { useRecipeStore, useStoreHydrated } from '@/lib/stores/recipe-store'
 import { useAuth } from '@/lib/auth-context'
+import { DemoModeBanner } from '@/components/onboarding/demo-mode-banner'
+import { useDemoFavorites } from '@/hooks/use-onboarding'
 import Link from 'next/link'
 
 export default function FavoritesPage() {
@@ -15,6 +17,7 @@ export default function FavoritesPage() {
   const hydrated = useStoreHydrated()
   const { isRecipeCompleted, toggleRecipeCompletion } = useRecipeStore()
   const { data: favorites, isLoading, isError } = useFavoriteRecipes()
+  const { data: demoRecipes } = useDemoFavorites()
 
   if (authLoading) {
     return (
@@ -37,19 +40,31 @@ export default function FavoritesPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="max-w-6xl mx-auto">
-        <Card className="bg-cq-surface border-cq-border">
-          <CardContent className="p-12 text-center space-y-4">
-            <Heart className="size-12 text-cq-text-muted mx-auto" />
-            <h2 className="text-2xl font-bold text-cq-text-primary">Sign in to see your favorites</h2>
-            <p className="text-cq-text-secondary">
-              Log in to save recipes to your watchlist and access them from anywhere.
-            </p>
-            <Link href="/">
-              <Button className="bg-cq-primary hover:bg-cq-primary/90">Back to Home</Button>
-            </Link>
-          </CardContent>
-        </Card>
+      <div className="max-w-6xl mx-auto space-y-6">
+        <h1 className="text-2xl font-bold flex items-center gap-2 text-cq-text-primary">
+          <Heart className="size-6 text-rose-500" />
+          Favorites
+        </h1>
+        <DemoModeBanner
+          title="Save recipes you love"
+          subtitle="Sign up to bookmark your favorites and access them anytime."
+        />
+        {demoRecipes && demoRecipes.length > 0 && (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 opacity-75">
+            {demoRecipes.map((recipe) => (
+              <Card key={recipe.id} className="overflow-hidden bg-cq-surface border-cq-border">
+                {recipe.imageUrl && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={recipe.imageUrl} alt={recipe.title} className="w-full h-32 object-cover" loading="lazy" />
+                )}
+                <CardContent className="p-3">
+                  <p className="text-sm font-medium text-cq-text-primary">{recipe.title}</p>
+                  <p className="text-xs text-cq-text-secondary mt-1">{recipe.difficulty} &middot; {recipe.time}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     )
   }

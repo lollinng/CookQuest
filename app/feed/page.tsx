@@ -2,15 +2,63 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Users, Globe } from 'lucide-react';
+import { Users, Globe, Heart, MessageCircle, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
 import { useFeed, useWorldFeed } from '@/hooks/use-social';
 import { FeedPostCard } from '@/components/feed-post-card';
+import { DemoModeBanner } from '@/components/onboarding/demo-mode-banner';
+import { useDemoFeed } from '@/hooks/use-onboarding';
 
 type FeedTab = 'world' | 'friends';
 type DifficultyFilter = 'all' | 'beginner' | 'intermediate' | 'advanced';
+
+function DemoFeedCard({ post }: { post: any }) {
+  return (
+    <div className="bg-cq-surface border border-cq-border rounded-xl overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={post.avatarUrl} alt={post.username} className="w-10 h-10 rounded-full object-cover" />
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-semibold text-cq-text-primary">{post.username}</span>
+          <p className="text-xs text-muted-foreground">
+            {post.type === 'recipe_completed' ? `Completed ${post.recipeTitle}` :
+             post.type === 'photo_upload' ? `Shared a photo of ${post.recipeTitle}` :
+             'Reached a milestone'}
+          </p>
+        </div>
+      </div>
+
+      {post.type === 'milestone' ? (
+        <div className="px-4 py-8 bg-gradient-to-br from-amber-500/10 to-orange-500/10 flex flex-col items-center gap-2">
+          <Trophy className="size-10 text-amber-400" />
+          <p className="text-lg font-semibold text-cq-text-primary text-center">{post.caption}</p>
+        </div>
+      ) : post.photoUrl ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img src={post.photoUrl} alt={post.recipeTitle || 'Post'} className="w-full aspect-[4/3] object-cover" loading="lazy" />
+      ) : null}
+
+      <div className="px-4 py-3 space-y-1">
+        {post.caption && post.type !== 'milestone' && (
+          <p className="text-sm text-cq-text-secondary">{post.caption}</p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-4 px-4 py-2 border-t border-cq-border/50">
+        <span className="flex items-center gap-1.5 text-sm text-cq-text-muted">
+          <Heart className="size-5" />
+          {post.likes > 0 && <span className="font-medium">{post.likes}</span>}
+        </span>
+        <span className="flex items-center gap-1.5 text-sm text-cq-text-muted">
+          <MessageCircle className="size-5" />
+          {post.comments > 0 && <span className="font-medium">{post.comments}</span>}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function FeedPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -19,13 +67,25 @@ export default function FeedPage() {
 
   const worldFeed = useWorldFeed(30, difficulty === 'all' ? undefined : difficulty);
   const friendsFeed = useFeed();
+  const { data: demoPosts } = useDemoFeed();
 
   const { data: posts, isLoading } = tab === 'world' ? worldFeed : friendsFeed;
 
   if (!authLoading && !isAuthenticated) {
     return (
-      <div className="max-w-xl mx-auto flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <p className="text-cq-text-secondary">Sign in to see your feed</p>
+      <div className="max-w-xl mx-auto space-y-6">
+        <h1 className="text-2xl font-bold text-cq-text-primary">Feed</h1>
+        <DemoModeBanner
+          title="See what other cooks are making!"
+          subtitle="Follow people to build your personalized feed."
+        />
+        {demoPosts && (
+          <div className="flex flex-col gap-6">
+            {demoPosts.map((post) => (
+              <DemoFeedCard key={post.id} post={post} />
+            ))}
+          </div>
+        )}
       </div>
     );
   }

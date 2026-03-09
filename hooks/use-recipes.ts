@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient, useMutation, keepPreviousData } from '@tanstack/react-query'
-import type { Recipe, SkillType, StructuredIngredient } from '@/lib/types'
+import type { Recipe, RecipePhoto, SkillType, StructuredIngredient } from '@/lib/types'
 import { getRecipes, getRecipeById, getRecipesBySkill, type RecipeFilters } from '@/lib/api/recipes'
 import { completeRecipe as apiCompleteRecipe, uncompleteRecipe as apiUncompleteRecipe, type CompletionResult } from '@/lib/api/progress'
 import { getSkills, getSkillById } from '@/lib/api/skills'
@@ -195,10 +195,25 @@ export function useUserPhotos() {
     queryKey: photoKeys.userPhotos,
     queryFn: async () => {
       try {
-        const data = await apiClient<{ photos: Array<{ recipe_id: string; photo_url: string; uploaded_at: string }> }>('/users/me/photos')
-        return new Map(data.photos.map(p => [p.recipe_id, p.photo_url]))
+        const data = await apiClient<{
+          photos: Array<{ recipe_id: string; photo_url: string; photo_number: number; uploaded_at: string }>
+          grouped: Record<string, Array<{ photoUrl: string; photoNumber: number; uploadedAt: string }>>
+        }>('/users/me/photos')
+
+        // Build Map<recipeId, RecipePhoto[]> from grouped data
+        const map = new Map<string, RecipePhoto[]>()
+        for (const [recipeId, photos] of Object.entries(data.grouped)) {
+          map.set(recipeId, photos.map((p, i) => ({
+            id: i,
+            recipeId,
+            photoUrl: p.photoUrl,
+            photoNumber: p.photoNumber,
+            uploadedAt: p.uploadedAt,
+          })))
+        }
+        return map
       } catch {
-        return new Map<string, string>()
+        return new Map<string, RecipePhoto[]>()
       }
     },
     staleTime: 2 * 60 * 1000,
@@ -228,14 +243,11 @@ export function useUploadRecipePhoto() {
       }
 
       const json = await response.json()
-      return json.data as { photo_url: string; recipe_id: string }
+      return json.data as { photo_url: string; recipe_id: string; photo_number: number }
     },
-    onSuccess: (data) => {
-      queryClient.setQueryData(photoKeys.userPhotos, (old: Map<string, string> | undefined) => {
-        const next = new Map(old || [])
-        next.set(data.recipe_id, data.photo_url)
-        return next
-      })
+    onSuccess: () => {
+      // Invalidate to refetch all photos with proper grouping
+      queryClient.invalidateQueries({ queryKey: photoKeys.userPhotos })
     },
   })
 }

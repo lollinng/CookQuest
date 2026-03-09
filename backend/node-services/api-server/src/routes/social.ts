@@ -339,6 +339,18 @@ router.get('/users/:id/skill-trophies',
 
 // Helper to map DB row → UserPost shape
 function mapPost(row: any) {
+  // Parse photos: could be JSON array from subquery, or empty
+  let photos: string[] = []
+  if (Array.isArray(row.photos)) {
+    photos = row.photos.filter(Boolean)
+  } else if (typeof row.photos === 'string') {
+    try { photos = JSON.parse(row.photos).filter(Boolean) } catch { /* ignore */ }
+  }
+  // Fallback: if photos empty but photoUrl exists, use it
+  if (photos.length === 0 && row.photo_url) {
+    photos = [row.photo_url]
+  }
+
   return {
     id: row.id,
     userId: row.user_id,
@@ -350,6 +362,7 @@ function mapPost(row: any) {
     recipeTitle: row.recipe_title,
     recipeImageUrl: row.recipe_image_url,
     photoUrl: row.photo_url,
+    photos,
     caption: row.caption,
     commentsCount: row.comments_count || 0,
     likesCount: row.likes_count || 0,

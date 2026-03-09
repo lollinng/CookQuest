@@ -135,6 +135,12 @@ router.post('/recipes/:id/photos', authMiddleware, (req: Request, res: Response,
       return res.status(400).json({ success: false, error: { message: `Upload limit reached (max ${MAX_USER_UPLOADS} photos)` } })
     }
 
+    // Check per-recipe limit (max 3)
+    const recipePhotoCount = await DatabaseService.getRecipePhotoCount(userId, recipeId)
+    if (recipePhotoCount >= 3) {
+      return res.status(400).json({ success: false, error: { message: 'Maximum 3 photos per recipe' } })
+    }
+
     const safeExt = MIME_TO_EXT[req.file.mimetype] || '.jpg'
     const baseFilename = `${crypto.randomUUID()}${safeExt}`
 
@@ -159,15 +165,18 @@ router.post('/recipes/:id/photos', authMiddleware, (req: Request, res: Response,
     // Store proxy URL (not direct GCS URL) so photos always serve through our API
     const photoUrl = buildPhotoProxyUrl(req, filename)
 
-    await DatabaseService.upsertRecipePhoto(userId, recipeId, photoUrl, filename)
+    const result = await DatabaseService.addRecipePhoto(userId, recipeId, photoUrl, filename)
 
-    // Create a feed post for the photo upload (idempotent — skip if one already exists)
+    // Create or update feed post for the photo upload
     const hasPost = await DatabaseService.hasPhotoUploadPost(userId, recipeId)
     if (!hasPost) {
       await DatabaseService.createPost(userId, 'photo_upload', recipeId, photoUrl, undefined)
+    } else {
+      // Update existing post's photo_url to the latest
+      await DatabaseService.updatePostPhotoUrl(userId, recipeId, photoUrl)
     }
 
-    res.json({ success: true, data: { photo_url: photoUrl, recipe_id: recipeId } })
+    res.json({ success: true, data: { photo_url: photoUrl, recipe_id: recipeId, photo_number: result.photo_number } })
   } catch (error: any) {
     logger.error({ err: error }, 'Photo upload error')
     res.status(500).json({ success: false, error: { message: 'Upload failed' } })
@@ -186,14 +195,53 @@ router.get('/users/me/photos', authMiddleware, async (req: AuthenticatedRequest,
       photo_url: rewritePhotoUrl(req, p),
     }))
 
-    res.json({ success: true, data: { photos: rewritten } })
+    // Group by recipe_id for frontend convenience
+    const grouped: Record<string, Array<{ photoUrl: string; photoNumber: number; uploadedAt: string }>> = {}
+    for (const p of rewritten) {
+      if (!grouped[p.recipe_id]) grouped[p.recipe_id] = []
+      grouped[p.recipe_id].push({
+        photoUrl: p.photo_url,
+        photoNumber: p.photo_number,
+        uploadedAt: p.uploaded_at,
+      })
+    }
+
+    res.json({ success: true, data: { photos: rewritten, grouped } })
   } catch (error: any) {
     logger.error({ err: error }, 'Get photos error')
     res.status(500).json({ success: false, error: { message: 'Failed to fetch photos' } })
   }
 })
 
-// DELETE /api/v1/recipes/:id/photos
+// DELETE /api/v1/recipes/:id/photos/:photoNumber — Delete a specific photo by number
+router.delete('/recipes/:id/photos/:photoNumber', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.id
+    const recipeId = req.params.id
+    const photoNumber = parseInt(req.params.photoNumber, 10)
+
+    if (isNaN(photoNumber) || photoNumber < 1 || photoNumber > 3) {
+      return res.status(400).json({ success: false, error: { message: 'Photo number must be 1, 2, or 3' } })
+    }
+
+    const deleted = await DatabaseService.deleteRecipePhotoByNumber(userId, recipeId, photoNumber)
+    if (!deleted) {
+      return res.status(404).json({ success: false, error: { message: 'Photo not found' } })
+    }
+
+    if (deleted.storageKey) {
+      const storage = getStorageService()
+      await storage.delete(deleted.storageKey)
+    }
+
+    res.status(204).send()
+  } catch (error: any) {
+    logger.error({ err: error }, 'Photo delete by number error')
+    res.status(500).json({ success: false, error: { message: 'Delete failed' } })
+  }
+})
+
+// DELETE /api/v1/recipes/:id/photos — Delete all photos for a recipe
 router.delete('/recipes/:id/photos', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChefHat, Flame, Clock, Target, Heart } from 'lucide-react'
 import { SkillCard } from '@/components/skill-card'
 import { CookingTip } from '@/components/cooking-tip'
@@ -17,10 +18,20 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { SkillUnlockBanner, shouldShowUnlockBanner } from '@/components/skill-unlock-banner'
 import { AnimatedCounter } from '@/components/animated-counter'
 import { DailyQuestCard } from '@/components/daily-quest-card'
+import { useOnboardingStore } from '@/lib/stores/onboarding-store'
 import Link from 'next/link'
 
 export default function Dashboard() {
   const hydrated = useStoreHydrated()
+  const router = useRouter()
+  const { hasSeenWelcome } = useOnboardingStore()
+
+  // Redirect first-time visitors to onboarding
+  useEffect(() => {
+    if (hydrated && !hasSeenWelcome) {
+      router.replace('/onboarding')
+    }
+  }, [hydrated, hasSeenWelcome, router])
 
   const {
     getSkillProgress,
