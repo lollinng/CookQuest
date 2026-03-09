@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { ChefHat, X, Share, Plus, Download } from 'lucide-react';
+import { ChefHat, X, Share, Plus, Download, SquarePlus } from 'lucide-react';
 import { usePWAInstall } from '@/hooks/use-pwa-install';
 
 interface PWAInstallPromptProps {
@@ -35,106 +35,110 @@ export function PWAInstallPrompt({ isOpen, onClose }: PWAInstallPromptProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+    >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50 transition-opacity duration-300"
+        className="absolute inset-0 bg-black/60"
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         onClick={handleDismiss}
       />
 
-      {/* Bottom sheet */}
-      <div className="relative w-full max-w-md bg-cq-surface border-t border-cq-border rounded-t-2xl p-6 pb-8 animate-slide-up-spring">
+      {/* Dialog */}
+      <div
+        className="relative w-full max-w-sm bg-cq-surface border border-cq-border rounded-2xl p-5 shadow-2xl animate-slide-up-spring"
+        style={{ position: 'relative', zIndex: 1 }}
+      >
         {/* Close button */}
         <button
           onClick={handleDismiss}
-          className="absolute top-4 right-4 text-cq-text-muted hover:text-cq-text-primary transition-colors"
+          className="absolute top-3 right-3 text-cq-text-muted hover:text-cq-text-primary transition-colors p-1"
         >
           <X className="size-5" />
         </button>
 
         {/* Header */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center">
-            <ChefHat className="size-6 text-amber-500" />
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-11 h-11 rounded-xl bg-amber-500/10 flex items-center justify-center">
+            <ChefHat className="size-5 text-amber-500" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-cq-text-primary">Get CookQuest</h3>
-            <p className="text-sm text-cq-text-muted">Add to your home screen</p>
+            <h3 className="text-base font-bold text-cq-text-primary">Install CookQuest</h3>
+            <p className="text-xs text-cq-text-muted">Add to your home screen</p>
           </div>
         </div>
 
-        <p className="text-sm text-cq-text-secondary mb-6">
-          Quick access to recipes, photos & your cooking journey — right from your home screen.
-        </p>
-
-        {/* Platform-specific instructions */}
+        {/* Platform-specific content */}
         {isIOS ? (
-          <div className="space-y-4 mb-6">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-sm font-bold text-blue-400">1</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-cq-text-primary">
-                  Tap the Share button
-                </p>
-                <p className="text-xs text-cq-text-muted flex items-center gap-1 mt-0.5">
-                  <Share className="size-3.5" /> in Safari&apos;s toolbar
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-sm font-bold text-blue-400">2</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-cq-text-primary">
-                  Scroll down and tap
-                </p>
-                <p className="text-xs text-cq-text-muted flex items-center gap-1 mt-0.5">
-                  <Plus className="size-3.5" /> &quot;Add to Home Screen&quot;
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-sm font-bold text-blue-400">3</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-cq-text-primary">
-                  Tap &quot;Add&quot;
-                </p>
-                <p className="text-xs text-cq-text-muted mt-0.5">
-                  CookQuest will appear on your home screen
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : canInstall ? (
-          <button
-            onClick={handleInstall}
-            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-semibold transition-colors mb-4"
-          >
-            <Download className="size-5" />
-            Install CookQuest
-          </button>
-        ) : (
-          <div className="space-y-3 mb-6">
-            <p className="text-sm text-cq-text-secondary">
-              Look for the install icon in your browser&apos;s address bar, or use your browser&apos;s menu to &quot;Install app&quot; or &quot;Add to Home Screen&quot;.
+          <>
+            <p className="text-sm text-cq-text-secondary mb-4">
+              iOS doesn&apos;t have a direct install button. Follow these quick steps:
             </p>
-          </div>
-        )}
 
-        {/* Dismiss */}
-        <button
-          onClick={handleDismiss}
-          className="w-full text-center text-sm text-cq-text-muted hover:text-cq-text-secondary transition-colors py-2"
-        >
-          Not now
-        </button>
+            <div className="space-y-3 mb-4">
+              <div className="flex items-center gap-3 bg-cq-bg/50 rounded-xl p-3">
+                <div className="w-8 h-8 rounded-full bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+                  <Share className="size-4 text-blue-400" />
+                </div>
+                <p className="text-sm text-cq-text-primary">
+                  Tap <span className="font-semibold">Share</span> in Safari&apos;s bottom bar
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 bg-cq-bg/50 rounded-xl p-3">
+                <div className="w-8 h-8 rounded-full bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+                  <SquarePlus className="size-4 text-blue-400" />
+                </div>
+                <p className="text-sm text-cq-text-primary">
+                  Tap <span className="font-semibold">&quot;Add to Home Screen&quot;</span>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 bg-cq-bg/50 rounded-xl p-3">
+                <div className="w-8 h-8 rounded-full bg-green-500/15 flex items-center justify-center flex-shrink-0">
+                  <Plus className="size-4 text-green-400" />
+                </div>
+                <p className="text-sm text-cq-text-primary">
+                  Tap <span className="font-semibold">&quot;Add&quot;</span> to confirm
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-semibold transition-colors text-sm"
+            >
+              Got it
+            </button>
+          </>
+        ) : canInstall ? (
+          <>
+            <p className="text-sm text-cq-text-secondary mb-4">
+              Get quick access to recipes &amp; your cooking journey from your home screen.
+            </p>
+            <button
+              onClick={handleInstall}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-semibold transition-colors text-sm"
+            >
+              <Download className="size-4" />
+              Install CookQuest
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-cq-text-secondary mb-4">
+              Use your browser&apos;s menu to find <span className="font-semibold">&quot;Install app&quot;</span> or <span className="font-semibold">&quot;Add to Home Screen&quot;</span>.
+            </p>
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-semibold transition-colors text-sm"
+            >
+              Got it
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
