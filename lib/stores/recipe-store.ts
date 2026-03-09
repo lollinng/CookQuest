@@ -11,10 +11,21 @@ const SKILL_RECIPES: Record<SkillType, string[]> = {
   'flavor-building': ['make-sauce', 'season-taste', 'herb-pairing', 'spice-blend', 'marinate', 'balance-flavors', 'umami-boost'],
   'air-fryer': ['air-fryer-fries', 'air-fryer-chicken-wings', 'air-fryer-salmon', 'air-fryer-vegetables', 'air-fryer-tofu', 'air-fryer-donuts'],
   'indian-cuisine': [
+    // Original 7
     'dal-tadka', 'butter-chicken', 'jeera-rice', 'aloo-gobi', 'naan-bread', 'chana-masala', 'mango-lassi',
+    // Weeks 1-2 plan (12)
     'ic-cutting-onion', 'ic-chai-and-eggs', 'ic-masala-omelette', 'ic-plain-rice',
     'ic-simple-dal', 'ic-aloo-sabzi', 'ic-first-full-meal', 'ic-roti',
     'ic-egg-bhurji', 'ic-upma', 'ic-masala-base', 'ic-full-thali',
+    // Week 3 (7)
+    'ic-poha', 'ic-paneer-bhurji', 'ic-matar-paneer', 'ic-veg-pulao',
+    'ic-bhindi-masala', 'ic-masoor-dal', 'ic-week3-thali',
+    // Week 4 (7)
+    'ic-aloo-paratha', 'ic-paneer-tikka', 'ic-gajar-matar', 'ic-rajma-masala',
+    'ic-kadhi', 'ic-khichdi', 'ic-week4-thali',
+    // Week 5 (7)
+    'ic-puri-bhaji', 'ic-besan-chilla', 'ic-paneer-butter-masala', 'ic-dal-tadka-yellow',
+    'ic-veg-biryani', 'ic-salad-raita', 'ic-grand-thali',
   ],
 }
 

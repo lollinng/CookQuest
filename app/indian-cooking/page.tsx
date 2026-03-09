@@ -17,7 +17,7 @@ export default function IndianCookingPage() {
   const { isRecipeCompleted, toggleRecipeCompletion } = useRecipeStore();
   const { data: recipes, isLoading } = useSkillData('indian-cuisine');
 
-  const [expandedWeeks, setExpandedWeeks] = useState<Record<number, boolean>>({ 1: true, 2: false });
+  const [expandedWeeks, setExpandedWeeks] = useState<Record<number, boolean>>({ 1: true });
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
 
   const recipeMap = new Map<string, Recipe>();
@@ -48,8 +48,8 @@ export default function IndianCookingPage() {
       <Card className="bg-gradient-to-r from-amber-600 to-orange-500 border-0 text-white shadow-lg">
         <CardContent className="p-6 text-center">
           <Flame className="size-10 mx-auto mb-2" />
-          <h1 className="text-2xl font-black tracking-tight">2-Week Indian Cooking Plan</h1>
-          <p className="text-white/80 text-sm mt-1">From zero to cooking full Indian meals</p>
+          <h1 className="text-2xl font-black tracking-tight">5-Week Indian Cooking Journey</h1>
+          <p className="text-white/80 text-sm mt-1">From zero to preparing a grand Indian feast</p>
           <div className="mt-4 space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-white/80">Progress</span>

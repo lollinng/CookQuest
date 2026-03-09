@@ -1065,6 +1065,228 @@ class DatabaseServiceClass {
       logger.info('Indian cooking plan recipes seeded')
     }
 
+    // Indian cooking plan Week 3 recipes (migration 018)
+    if (!(await this.isMigrationApplied('018_indian_plan_week3'))) {
+      await this.pool.query(`
+        INSERT INTO recipes (id, title, description, skill_id, difficulty, total_time, image_url, emoji, ingredients, instructions, tips, xp_reward) VALUES
+
+        ('ic-poha', 'Poha (Flattened Rice Breakfast)',
+         'Quick and popular Indian breakfast made from flattened rice with onions, spices, and peanuts',
+         'indian-cuisine', 'beginner', '20 minutes',
+         'https://images.unsplash.com/photo-1644289450169-bc58aa16bacb?w=800&fit=crop&q=80', '🍛',
+         '["2 cups thick poha (flattened rice)", "1 medium onion (finely chopped)", "1 small potato (diced small)", "1 green chili (slit)", "10-12 peanuts", "1/2 tsp mustard seeds", "8-10 curry leaves", "1/4 tsp turmeric", "Salt to taste", "2 tbsp oil", "Juice of half a lemon", "Fresh cilantro for garnish"]',
+         '["Rinse poha in water briefly and drain — do not soak", "Chop onion, green chili, and dice potatoes small", "Heat oil and add mustard seeds — wait until they splutter", "Add curry leaves and peanuts, fry 30 seconds", "Add chopped onion and diced potato, saute until potato softens (5 min)", "Add turmeric and salt, stir well", "Add drained poha and mix gently until heated through (3-4 min)", "Squeeze lemon juice and garnish with cilantro", "Serve hot"]',
+         '["Rinse poha briefly — don''t soak or it becomes mushy", "Medium-thick poha holds its shape better than thin variety", "Lemon juice at the end is essential for authentic taste", "Add peanuts early so they get crispy"]',
+         100),
+
+        ('ic-paneer-bhurji', 'Paneer Bhurji (Paneer Scramble)',
+         'Scrambled paneer with spices — like a vegetarian egg bhurji with Indian cottage cheese',
+         'indian-cuisine', 'beginner', '20 minutes',
+         'https://images.unsplash.com/photo-1631452180539-96aca7d48617?w=800&fit=crop&q=80', '🧀',
+         '["200g fresh paneer (crumbled or grated)", "1 onion (finely chopped)", "2 tomatoes (finely chopped)", "1 green chili (chopped)", "1 tsp cumin seeds", "1 tsp ginger-garlic paste", "1/4 tsp turmeric", "1/2 tsp garam masala", "1/4 cup green peas (optional)", "2 tbsp oil", "Salt to taste", "Fresh coriander for garnish"]',
+         '["Grate or crumble fresh paneer into small pieces", "Finely chop onion, tomatoes, and green chili", "Heat oil and add cumin seeds until they splutter", "Add chopped onions and saute until soft (3-4 min)", "Add ginger-garlic paste and turmeric, cook 1 minute", "Add chopped tomatoes, cook until soft and masala thickens (3-4 min)", "Stir in crumbled paneer and peas", "Cook 3-4 minutes, seasoning with salt and garam masala", "Garnish with fresh coriander leaves and serve hot"]',
+         '["Fresh paneer works best — avoid store-bought hard paneer", "Don''t overcook paneer or it becomes rubbery", "The tomato masala should be thick before adding paneer", "Serve with roti or as a sandwich filling"]',
+         100),
+
+        ('ic-matar-paneer', 'Matar Paneer (Peas with Paneer Curry)',
+         'North Indian curry of peas and paneer cubes in a spiced onion-tomato-cashew gravy',
+         'indian-cuisine', 'intermediate', '35 minutes',
+         'https://images.unsplash.com/photo-1708793873401-e8c6c153b76a?w=800&fit=crop&q=80', '🍛',
+         '["200g paneer (cubed)", "1 cup green peas", "2 onions (roughly chopped)", "2 tomatoes (roughly chopped)", "3 garlic cloves", "8-10 cashews", "1 tsp cumin seeds", "1 bay leaf", "1/2 tsp turmeric", "1 tsp red chili powder", "1 tsp garam masala", "1 tsp kasuri methi (dried fenugreek)", "1/2 cup water or cream", "2 tbsp oil", "Salt to taste", "Fresh coriander"]',
+         '["Blend sauteed onions, tomatoes, garlic, and cashews into a smooth paste", "In a pan, heat oil and saute cumin seeds and bay leaf", "Add the blended paste and cook 5 minutes until oil separates", "Add turmeric, chili powder, and salt", "Add water or cream for desired gravy consistency", "Stir in green peas and cubed paneer", "Simmer 5-7 minutes until peas are cooked", "Finish with kasuri methi and garam masala", "Garnish with fresh coriander"]',
+         '["Cashews make the gravy creamy and rich", "Blend the base very smooth for restaurant-style texture", "Kasuri methi (fenugreek leaves) is the signature flavor", "Paneer should be added last so it stays soft"]',
+         100),
+
+        ('ic-veg-pulao', 'Vegetable Pulao (One-pot Rice)',
+         'Aromatic one-pot basmati rice dish with mixed vegetables and whole spices',
+         'indian-cuisine', 'beginner', '30 minutes',
+         'https://images.unsplash.com/photo-1645177628172-a94c1f96e6db?w=800&fit=crop&q=80', '🍚',
+         '["1 cup basmati rice", "1 carrot (diced)", "1/4 cup green beans (chopped)", "1/4 cup green peas", "1 onion (sliced)", "1 tsp cumin seeds", "1 bay leaf", "2 cardamom pods", "1 small cinnamon stick", "1 tsp ginger-garlic paste", "2 cups water", "1 tbsp oil or ghee", "Salt to taste"]',
+         '["Rinse and soak basmati rice for 20 minutes, then drain", "Chop carrots, beans, and onions", "Heat oil/ghee in a pot, add cumin, bay leaf, cinnamon, cardamom", "Saute sliced onions until translucent (3-4 min)", "Add ginger-garlic paste and chopped veggies, cook 1-2 minutes", "Drain rice and add to pot, stir to coat with spices", "Add 2 cups water and salt, bring to a boil", "Cover and cook on low flame until water is absorbed (15 min)", "Fluff with fork and serve"]',
+         '["Soaking rice ensures long, separate grains", "Don''t stir rice while cooking", "Whole spices infuse the rice — remove before eating", "Use ghee for richer flavor"]',
+         100),
+
+        ('ic-bhindi-masala', 'Bhindi Masala (Okra Stir-fry)',
+         'Dry stir-fried okra with onions, tomatoes, and spices — crispy and flavorful',
+         'indian-cuisine', 'beginner', '25 minutes',
+         'https://images.unsplash.com/photo-1586981114766-708f09a71e20?w=800&fit=crop&q=80', '🫑',
+         '["250g okra (bhindi)", "1 onion (finely chopped)", "1 tomato (diced)", "1 tsp cumin seeds", "1/4 tsp turmeric", "1/2 tsp red chili powder", "1/2 tsp garam masala", "Salt to taste", "2 tbsp oil", "Lemon juice", "Fresh coriander"]',
+         '["Trim and slice okra into 1-inch pieces", "Heat oil and add cumin seeds until they splutter", "Add finely chopped onion and saute until soft (3-4 min)", "Add okra, turmeric, and salt", "Fry on medium-high heat, stirring occasionally, until tender and lightly browned (10-12 min)", "Add diced tomato, chili powder, and garam masala", "Cook 2-3 more minutes until tomato softens", "Finish with lemon juice and fresh coriander"]',
+         '["Wash and completely dry okra before cutting to reduce sliminess", "Don''t cover the pan — steam makes okra slimy", "Cook on medium-high heat for crispy results", "Add tomato at the end so okra stays crisp"]',
+         100),
+
+        ('ic-masoor-dal', 'Masoor Dal Tadka (Red Lentil)',
+         'Quick-cooking red lentils finished with a fragrant cumin-garlic oil tempering',
+         'indian-cuisine', 'beginner', '25 minutes',
+         'https://images.unsplash.com/photo-1668236534990-73c4ed23043c?w=800&fit=crop&q=80', '🍲',
+         '["1/2 cup masoor dal (red lentils)", "2 cups water", "1/4 tsp turmeric", "Salt to taste", "1 tbsp ghee or oil", "1 tsp cumin seeds", "3 garlic cloves (chopped)", "1 dried red chili", "Fresh coriander for garnish"]',
+         '["Rinse masoor dal and boil with turmeric and salt until soft (10-12 min)", "Mash lightly with a ladle — dal should be slightly soupy", "TADKA: Heat ghee or oil in a small pan", "Add cumin seeds and wait until they splutter", "Add chopped garlic and dried red chili, fry until golden", "Pour the sizzling tadka over the cooked dal", "Simmer everything together for 2 more minutes", "Adjust seasoning and garnish with coriander"]',
+         '["Masoor dal cooks fastest of all lentils — no soaking needed", "The tadka should sizzle when poured over the dal", "Use ghee for more authentic flavor", "Dal thickens as it cools — keep it slightly runny"]',
+         100),
+
+        ('ic-week3-thali', 'Week 3 Thali (Combined Meal)',
+         'Combine this week''s recipes into a balanced Indian thali — rotis, rice, dal, and sabzi',
+         'indian-cuisine', 'beginner', '60 minutes',
+         'https://images.unsplash.com/photo-1742281257707-0c7f7e5ca9c6?w=800&fit=crop&q=80', '🍽️',
+         '["Ingredients for roti (from Day 8)", "Ingredients for plain rice", "Ingredients for masoor dal", "Leftover paneer bhurji or matar paneer", "Leftover bhindi masala", "Fresh salad (cucumber, tomato, onion)", "Lemon wedges"]',
+         '["PLAN YOUR TIMING: Start dal first (longest cook time)", "While dal simmers, start rice", "Reheat paneer bhurji or matar paneer from this week", "Reheat bhindi masala", "Make fresh rotis last — they are best served hot", "ASSEMBLY: Place 2-3 rotis on a large plate", "Add a bowl of rice in the center", "Place dal in a small bowl", "Add paneer dish and bhindi on the sides", "Garnish with fresh salad, lemon wedges", "Enjoy your Week 3 thali!"]',
+         '["This week you learned paneer, pulao, and new vegetables", "Reheating sabzis is part of real Indian home cooking", "A thali is about variety and balance", "Note how each dish uses skills from this week"]',
+         150)
+
+        ON CONFLICT (id) DO NOTHING;
+      `)
+      await this.recordMigration('018_indian_plan_week3')
+      logger.info('Indian cooking plan Week 3 recipes seeded')
+    }
+
+    // Indian cooking plan Week 4 recipes (migration 019)
+    if (!(await this.isMigrationApplied('019_indian_plan_week4'))) {
+      await this.pool.query(`
+        INSERT INTO recipes (id, title, description, skill_id, difficulty, total_time, image_url, emoji, ingredients, instructions, tips, xp_reward) VALUES
+
+        ('ic-aloo-paratha', 'Aloo Paratha (Stuffed Flatbread)',
+         'Spiced mashed potato stuffed inside whole wheat dough, rolled and cooked with ghee until golden',
+         'indian-cuisine', 'intermediate', '45 minutes',
+         'https://images.unsplash.com/photo-1668357530437-72a12c660f94?w=800&fit=crop&q=80', '🫓',
+         '["1 cup whole wheat flour (atta)", "Warm water for dough", "Pinch of salt", "2 potatoes (boiled and mashed)", "1/2 tsp cumin powder", "1/2 tsp coriander powder", "1/4 tsp red chili powder", "Fresh cilantro (chopped)", "Salt to taste", "Ghee for cooking"]',
+         '["Knead whole wheat dough with water and salt until soft — rest 10 minutes", "Boil and mash 2 potatoes, mix with cumin, coriander, chili, salt, and cilantro", "Divide dough and filling into equal balls", "Roll each dough ball into a small circle", "Place a potato portion in the center, seal edges, and flatten", "Roll gently into a flat circle (don''t press too hard or filling leaks)", "Cook on a hot griddle, applying ghee on both sides", "Cook until both sides have golden-brown spots", "Serve hot with yogurt or pickle"]',
+         '["Dough should be softer than roti dough for easier stuffing", "Don''t overstuff or it will tear while rolling", "Use dry flour for dusting to prevent sticking", "Press gently while rolling — the filling spreads on its own"]',
+         100),
+
+        ('ic-paneer-tikka', 'Paneer Tikka (Grilled Paneer)',
+         'Yogurt-marinated paneer cubes and vegetables, grilled or pan-fried until charred',
+         'indian-cuisine', 'intermediate', '35 minutes',
+         'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=800&fit=crop&q=80', '🍢',
+         '["250g paneer (cubed large)", "1 bell pepper (large pieces)", "1 onion (large pieces)", "1/2 cup thick yogurt", "1 tsp red chili powder", "1/4 tsp turmeric", "1 tsp garam masala", "1 tbsp ginger-garlic paste", "1 tbsp oil", "Salt to taste", "Lemon wedges", "Mint chutney for serving"]',
+         '["Cube paneer and chop bell peppers and onions into large pieces", "In a bowl, mix yogurt with chili powder, turmeric, garam masala, ginger-garlic paste, oil, and salt", "Toss paneer and vegetables in the marinade", "Refrigerate for 15-30 minutes", "Thread onto skewers or arrange on a baking tray", "Grill, broil, or pan-cook, turning occasionally", "Cook until lightly charred on all sides (8-10 min)", "Serve with lemon wedges and mint chutney"]',
+         '["Thick yogurt clings better — strain if too thin", "Don''t marinate too long or paneer gets mushy", "High heat is key for those charred spots", "A cast iron pan works great if you don''t have a grill"]',
+         100),
+
+        ('ic-gajar-matar', 'Gajar Matar Sabzi (Carrot-Pea Curry)',
+         'Simple dry curry of diced carrots and peas — quick, nutritious, everyday sabzi',
+         'indian-cuisine', 'beginner', '20 minutes',
+         'https://images.unsplash.com/photo-1595959524165-0d395008e55b?w=800&fit=crop&q=80', '🥕',
+         '["2 carrots (diced)", "1/2 cup green peas", "1 tsp cumin seeds", "1 inch ginger (grated)", "1/4 tsp turmeric", "Salt to taste", "1/2 tsp garam masala or kasuri methi", "1 tbsp oil", "Fresh cilantro"]',
+         '["Dice carrots into small cubes", "Heat oil and saute cumin seeds and grated ginger", "Add carrots, peas, turmeric, and salt — stir well", "Cover and cook until carrots are tender (5-7 min), stirring occasionally", "Sprinkle garam masala or kasuri methi and mix", "Serve garnished with cilantro"]',
+         '["Cut carrots small so they cook at the same speed as peas", "Keep the lid on to steam the vegetables", "Add a pinch of sugar to enhance the natural sweetness", "This is a great side dish for any roti or rice meal"]',
+         100),
+
+        ('ic-rajma-masala', 'Rajma Masala (Kidney Bean Curry)',
+         'Hearty Punjabi-style red kidney bean curry in a thick onion-tomato gravy',
+         'indian-cuisine', 'intermediate', '50 minutes',
+         'https://images.unsplash.com/photo-1697155406121-85aac6236000?w=800&fit=crop&q=80', '🫘',
+         '["1/2 cup dried rajma (kidney beans) — soaked overnight", "1 onion (finely chopped)", "1 tomato (chopped)", "1 tbsp ginger-garlic paste", "1 tsp cumin seeds", "1/2 tsp turmeric", "1 tsp coriander powder", "1/2 tsp red chili powder", "1 tsp garam masala", "2 tbsp oil", "Salt to taste", "Cream (optional)", "Fresh cilantro"]',
+         '["Soak rajma overnight or 1 hour in hot water", "Pressure cook or boil until very soft", "Heat oil and add cumin seeds until they splutter", "Saute chopped onions until golden (5-6 min)", "Add ginger-garlic paste, cook 1 minute", "Add chopped tomato, turmeric, coriander, chili powder", "Cook until tomato breaks down and oil separates", "Add cooked rajma with some cooking water", "Simmer 10-15 minutes until gravy thickens", "Finish with garam masala and optional cream", "Garnish with cilantro, serve with rice or roti"]',
+         '["Rajma MUST be fully cooked — undercooked kidney beans are toxic", "Soaking overnight gives the best texture", "The gravy should be thick and cling to the beans", "Rajma Chawal (with rice) is the ultimate North Indian comfort food"]',
+         100),
+
+        ('ic-kadhi', 'Kadhi (Yogurt-Gram Flour Curry)',
+         'Tangy yogurt-based curry thickened with gram flour (besan) and tempered with spices',
+         'indian-cuisine', 'intermediate', '30 minutes',
+         'https://images.unsplash.com/photo-1609915436989-c7a0a4be04ae?w=800&fit=crop&q=80', '🥣',
+         '["1 cup yogurt", "3 tbsp gram flour (besan)", "1/4 tsp turmeric", "1/2 tsp red chili powder", "Salt to taste", "2 cups water", "1 tbsp oil", "1/2 tsp mustard seeds", "1/2 tsp cumin seeds", "1/4 tsp fenugreek seeds", "8-10 curry leaves", "2 dried red chilies", "Fresh cilantro"]',
+         '["Whisk yogurt with gram flour, turmeric, chili powder, salt, and 2 cups water until lump-free", "Heat oil in a pan, add mustard seeds, cumin, and fenugreek seeds", "When they crackle, add curry leaves and dried red chilies", "Pour in the yogurt mixture, stirring constantly to prevent lumps", "Bring to a gentle simmer on low heat", "Keep stirring occasionally, simmer until kadhi thickens (15-20 min)", "Garnish with cilantro", "Serve with steamed rice or roti"]',
+         '["Whisk the yogurt mixture very well — lumps are the enemy", "Stir constantly when heating to prevent curdling", "Low heat is essential — high heat will split the yogurt", "Add pakoras (onion fritters) for authentic kadhi pakora"]',
+         100),
+
+        ('ic-khichdi', 'Khichdi (Rice-Dal Comfort Food)',
+         'One-pot rice and moong dal cooked together — India''s ultimate comfort food',
+         'indian-cuisine', 'beginner', '30 minutes',
+         'https://images.unsplash.com/photo-1630409351211-d62ab2d24da4?w=800&fit=crop&q=80', '🍲',
+         '["1/2 cup rice", "1/2 cup moong dal", "3 cups water", "1/4 tsp turmeric", "Salt to taste", "1 tbsp ghee", "1 tsp cumin seeds", "Chopped vegetables (carrot, peas, potato — optional)"]',
+         '["Rinse rice and moong dal together 3-4 times", "In a pot, heat ghee and add cumin seeds", "If using vegetables, add them and stir 1-2 minutes", "Add rice, dal, turmeric, salt, and 3 cups water", "Cover and cook on medium-low heat", "Stir occasionally until mixture is mushy and porridge-like (15-20 min)", "Adjust consistency — add water if too thick", "Top with a ghee and cumin tadka if desired", "Serve warm"]',
+         '["Khichdi should be soft and porridge-like, not separate grains", "The 1:1 rice-to-dal ratio is traditional", "Ghee on top makes it special", "This is what Indian grandmothers make when you are sick"]',
+         100),
+
+        ('ic-week4-thali', 'Week 4 Thali (Combined Meal)',
+         'A complete North Indian thali featuring rajma, kadhi, rice, roti, and raita',
+         'indian-cuisine', 'beginner', '60 minutes',
+         'https://images.unsplash.com/photo-1680993032090-1ef7ea9b51e5?w=800&fit=crop&q=80', '🍽️',
+         '["Ingredients for jeera rice or plain rice", "Ingredients for rajma masala (or reheat)", "Ingredients for kadhi (or reheat)", "Ingredients for gajar matar (or reheat)", "Fresh rotis or leftover parathas", "Yogurt raita", "Fresh salad"]',
+         '["PLAN: Start rajma first if cooking fresh (longest cook time)", "Prepare rice while rajma simmers", "Reheat kadhi and gajar matar", "Make fresh rotis or warm leftover parathas", "Prepare a simple cucumber raita: yogurt + salt + cumin + mint", "ASSEMBLY: Plate jeera rice or plain rice", "Add rajma curry and kadhi in small bowls", "Place gajar matar sabzi on the side", "Stack 2-3 rotis or parathas", "Add raita and fresh salad", "This is a complete North Indian meal!"]',
+         '["This week you mastered stuffed breads, marination, and yogurt curries", "Rajma chawal is a Sunday staple in North Indian homes", "Mix and match dishes — that is the beauty of a thali", "Enjoy the rich curry and comfort of your complete meal"]',
+         150)
+
+        ON CONFLICT (id) DO NOTHING;
+      `)
+      await this.recordMigration('019_indian_plan_week4')
+      logger.info('Indian cooking plan Week 4 recipes seeded')
+    }
+
+    // Indian cooking plan Week 5 recipes (migration 020)
+    if (!(await this.isMigrationApplied('020_indian_plan_week5'))) {
+      await this.pool.query(`
+        INSERT INTO recipes (id, title, description, skill_id, difficulty, total_time, image_url, emoji, ingredients, instructions, tips, xp_reward) VALUES
+
+        ('ic-puri-bhaji', 'Puri Bhaji (Fried Bread & Potato Curry)',
+         'Crispy deep-fried puris served with a mildly spiced potato curry — classic Indian breakfast',
+         'indian-cuisine', 'intermediate', '40 minutes',
+         'https://images.unsplash.com/photo-1605719161691-5d9771fc144f?w=800&fit=crop&q=80', '🫓',
+         '["FOR PURI: 1 cup wheat flour", "Water", "Pinch of salt", "Oil for deep frying", "FOR BHAJI: 2 potatoes (boiled, lightly mashed)", "1 onion (chopped)", "1/2 tsp mustard seeds", "1/2 tsp cumin seeds", "1 inch ginger (grated)", "1 green chili (chopped)", "1/4 tsp turmeric", "1/2 tsp red chili powder", "Salt to taste", "2 tbsp oil", "Lemon wedges"]',
+         '["PURI DOUGH: Knead a tight dough with flour, water, and salt — rest 10 min", "BHAJI: Boil and lightly mash 2 potatoes", "Heat oil, temper mustard and cumin seeds", "Saute onion, ginger, and green chili until soft", "Add turmeric, chili powder, and mashed potatoes", "Sprinkle water and cook until spiced through (5 min)", "FRYING PURIS: Divide dough into small balls", "Roll each into a thin circle (no oil on surface)", "Heat oil for deep frying until very hot", "Slide puri in — it should puff up within seconds", "Flip once, fry until golden on both sides", "Serve puris hot with potato bhaji and lemon"]',
+         '["The dough should be tight (less water than roti dough)", "Oil must be very hot for puris to puff", "Don''t press the puri down while frying — let it puff naturally", "Fry one at a time for best results"]',
+         100),
+
+        ('ic-besan-chilla', 'Besan Chilla (Savory Chickpea Pancake)',
+         'Savory chickpea-flour pancake like an eggless omelette — quick and protein-rich',
+         'indian-cuisine', 'beginner', '15 minutes',
+         'https://images.unsplash.com/photo-1601387434127-20979856e76e?w=800&fit=crop&q=80', '🥞',
+         '["1 cup chickpea flour (besan)", "Water (about 3/4 cup)", "1 small onion (finely chopped)", "1 tomato (finely chopped)", "2 tbsp fresh coriander (chopped)", "1/4 tsp turmeric", "1/2 tsp red chili powder", "1/2 tsp cumin seeds", "Salt to taste", "Oil for cooking"]',
+         '["Mix chickpea flour with water to make a smooth, pourable batter", "Add chopped onion, tomato, coriander, and all spices", "Mix well and let batter rest 5 minutes", "Heat a non-stick pan with a little oil on medium heat", "Pour a ladle of batter and spread thin in a circular motion", "Cook until bottom sets and edges crisp (2-3 min)", "Flip carefully and cook other side until golden", "Serve hot with green chutney or ketchup"]',
+         '["Batter should be like crepe batter — pourable but not watery", "Spread quickly before it sets", "Medium heat gives the best color without burning", "This is a great high-protein breakfast alternative to eggs"]',
+         100),
+
+        ('ic-paneer-butter-masala', 'Paneer Butter Masala',
+         'Rich creamy paneer in a smooth onion-tomato-cashew gravy with butter and cream — restaurant favorite',
+         'indian-cuisine', 'intermediate', '40 minutes',
+         'https://images.unsplash.com/photo-1680529667594-db0955e6e1f9?w=800&fit=crop&q=80', '🍛',
+         '["250g paneer (cubed)", "2 onions (roughly chopped)", "3 tomatoes (roughly chopped)", "3 garlic cloves", "10 cashews", "2 tbsp butter", "1 bay leaf", "2 cardamom pods", "1 tsp cumin seeds", "1/4 cup cream", "1/2 tsp red chili powder", "1 tsp garam masala", "1 tsp kasuri methi", "Salt to taste"]',
+         '["Blend sauteed onions, tomatoes, garlic, and cashews into a smooth paste", "In a pan, heat butter and saute bay leaf, cardamom, and cumin", "Add the pureed paste and cook 5-7 minutes until oil separates", "Stir in cream, chili powder, garam masala, and salt", "Add paneer cubes and simmer 3-4 minutes", "Finish with kasuri methi (crush between palms before adding)", "Serve with naan or roti"]',
+         '["Butter (not oil) is essential for authentic flavor", "Blend the base ultra-smooth for restaurant texture", "Kasuri methi is the secret finishing touch", "A swirl of cream on top makes it look restaurant-style"]',
+         100),
+
+        ('ic-dal-tadka-yellow', 'Dal Tadka (Yellow Lentils)',
+         'Spiced yellow lentils (toor or moong dal) with a hot ghee tempering — different spice mix from Week 3',
+         'indian-cuisine', 'beginner', '25 minutes',
+         'https://images.unsplash.com/photo-1637194502510-09d5a08e7535?w=800&fit=crop&q=80', '🍲',
+         '["1/2 cup toor dal or yellow moong dal", "2 cups water", "1/4 tsp turmeric", "Salt to taste", "1 tbsp ghee", "1/2 tsp cumin seeds", "1/2 tsp mustard seeds", "8-10 curry leaves", "1 dried red chili", "2 garlic cloves (chopped)", "1 green chili (slit)", "Fresh cilantro"]',
+         '["Boil dal with turmeric and salt until soft (15-20 min for toor dal)", "Mash lightly to desired consistency", "TADKA: Heat ghee in a small pan", "Add cumin seeds and mustard seeds — wait for them to crackle", "Add curry leaves, dried red chili, garlic, and green chili", "When fragrant (30 seconds), pour the hot tadka into the dal", "Stir and simmer 2 minutes", "Adjust salt and garnish with cilantro"]',
+         '["This uses curry leaves and mustard — a South Indian-style tadka", "Toor dal takes longer than masoor — use pressure cooker for speed", "The sizzle when tadka meets dal is the best sound in Indian cooking", "Compare this with Week 3 masoor dal to taste the difference"]',
+         100),
+
+        ('ic-veg-biryani', 'Vegetable Biryani',
+         'Celebratory layered rice dish with mixed vegetables, whole spices, and aromatic seasoning',
+         'indian-cuisine', 'intermediate', '45 minutes',
+         'https://images.unsplash.com/photo-1707339088654-117df66bd55c?w=800&fit=crop&q=80', '🍚',
+         '["1 cup basmati rice (soaked 20 min)", "1 carrot (diced)", "1/4 cup green beans (chopped)", "1/4 cup green peas", "1 onion (sliced thin)", "1 bay leaf", "1 cinnamon stick", "3 cardamom pods", "4 cloves", "1 tbsp ginger-garlic paste", "1 tsp biryani masala or chili powder", "2 cups water", "2 tbsp oil", "Salt to taste", "Fried onions for garnish (optional)"]',
+         '["Rinse and soak basmati rice for 20 minutes, drain", "Chop mixed vegetables into small pieces", "Heat oil in a heavy-bottomed pot", "Add whole spices: bay leaf, cinnamon, cardamom, cloves", "Saute sliced onions until golden brown (5-7 min)", "Add ginger-garlic paste, cook 1 minute", "Add vegetables and biryani masala, cook 2 minutes", "Layer drained rice over the vegetables", "Pour 2 cups water and add salt", "Cover tightly and cook on low heat until rice is fluffy (15-18 min)", "Do not stir — let it cook undisturbed", "Garnish with fried onions if desired, fluff gently"]',
+         '["Biryani is about layers — don''t mix the rice and vegetables while cooking", "Soaking rice is essential for long, separate grains", "The bottom layer (vegetables) flavors the rice through steam", "Tight lid is crucial — seal with foil if lid is loose"]',
+         100),
+
+        ('ic-salad-raita', 'Salad & Raita (Fresh Sides)',
+         'Fresh cucumber-tomato salad and cooling yogurt raita — essential Indian meal accompaniments',
+         'indian-cuisine', 'beginner', '15 minutes',
+         'https://images.unsplash.com/photo-1508910238952-0dfebf373ecf?w=800&fit=crop&q=80', '🥗',
+         '["FOR SALAD: 1 cucumber (diced)", "1 tomato (diced)", "1/4 red onion (sliced thin)", "Juice of 1 lemon", "Salt and pepper to taste", "FOR RAITA: 1 cup thick yogurt", "1/4 cucumber (grated)", "Salt to taste", "1/4 tsp cumin powder (roasted)", "Fresh mint or coriander (chopped)"]',
+         '["SALAD: Dice cucumber and tomato into bite-sized pieces", "Slice red onion thinly", "Toss together with lemon juice, salt, and pepper", "RAITA: Whisk yogurt until smooth in a bowl", "Grate cucumber and squeeze out excess water", "Mix grated cucumber into yogurt", "Add salt and roasted cumin powder", "Garnish with chopped mint or coriander", "Chill both for 10 minutes before serving"]',
+         '["Squeeze water from cucumber before adding to raita", "Roast cumin seeds in a dry pan then crush for best flavor", "Raita is meant to cool down spicy curries", "These light sides balance the rich curries perfectly"]',
+         100),
+
+        ('ic-grand-thali', 'Grand Finale Thali (Ultimate Feast)',
+         'The ultimate 5-week graduation feast — combine ALL your skills into one magnificent Indian thali',
+         'indian-cuisine', 'intermediate', '90 minutes',
+         'https://images.unsplash.com/photo-1742281257687-092746ad6021?w=800&fit=crop&q=80', '🏆',
+         '["Ingredients for roti or naan", "Ingredients for jeera rice or plain rice", "Ingredients for dal tadka", "Ingredients for paneer butter masala", "Leftover sabzis from the week", "Fresh salad and raita", "Pickle, papad, lemon wedges"]',
+         '["PLAN YOUR TIMING: Start dal first (pressure cooker)", "Begin paneer butter masala while dal cooks", "Start rice when dal is almost done", "Reheat any leftover puri bhaji potato mix or other sabzis", "Prepare fresh raita and salad", "Roll and cook rotis or naan LAST — serve hot", "GRAND ASSEMBLY: Use a large round plate or thali", "Place rice in the center", "Arrange dal, paneer curry, and sabzi in small bowls around the plate", "Stack 2-3 rotis/naan on the side", "Add raita, salad, pickle, and papad", "Squeeze lemon over everything", "This is your 5-week graduation meal — you did it!"]',
+         '["You now know knife skills, tempering, curry bases, bread-making, biryani, and more", "A thali represents the diversity of Indian cooking in one plate", "Mix and match any dishes you have learned over 5 weeks", "Pat yourself on the back — you have mastered Indian home cooking fundamentals!", "Next steps: try regional cuisines, experiment with your own masala blends"]',
+         200)
+
+        ON CONFLICT (id) DO NOTHING;
+      `)
+      await this.recordMigration('020_indian_plan_week5')
+      logger.info('Indian cooking plan Week 5 recipes seeded')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
