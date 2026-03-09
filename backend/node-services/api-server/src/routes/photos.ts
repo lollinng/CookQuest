@@ -141,6 +141,14 @@ router.post('/recipes/:id/photos', authMiddleware, (req: Request, res: Response,
       return res.status(400).json({ success: false, error: { message: 'Maximum 3 photos per recipe' } })
     }
 
+    // Snapshot photo count before upload for unlock detection
+    const recipe = await DatabaseService.getRecipeById(recipeId)
+    const skillId = recipe?.skill
+    let previousPhotoCount = 0
+    if (skillId) {
+      previousPhotoCount = await DatabaseService.getPhotoCountForSkill(userId, skillId)
+    }
+
     const safeExt = MIME_TO_EXT[req.file.mimetype] || '.jpg'
     const baseFilename = `${crypto.randomUUID()}${safeExt}`
 
@@ -176,7 +184,17 @@ router.post('/recipes/:id/photos', authMiddleware, (req: Request, res: Response,
       await DatabaseService.updatePostPhotoUrl(userId, recipeId, photoUrl)
     }
 
-    res.json({ success: true, data: { photo_url: photoUrl, recipe_id: recipeId, photo_number: result.photo_number } })
+    // Award +80 XP for posting a photo
+    await DatabaseService.awardXP(userId, 'photo_post', 80, `recipe:${recipeId}`)
+    const newBadges = await DatabaseService.checkAndAwardBadges(userId)
+
+    // Check for newly unlocked recipes after this upload
+    let newUnlocks: { id: string; title: string }[] = []
+    if (skillId) {
+      newUnlocks = await DatabaseService.getNewlyUnlockedRecipes(userId, skillId, previousPhotoCount)
+    }
+
+    res.json({ success: true, data: { photo_url: photoUrl, recipe_id: recipeId, photo_number: result.photo_number, newUnlocks, newBadges } })
   } catch (error: any) {
     logger.error({ err: error }, 'Photo upload error')
     res.status(500).json({ success: false, error: { message: 'Upload failed' } })

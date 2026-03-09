@@ -219,19 +219,33 @@ router.post('/:id/progress',
       skills_unlocked = await DatabaseService.getNewlyUnlockedSkills(userId, recipe.skill)
     }
 
-    const xp_earned = completed && !wasAlreadyCompleted ? (recipe.xp_reward || 100) : 0
+    // Award XP for recipe completion (50 XP, only on new completions)
+    let xp_earned = completed && !wasAlreadyCompleted ? 50 : 0
+    let newBadges: { badgeKey: string; badgeName: string; badgeEmoji: string }[] = []
+    let streak_bonus: { bonusXP: number; milestone: number } | null = null
+    if (xp_earned > 0) {
+      await DatabaseService.awardXP(userId, 'recipe_complete', xp_earned, `recipe:${id}`)
+
+      // Check streak bonus
+      const streakDays = await DatabaseService.getUserStreakDays(userId)
+      streak_bonus = await DatabaseService.awardStreakBonus(userId, streakDays)
+      if (streak_bonus) {
+        xp_earned += streak_bonus.bonusXP
+      }
+
+      newBadges = await DatabaseService.checkAndAwardBadges(userId)
+    }
 
     // Compute full user state for the response
     const allUserProgress = await DatabaseService.getUserProgress(userId)
     const totalCompleted = allUserProgress.filter(p => p.completed).length
-    const totalXP = totalCompleted * 100 // simplified: 100 XP per recipe
+    const totalXP = await DatabaseService.getUserTotalXP(userId)
     const level = Math.floor(totalXP / 1000) + 1
     const currentLevelXP = (level - 1) * 1000
     const nextLevelXP = level * 1000
 
     // Check if this completion caused a level-up
-    const prevTotalCompleted = wasAlreadyCompleted ? totalCompleted : totalCompleted - 1
-    const prevTotalXP = prevTotalCompleted * 100
+    const prevTotalXP = totalXP - xp_earned
     const prevLevel = Math.floor(prevTotalXP / 1000) + 1
     const level_up = level > prevLevel ? { new_level: level, previous_level: prevLevel } : null
 
@@ -293,6 +307,8 @@ router.post('/:id/progress',
           color: s.color,
         })),
         streak_updated: !wasAlreadyCompleted && streak > 0,
+        streak_bonus,
+        new_badges: newBadges,
       }
     })
   })

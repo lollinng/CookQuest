@@ -176,3 +176,35 @@ export interface Notification {
   isRead: boolean
   createdAt: string
 }
+
+// ── Progression / Recipe Gating ──
+
+export interface RecipeGatingStatus {
+  recipeId: string
+  isUnlocked: boolean
+  unlockReason?: string
+}
+
+export interface SkillProgression {
+  skillId: SkillType
+  totalRecipes: number
+  unlockedCount: number
+  photosPosted: number
+  photosNeededForNextUnlock: number
+  photosNeededForNextSkill: number
+  nextUnlockAt: number
+  recipes: RecipeGatingStatus[]
+}
+
+export interface Badge {
+  key: string
+  name: string
+  emoji: string
+  earnedAt: string | null
+  earned: boolean
+}
+
+export interface PostRatings {
+  tasteRating: number
+  difficultyRating: number
+}

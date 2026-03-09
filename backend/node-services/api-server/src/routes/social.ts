@@ -600,10 +600,21 @@ router.post('/posts/:postId/like',
       })
     }
 
+    // Prevent self-likes
+    if (post.user_id === userId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Cannot like your own post' }
+      })
+    }
+
     const result = await DatabaseService.togglePostLike(postId, userId)
 
     if (result.liked) {
       await DatabaseService.createNotification(post.user_id, userId, 'post_like', postId)
+      // Award +5 XP to the post author for receiving a like
+      await DatabaseService.awardXP(post.user_id, 'receive_like', 5, `post:${postId}`)
+      await DatabaseService.checkAndAwardBadges(post.user_id)
     }
 
     res.json({

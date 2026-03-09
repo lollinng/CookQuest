@@ -1,7 +1,9 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Camera, Lock, Loader2 } from 'lucide-react'
+import { useIsMobile } from '@/hooks/use-platform'
+import { PhotoSourceSheet } from '@/components/ui/photo-source-sheet'
 
 interface PhotoNodeProps {
   recipeId: string
@@ -30,6 +32,8 @@ export function PhotoNode({
   totalPhotos = 0,
 }: PhotoNodeProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const isMobile = useIsMobile()
+  const [sheetOpen, setSheetOpen] = useState(false)
   const hasPhoto = !!photoUrl
 
   // Larger nodes when photo is present so users can see their uploads
@@ -104,7 +108,7 @@ export function PhotoNode({
 
             {/* Upload button overlay at bottom-right */}
             <button
-              onClick={() => inputRef.current?.click()}
+              onClick={() => isMobile ? setSheetOpen(true) : inputRef.current?.click()}
               disabled={isUploading}
               className={`
                 absolute bottom-0 right-0 rounded-full bg-amber-500 hover:bg-amber-400 text-white
@@ -127,6 +131,14 @@ export function PhotoNode({
               className="hidden"
               onChange={handleFileChange}
             />
+
+            {isMobile && (
+              <PhotoSourceSheet
+                open={sheetOpen}
+                onOpenChange={setSheetOpen}
+                onFileSelected={(file) => onUpload(recipeId, file)}
+              />
+            )}
           </>
         )}
       </div>

@@ -48,7 +48,7 @@ export function PWAInstallPrompt({ isOpen, onClose }: PWAInstallPromptProps) {
 
       {/* Dialog */}
       <div
-        className="relative w-full max-w-sm bg-cq-surface border border-cq-border rounded-2xl p-5 shadow-2xl animate-slide-up-spring"
+        className="relative w-full max-w-sm max-h-[90vh] overflow-y-auto bg-cq-surface border border-cq-border rounded-2xl p-5 shadow-2xl animate-slide-up-spring"
         style={{ position: 'relative', zIndex: 1 }}
       >
         {/* Close button */}

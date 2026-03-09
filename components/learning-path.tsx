@@ -1,10 +1,11 @@
 'use client'
 
-import { Check, Lock, Star, Crown } from 'lucide-react'
-import type { Recipe, RecipePhoto } from '@/lib/types'
+import { Check, Lock, Star, Crown, Camera } from 'lucide-react'
+import type { Recipe, RecipePhoto, SkillProgression } from '@/lib/types'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { PhotoNode } from './photo-node'
+import { GatePrompt } from './ui/gate-prompt'
 
 interface LearningPathProps {
   recipes: Recipe[]
@@ -17,6 +18,7 @@ interface LearningPathProps {
   userPhotos?: Map<string, RecipePhoto[]>
   onPhotoUpload?: (recipeId: string, file: File) => void
   uploadingRecipeId?: string | null
+  progression?: SkillProgression
 }
 
 const COLOR_MAP: Record<string, {
@@ -116,6 +118,7 @@ function PathNode({
   colors,
   onToggle,
   labelSide,
+  gateMessage,
 }: {
   recipe: Recipe
   isCompleted: boolean
@@ -125,6 +128,7 @@ function PathNode({
   colors: typeof COLOR_MAP.blue
   onToggle: (id: string) => void
   labelSide: 'left' | 'right'
+  gateMessage?: string
 }) {
   const [isPressed, setIsPressed] = useState(false)
   const isCheckpoint = index % 3 === 0
@@ -231,6 +235,12 @@ function PathNode({
             UNDO
           </button>
         )}
+        {isLocked && gateMessage && (
+          <div className="mt-1 text-xs text-amber-500 font-medium flex items-center gap-1">
+            <Camera className="size-3" />
+            {gateMessage}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -277,6 +287,7 @@ export function LearningPath({
   userPhotos,
   onPhotoUpload,
   uploadingRecipeId,
+  progression,
 }: LearningPathProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const containerWidth = useContainerWidth(wrapperRef)
@@ -286,6 +297,23 @@ export function LearningPath({
   const allCompleted = completedCount === recipes.length && recipes.length > 0
   const currentIndex = recipes.findIndex(r => !isRecipeCompleted(r.id))
   const isCookbook = mode === 'cookbook'
+
+  // Gate prompt state
+  const [gateOpen, setGateOpen] = useState(false)
+  const [gatedRecipe, setGatedRecipe] = useState<Recipe | null>(null)
+
+  // Check if a recipe is gated (locked by progression, not just sequence)
+  const isRecipeGated = (recipeId: string): boolean => {
+    if (!progression || progression.recipes.length === 0) return false
+    const entry = progression.recipes.find(r => r.recipeId === recipeId)
+    if (!entry) return false
+    return !entry.isUnlocked
+  }
+
+  const handleGatedNodeClick = (recipe: Recipe) => {
+    setGatedRecipe(recipe)
+    setGateOpen(true)
+  }
 
   // In cookbook mode, build expanded node list (multiple photo nodes per recipe)
   type CookbookNode = {
@@ -363,6 +391,39 @@ export function LearningPath({
         isCookbook ? 'bg-amber-50' : ''
       }`}
     >
+      {/* Photo progress tracker — only when gating is active */}
+      {progression && progression.recipes.length > 0 && progression.photosNeededForNextUnlock > 0 && !isCookbook && (
+        <div className="w-full max-w-lg mb-4 px-1">
+          <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border ${
+            isCookbook
+              ? 'bg-amber-100/80 border-amber-200'
+              : 'bg-cq-surface border-cq-border'
+          }`}>
+            <Camera className={`size-4 flex-shrink-0 ${isCookbook ? 'text-amber-600' : colors.accent}`} />
+            <div className="flex-1 min-w-0">
+              <div className="flex justify-between text-xs mb-1">
+                <span className={isCookbook ? 'text-stone-600' : 'text-cq-text-secondary'}>
+                  {progression.photosPosted} photo{progression.photosPosted !== 1 ? 's' : ''} posted
+                </span>
+                <span className={`font-medium ${isCookbook ? 'text-stone-700' : 'text-cq-text-primary'}`}>
+                  {Math.max(0, progression.photosNeededForNextUnlock - progression.photosPosted)} more to unlock
+                </span>
+              </div>
+              <div className={`h-2 rounded-full overflow-hidden ${isCookbook ? 'bg-amber-200' : 'bg-cq-track'}`}>
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${
+                    isCookbook ? 'bg-amber-500' : colors.node
+                  }`}
+                  style={{
+                    width: `${Math.min(100, (progression.photosPosted / progression.photosNeededForNextUnlock) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Section banner */}
       <div className={`w-full max-w-lg rounded-2xl p-5 mb-16 shadow-2xl border ${
         isCookbook
@@ -463,30 +524,48 @@ export function LearningPath({
           recipes.map((recipe, index) => {
             const pos = positions[index]
             const isCompleted = isRecipeCompleted(recipe.id)
-            const isLocked = index > 0 && !isRecipeCompleted(recipes[index - 1].id) && !isCompleted
-            const isCurrent = index === currentIndex
+            const sequentialLock = index > 0 && !isRecipeCompleted(recipes[index - 1].id) && !isCompleted
+            const gated = isRecipeGated(recipe.id)
+            const isLocked = sequentialLock || gated
+            const isCurrent = index === currentIndex && !gated
             const labelSide = getLabelSide(pos.x, index)
 
             return (
               <div
                 key={recipe.id}
-                className="absolute"
+                className={`absolute ${gated && !sequentialLock ? 'opacity-50 grayscale' : ''}`}
                 style={{
                   left: centerX + pos.x,
                   top: pos.y,
                   transform: 'translate(-50%, -50%)',
                 }}
               >
-                <PathNode
-                  recipe={recipe}
-                  isCompleted={isCompleted}
-                  isLocked={isLocked}
-                  isCurrent={isCurrent}
-                  index={index}
-                  colors={colors}
-                  onToggle={onToggleCompletion}
-                  labelSide={labelSide}
-                />
+                {gated ? (
+                  <div onClick={() => handleGatedNodeClick(recipe)} className="cursor-pointer">
+                    <PathNode
+                      recipe={recipe}
+                      isCompleted={isCompleted}
+                      isLocked={isLocked}
+                      isCurrent={false}
+                      index={index}
+                      colors={colors}
+                      onToggle={() => {}}
+                      labelSide={labelSide}
+                      gateMessage="Cook & post to unlock"
+                    />
+                  </div>
+                ) : (
+                  <PathNode
+                    recipe={recipe}
+                    isCompleted={isCompleted}
+                    isLocked={isLocked}
+                    isCurrent={isCurrent}
+                    index={index}
+                    colors={colors}
+                    onToggle={onToggleCompletion}
+                    labelSide={labelSide}
+                  />
+                )}
               </div>
             )
           })
@@ -570,6 +649,19 @@ export function LearningPath({
           />
         </div>
       </div>
+
+      {/* Gate prompt bottom sheet */}
+      {gatedRecipe && (
+        <GatePrompt
+          open={gateOpen}
+          onOpenChange={setGateOpen}
+          recipeName={gatedRecipe.title}
+          recipeEmoji={gatedRecipe.emoji}
+          photosPosted={progression?.photosPosted ?? 0}
+          photosNeededForNextUnlock={progression?.photosNeededForNextUnlock ?? 1}
+          skillColor={skillColor}
+        />
+      )}
     </div>
   )
 }

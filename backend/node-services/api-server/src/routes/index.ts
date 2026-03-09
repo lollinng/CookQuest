@@ -15,6 +15,7 @@ import { adminRoutes } from './admin'
 import { onboardingRoutes } from './onboarding'
 import { demoRoutes } from './demo'
 import { uploadRoutes } from './uploads'
+import { progressionRoutes } from './progression'
 
 export function initializeRoutes(app: Express) {
   // API version prefix
@@ -49,6 +50,9 @@ export function initializeRoutes(app: Express) {
 
   // Favorites — handles /api/v1/recipes/:id/favorite and /api/v1/users/me/favorites
   app.use(apiPrefix, favoriteRoutes)
+
+  // Progression — handles /api/v1/progression/overview and /api/v1/progression/skills/:skillId
+  app.use(`${apiPrefix}/progression`, authMiddleware, progressionRoutes)
 
   // Social — handles /api/v1/users/:id/follow, followers, following, search, profile
   app.use(apiPrefix, socialRoutes)

@@ -1323,6 +1323,91 @@ class DatabaseServiceClass {
       logger.info('Migration 022: Onboarding column applied')
     }
 
+    // Migration 023: Cook-to-unlock progression system
+    if (!(await this.isMigrationApplied('023_cook_to_unlock'))) {
+      // 1. Add gating columns to skills
+      await this.pool.query(`
+        ALTER TABLE skills ADD COLUMN IF NOT EXISTS initial_free_recipes INTEGER DEFAULT 3;
+        ALTER TABLE skills ADD COLUMN IF NOT EXISTS recipes_per_unlock INTEGER DEFAULT 2;
+        ALTER TABLE skills ADD COLUMN IF NOT EXISTS photos_to_unlock_next INTEGER DEFAULT 3;
+      `)
+
+      // 2. Add sort_order to recipes
+      await this.pool.query(`
+        ALTER TABLE recipes ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+      `)
+
+      // 3. Seed sort_order values matching SKILL_RECIPES array positions
+      await this.pool.query(`
+        UPDATE recipes SET sort_order = v.pos FROM (VALUES
+          ('boiled-egg', 0), ('make-rice', 1), ('chop-onion', 2),
+          ('sear-steak', 0), ('simmer-soup', 1), ('deep-fry', 2), ('stir-fry', 3), ('grill-chicken', 4),
+          ('make-sauce', 0), ('season-taste', 1), ('herb-pairing', 2), ('spice-blend', 3), ('marinate', 4), ('balance-flavors', 5), ('umami-boost', 6),
+          ('air-fryer-fries', 0), ('air-fryer-chicken-wings', 1), ('air-fryer-salmon', 2), ('air-fryer-vegetables', 3), ('air-fryer-tofu', 4), ('air-fryer-donuts', 5),
+          ('dal-tadka', 0), ('butter-chicken', 1), ('jeera-rice', 2), ('aloo-gobi', 3), ('naan-bread', 4), ('chana-masala', 5), ('mango-lassi', 6),
+          ('ic-cutting-onion', 7), ('ic-chai-and-eggs', 8), ('ic-masala-omelette', 9), ('ic-plain-rice', 10),
+          ('ic-simple-dal', 11), ('ic-aloo-sabzi', 12), ('ic-first-full-meal', 13), ('ic-roti', 14),
+          ('ic-egg-bhurji', 15), ('ic-upma', 16), ('ic-masala-base', 17), ('ic-full-thali', 18),
+          ('ic-poha', 19), ('ic-paneer-bhurji', 20), ('ic-matar-paneer', 21), ('ic-veg-pulao', 22),
+          ('ic-bhindi-masala', 23), ('ic-masoor-dal', 24), ('ic-week3-thali', 25),
+          ('ic-aloo-paratha', 26), ('ic-paneer-tikka', 27), ('ic-gajar-matar', 28), ('ic-rajma-masala', 29),
+          ('ic-kadhi', 30), ('ic-khichdi', 31), ('ic-week4-thali', 32),
+          ('ic-puri-bhaji', 33), ('ic-besan-chilla', 34), ('ic-paneer-butter-masala', 35), ('ic-dal-tadka-yellow', 36),
+          ('ic-veg-biryani', 37), ('ic-salad-raita', 38), ('ic-grand-thali', 39)
+        ) AS v(recipe_id, pos) WHERE recipes.id = v.recipe_id;
+      `)
+
+      // 4. Add rating/privacy columns to user_posts (likes_count already exists from migration 016)
+      await this.pool.query(`
+        ALTER TABLE user_posts ADD COLUMN IF NOT EXISTS taste_rating INTEGER CHECK (taste_rating BETWEEN 1 AND 5);
+        ALTER TABLE user_posts ADD COLUMN IF NOT EXISTS difficulty_rating INTEGER CHECK (difficulty_rating BETWEEN 1 AND 5);
+        ALTER TABLE user_posts ADD COLUMN IF NOT EXISTS is_private BOOLEAN DEFAULT false;
+      `)
+
+      // 5. Create xp_actions table
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS xp_actions (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          action_type VARCHAR(50) NOT NULL,
+          xp_amount INTEGER NOT NULL,
+          reference_id TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_xp_actions_user ON xp_actions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_xp_actions_type ON xp_actions(action_type);
+      `)
+
+      // 6. Create user_badges table
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS user_badges (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          badge_key VARCHAR(100) NOT NULL,
+          badge_name VARCHAR(200) NOT NULL,
+          badge_emoji VARCHAR(10),
+          earned_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(user_id, badge_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_badges_user ON user_badges(user_id);
+      `)
+
+      // 7. Update skill configs: basic-cooking gets all free, others get 3/2/3
+      await this.pool.query(`
+        UPDATE skills SET initial_free_recipes = 99 WHERE id = 'basic-cooking';
+        UPDATE skills SET initial_free_recipes = 3, recipes_per_unlock = 2, photos_to_unlock_next = 3
+          WHERE id != 'basic-cooking';
+      `)
+
+      // 8. Add sort_order index on recipes
+      await this.pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_recipes_sort ON recipes(skill_id, sort_order);
+      `)
+
+      await this.recordMigration('023_cook_to_unlock')
+      logger.info('Migration 023: Cook-to-unlock progression schema applied')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
@@ -2286,6 +2371,390 @@ class DatabaseServiceClass {
       [userId]
     )
     return rows
+  }
+
+  // ── Progression (cook-to-unlock) ──
+
+  /** Count distinct recipes a user has posted photos for in a given skill */
+  async getPhotoCountForSkill(userId: number, skillId: string): Promise<number> {
+    const { rows } = await this.pool.query(
+      `SELECT COUNT(DISTINCT urp.recipe_id)::int AS cnt
+       FROM user_recipe_photos urp
+       JOIN recipes r ON r.id = urp.recipe_id
+       WHERE urp.user_id = $1 AND r.skill_id = $2`,
+      [userId, skillId]
+    )
+    return rows[0].cnt
+  }
+
+  /** Get full progression state for a user in a skill */
+  async getSkillProgression(userId: number, skillId: string): Promise<{
+    skillId: string;
+    totalRecipes: number;
+    unlockedCount: number;
+    photoCount: number;
+    initialFree: number;
+    recipesPerUnlock: number;
+    recipes: { id: string; title: string; sortOrder: number; isUnlocked: boolean }[];
+  }> {
+    // Get skill config
+    const skill = await this.getSkillById(skillId)
+    const initialFree = skill?.initial_free_recipes ?? 3
+    const recipesPerUnlock = skill?.recipes_per_unlock ?? 2
+
+    // Get all recipes ordered by sort_order
+    const { rows: recipes } = await this.pool.query(
+      `SELECT id, title, sort_order
+       FROM recipes
+       WHERE skill_id = $1 AND is_active = TRUE
+       ORDER BY sort_order`,
+      [skillId]
+    )
+
+    // Get photo count for this skill
+    const photoCount = await this.getPhotoCountForSkill(userId, skillId)
+
+    const totalRecipes = recipes.length
+    const unlockedCount = Math.min(totalRecipes, initialFree + photoCount * recipesPerUnlock)
+
+    return {
+      skillId,
+      totalRecipes,
+      unlockedCount,
+      photoCount,
+      initialFree,
+      recipesPerUnlock,
+      recipes: recipes.map((r: any, idx: number) => ({
+        id: r.id,
+        title: r.title,
+        sortOrder: r.sort_order,
+        isUnlocked: idx < unlockedCount,
+      })),
+    }
+  }
+
+  /** Get progression overview for all skills */
+  async getProgressionOverview(userId: number): Promise<Array<{
+    skillId: string;
+    skillName: string;
+    totalRecipes: number;
+    unlockedCount: number;
+    photoCount: number;
+  }>> {
+    const skills = await this.getAllSkills()
+    const results = []
+    for (const skill of skills) {
+      const photoCount = await this.getPhotoCountForSkill(userId, skill.id)
+      const initialFree = skill.initial_free_recipes ?? 3
+      const recipesPerUnlock = skill.recipes_per_unlock ?? 2
+
+      const { rows: recipeCountRows } = await this.pool.query(
+        'SELECT COUNT(*)::int AS cnt FROM recipes WHERE skill_id = $1 AND is_active = TRUE',
+        [skill.id]
+      )
+      const totalRecipes = recipeCountRows[0].cnt
+      const unlockedCount = Math.min(totalRecipes, initialFree + photoCount * recipesPerUnlock)
+
+      results.push({
+        skillId: skill.id,
+        skillName: skill.name,
+        totalRecipes,
+        unlockedCount,
+        photoCount,
+      })
+    }
+    return results
+  }
+
+  /** After photo upload, check which new recipes were unlocked */
+  async getNewlyUnlockedRecipes(userId: number, skillId: string, previousPhotoCount: number): Promise<{ id: string; title: string }[]> {
+    const skill = await this.getSkillById(skillId)
+    const initialFree = skill?.initial_free_recipes ?? 3
+    const recipesPerUnlock = skill?.recipes_per_unlock ?? 2
+
+    const { rows: recipes } = await this.pool.query(
+      `SELECT id, title, sort_order
+       FROM recipes
+       WHERE skill_id = $1 AND is_active = TRUE
+       ORDER BY sort_order`,
+      [skillId]
+    )
+
+    const totalRecipes = recipes.length
+    const previousUnlocked = Math.min(totalRecipes, initialFree + previousPhotoCount * recipesPerUnlock)
+    const currentPhotoCount = await this.getPhotoCountForSkill(userId, skillId)
+    const currentUnlocked = Math.min(totalRecipes, initialFree + currentPhotoCount * recipesPerUnlock)
+
+    if (currentUnlocked <= previousUnlocked) return []
+
+    return recipes
+      .slice(previousUnlocked, currentUnlocked)
+      .map((r: any) => ({ id: r.id, title: r.title }))
+  }
+
+  // ── XP Actions ──
+
+  async awardXP(userId: number, actionType: string, xpAmount: number, referenceId?: string): Promise<void> {
+    await this.pool.query(
+      'INSERT INTO xp_actions (user_id, action_type, xp_amount, reference_id) VALUES ($1, $2, $3, $4)',
+      [userId, actionType, xpAmount, referenceId ?? null]
+    )
+  }
+
+  async getUserTotalXP(userId: number): Promise<number> {
+    const { rows } = await this.pool.query(
+      'SELECT COALESCE(SUM(xp_amount), 0)::int AS total_xp FROM xp_actions WHERE user_id = $1',
+      [userId]
+    )
+    return rows[0].total_xp
+  }
+
+  // ── Badges ──
+
+  private static BADGE_DEFINITIONS = [
+    { key: 'first_cook', name: 'First Cook', emoji: '🍳', check: (stats: any) => stats.recipesCompleted >= 1 },
+    { key: 'five_dishes', name: 'Five Dishes', emoji: '🥘', check: (stats: any) => stats.recipesCompleted >= 5 },
+    { key: 'ten_dishes', name: 'Ten Dishes', emoji: '🏅', check: (stats: any) => stats.recipesCompleted >= 10 },
+    { key: 'photo_starter', name: 'Photo Starter', emoji: '📸', check: (stats: any) => stats.photosPosted >= 1 },
+    { key: 'photo_pro', name: 'Photo Pro', emoji: '🎞️', check: (stats: any) => stats.photosPosted >= 10 },
+    { key: 'social_butterfly', name: 'Social Butterfly', emoji: '🦋', check: (stats: any) => stats.likesReceived >= 10 },
+    { key: 'master_basic', name: 'Basic Cooking Master', emoji: '⭐', check: (stats: any) => (stats.skillCompletion['basic-cooking'] ?? 0) >= 100 },
+    { key: 'master_heat', name: 'Heat Control Master', emoji: '🔥', check: (stats: any) => (stats.skillCompletion['heat-control'] ?? 0) >= 100 },
+    { key: 'master_flavor', name: 'Flavor Building Master', emoji: '🧂', check: (stats: any) => (stats.skillCompletion['flavor-building'] ?? 0) >= 100 },
+    { key: 'master_airfryer', name: 'Air Fryer Master', emoji: '💨', check: (stats: any) => (stats.skillCompletion['air-fryer'] ?? 0) >= 100 },
+    { key: 'master_indian', name: 'Indian Cuisine Master', emoji: '🍛', check: (stats: any) => (stats.skillCompletion['indian-cuisine'] ?? 0) >= 100 },
+  ]
+
+  /** Check all badge definitions and award any newly earned badges. Returns newly earned badges. */
+  async checkAndAwardBadges(userId: number): Promise<{ badgeKey: string; badgeName: string; badgeEmoji: string }[]> {
+    // Gather stats
+    const { rows: recipeRows } = await this.pool.query(
+      "SELECT COUNT(*)::int AS cnt FROM user_recipe_progress WHERE user_id = $1 AND status IN ('completed', 'mastered')",
+      [userId]
+    )
+    const recipesCompleted = recipeRows[0].cnt
+
+    const { rows: photoRows } = await this.pool.query(
+      'SELECT COUNT(DISTINCT recipe_id)::int AS cnt FROM user_recipe_photos WHERE user_id = $1',
+      [userId]
+    )
+    const photosPosted = photoRows[0].cnt
+
+    const { rows: likeRows } = await this.pool.query(
+      `SELECT COUNT(*)::int AS cnt FROM post_likes pl
+       JOIN user_posts up ON up.id = pl.post_id
+       WHERE up.user_id = $1`,
+      [userId]
+    )
+    const likesReceived = likeRows[0].cnt
+
+    // Skill completion percentages
+    const skills = await this.getAllSkills()
+    const skillCompletion: Record<string, number> = {}
+    for (const skill of skills) {
+      const { rows: totalRows } = await this.pool.query(
+        'SELECT COUNT(*)::int AS cnt FROM recipes WHERE skill_id = $1 AND is_active = TRUE',
+        [skill.id]
+      )
+      const { rows: completedRows } = await this.pool.query(
+        `SELECT COUNT(*)::int AS cnt FROM user_recipe_progress urp
+         JOIN recipes r ON r.id = urp.recipe_id
+         WHERE urp.user_id = $1 AND r.skill_id = $2 AND urp.status IN ('completed', 'mastered')`,
+        [userId, skill.id]
+      )
+      const total = totalRows[0].cnt
+      skillCompletion[skill.id] = total > 0 ? Math.round((completedRows[0].cnt / total) * 100) : 0
+    }
+
+    const stats = { recipesCompleted, photosPosted, likesReceived, skillCompletion }
+
+    // Get already-earned badges
+    const { rows: earnedRows } = await this.pool.query(
+      'SELECT badge_key FROM user_badges WHERE user_id = $1',
+      [userId]
+    )
+    const earnedKeys = new Set(earnedRows.map((r: any) => r.badge_key))
+
+    // Check each definition
+    const newBadges: { badgeKey: string; badgeName: string; badgeEmoji: string }[] = []
+    for (const def of DatabaseServiceClass.BADGE_DEFINITIONS) {
+      if (!earnedKeys.has(def.key) && def.check(stats)) {
+        await this.pool.query(
+          'INSERT INTO user_badges (user_id, badge_key, badge_name, badge_emoji) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
+          [userId, def.key, def.name, def.emoji]
+        )
+        newBadges.push({ badgeKey: def.key, badgeName: def.name, badgeEmoji: def.emoji })
+      }
+    }
+
+    return newBadges
+  }
+
+  // ── Leaderboard ──
+
+  async getWeeklyLeaderboard(limit: number = 20): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT u.id, u.username, u.display_name, u.avatar_url,
+              COUNT(DISTINCT urp.recipe_id)::int AS dishes_this_week,
+              COALESCE(SUM(xa.xp_amount), 0)::int AS xp_this_week
+       FROM users u
+       LEFT JOIN user_recipe_progress urp
+         ON urp.user_id = u.id
+         AND urp.status IN ('completed', 'mastered')
+         AND urp.completed_at >= date_trunc('week', NOW())
+       LEFT JOIN xp_actions xa
+         ON xa.user_id = u.id
+         AND xa.created_at >= date_trunc('week', NOW())
+       WHERE u.is_active = TRUE AND u.is_allowed = TRUE
+       GROUP BY u.id
+       HAVING COUNT(DISTINCT urp.recipe_id) > 0 OR COALESCE(SUM(xa.xp_amount), 0) > 0
+       ORDER BY dishes_this_week DESC, xp_this_week DESC
+       LIMIT $1`,
+      [limit]
+    )
+    return rows
+  }
+
+  // ── Streak helpers ──
+
+  /** Calculate current streak days from user completion dates */
+  async getUserStreakDays(userId: number): Promise<number> {
+    const { rows } = await this.pool.query(
+      `SELECT DISTINCT completed_at::date AS d
+       FROM user_recipe_progress
+       WHERE user_id = $1 AND status IN ('completed', 'mastered') AND completed_at IS NOT NULL
+       ORDER BY d DESC`,
+      [userId]
+    )
+
+    if (rows.length === 0) return 0
+
+    const today = new Date().toISOString().split('T')[0]
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+    const dates = rows.map((r: any) => r.d.toISOString().split('T')[0])
+
+    let streak = 0
+    let checkDate: string = dates.includes(today) ? today : (dates.includes(yesterday) ? yesterday : '')
+    if (!checkDate) return 0
+
+    streak = 1
+    for (let i = 1; i < 365; i++) {
+      const prevDate: string = new Date(new Date(checkDate).getTime() - 86400000).toISOString().split('T')[0]
+      if (dates.includes(prevDate)) {
+        streak++
+        checkDate = prevDate
+      } else {
+        break
+      }
+    }
+    return streak
+  }
+
+  /** Award streak bonus XP based on streak milestones */
+  async awardStreakBonus(userId: number, streakDays: number): Promise<{ bonusXP: number; milestone: number } | null> {
+    const milestones = [
+      { days: 30, xp: 200 },
+      { days: 14, xp: 100 },
+      { days: 7, xp: 50 },
+      { days: 3, xp: 25 },
+    ]
+
+    for (const m of milestones) {
+      if (streakDays === m.days) {
+        // Check if already awarded for this milestone today
+        const { rows } = await this.pool.query(
+          `SELECT id FROM xp_actions
+           WHERE user_id = $1 AND action_type = 'streak_bonus' AND reference_id = $2
+             AND created_at >= CURRENT_DATE`,
+          [userId, `streak:${m.days}`]
+        )
+        if (rows.length === 0) {
+          await this.awardXP(userId, 'streak_bonus', m.xp, `streak:${m.days}`)
+          return { bonusXP: m.xp, milestone: m.days }
+        }
+      }
+    }
+    return null
+  }
+
+  // ── Engagement notifications ──
+
+  async getEngagementNotifications(userId: number): Promise<any[]> {
+    const notifications: any[] = []
+
+    // 1. Check if near unlock
+    const overview = await this.getProgressionOverview(userId)
+    for (const skill of overview) {
+      if (skill.unlockedCount < skill.totalRecipes) {
+        const skillConfig = await this.getSkillById(skill.skillId)
+        const recipesPerUnlock = skillConfig?.recipes_per_unlock ?? 2
+        const photosNeeded = Math.ceil((skill.unlockedCount - (skillConfig?.initial_free_recipes ?? 3)) / recipesPerUnlock) + 1 - skill.photoCount
+        if (photosNeeded > 0 && photosNeeded <= 2) {
+          notifications.push({
+            type: 'unlock_near',
+            message: `${photosNeeded} photo${photosNeeded > 1 ? 's' : ''} from unlocking ${recipesPerUnlock} new ${skill.skillName} recipes`,
+            skillId: skill.skillId,
+          })
+        }
+      }
+    }
+
+    // 2. Recent likes on user posts
+    const { rows: likeRows } = await this.pool.query(
+      `SELECT up.id, COUNT(pl.id)::int AS like_count
+       FROM user_posts up
+       JOIN post_likes pl ON pl.post_id = up.id AND pl.created_at >= NOW() - INTERVAL '7 days'
+       WHERE up.user_id = $1
+       GROUP BY up.id
+       HAVING COUNT(pl.id) > 0
+       ORDER BY like_count DESC LIMIT 3`,
+      [userId]
+    )
+    for (const row of likeRows) {
+      notifications.push({
+        type: 'post_liked',
+        message: `Your dish got ${row.like_count} like${row.like_count > 1 ? 's' : ''} this week`,
+        postId: row.id,
+      })
+    }
+
+    // 3. Streak milestone
+    const streakDays = await this.getUserStreakDays(userId)
+    if (streakDays >= 3) {
+      notifications.push({
+        type: 'streak_milestone',
+        message: `${streakDays}-day streak!`,
+        streakDays,
+      })
+    }
+
+    return notifications
+  }
+
+  async getUserBadges(userId: number): Promise<{ badgeKey: string; badgeName: string; badgeEmoji: string; earnedAt: string }[]> {
+    const { rows } = await this.pool.query(
+      'SELECT badge_key, badge_name, badge_emoji, earned_at FROM user_badges WHERE user_id = $1 ORDER BY earned_at',
+      [userId]
+    )
+    return rows.map((r: any) => ({
+      badgeKey: r.badge_key,
+      badgeName: r.badge_name,
+      badgeEmoji: r.badge_emoji,
+      earnedAt: r.earned_at,
+    }))
+  }
+
+  async getAllBadgeDefinitions(userId: number): Promise<{ badgeKey: string; badgeName: string; badgeEmoji: string; earned: boolean; earnedAt: string | null }[]> {
+    const earned = await this.getUserBadges(userId)
+    const earnedMap = new Map(earned.map(b => [b.badgeKey, b.earnedAt]))
+
+    return DatabaseServiceClass.BADGE_DEFINITIONS.map(def => ({
+      badgeKey: def.key,
+      badgeName: def.name,
+      badgeEmoji: def.emoji,
+      earned: earnedMap.has(def.key),
+      earnedAt: earnedMap.get(def.key) ?? null,
+    }))
   }
 
   // Health check — lightweight ping for readiness probes

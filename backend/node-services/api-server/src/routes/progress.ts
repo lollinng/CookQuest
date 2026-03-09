@@ -40,8 +40,8 @@ router.get('/',
       }
     }))
 
-    // Calculate level and XP (100 XP per completed recipe)
-    const xp = completed * 100
+    // Calculate level and XP from xp_actions table
+    const xp = await DatabaseService.getUserTotalXP(req.user!.id)
     const level = Math.floor(xp / 1000) + 1
     const currentLevelXP = (level - 1) * 1000
     const nextLevelXP = level * 1000

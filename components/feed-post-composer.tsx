@@ -2,6 +2,8 @@
 
 import { useState, useRef } from 'react';
 import { Camera, X, Search, LinkIcon, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-platform';
+import { PhotoSourceSheet } from '@/components/ui/photo-source-sheet';
 import { Button } from '@/components/ui/button';
 import {
   Drawer,
@@ -34,6 +36,8 @@ export function FeedPostComposer({ isOpen, onClose, onPostCreated }: FeedPostCom
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
+  const isMobile = useIsMobile();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const createPost = useCreatePost();
@@ -181,7 +185,7 @@ export function FeedPostComposer({ isOpen, onClose, onPostCreated }: FeedPostCom
               </div>
             ) : (
               <button
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => isMobile ? setPhotoSheetOpen(true) : fileInputRef.current?.click()}
                 className="w-full rounded-xl border-2 border-dashed border-border hover:border-muted-foreground/40 py-10 flex flex-col items-center gap-2 transition-colors"
               >
                 <Camera className="size-8 text-muted-foreground" />
@@ -195,6 +199,17 @@ export function FeedPostComposer({ isOpen, onClose, onPostCreated }: FeedPostCom
               className="hidden"
               onChange={handlePhotoSelect}
             />
+            {isMobile && (
+              <PhotoSourceSheet
+                open={photoSheetOpen}
+                onOpenChange={setPhotoSheetOpen}
+                onFileSelected={(file) => {
+                  setError(null);
+                  setPhoto(file);
+                  setPhotoPreview(URL.createObjectURL(file));
+                }}
+              />
+            )}
           </div>
 
           {/* Caption */}

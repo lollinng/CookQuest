@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { LearningPath } from '@/components/learning-path'
 import { useRecipeStore, useStoreHydrated } from '@/lib/stores/recipe-store'
 import { useSkillData, useSkills, useUserPhotos, useUploadRecipePhoto } from '@/hooks/use-recipes'
+import { useSkillProgression } from '@/hooks/use-progression'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { SkillType } from '@/lib/types'
 import Link from 'next/link'
@@ -13,6 +14,9 @@ import { SectionErrorBoundary } from '@/components/section-error-boundary'
 import { useState, useEffect, useRef } from 'react'
 import { usePWAInstall } from '@/hooks/use-pwa-install'
 import { PWAInstallPrompt } from '@/components/pwa-install-prompt'
+import { PostCookModal } from '@/components/post-cook-modal'
+import { BadgeShowcase } from '@/components/badge-showcase'
+import type { Recipe } from '@/lib/types'
 
 const SKILL_META: Record<string, {
   gradient: string
@@ -75,6 +79,8 @@ export default function SkillPage() {
   const [mode, setMode] = useState<'learn' | 'cookbook'>('learn')
   const [uploadingRecipeId, setUploadingRecipeId] = useState<string | null>(null)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
+  const [postCookRecipe, setPostCookRecipe] = useState<Recipe | null>(null)
+  const [showPostCook, setShowPostCook] = useState(false)
   const hasPrompted = useRef(false)
   const { shouldShow: shouldShowInstall } = usePWAInstall()
 
@@ -95,6 +101,7 @@ export default function SkillPage() {
   const { data: recipes, isLoading, isError } = useSkillData(skillId)
   const { data: userPhotos } = useUserPhotos()
   const uploadPhoto = useUploadRecipePhoto()
+  const { data: progression } = useSkillProgression(skillId as SkillType)
 
   const triggerInstallPrompt = () => {
     if (shouldShowInstall && !hasPrompted.current) {
@@ -116,8 +123,13 @@ export default function SkillPage() {
   const handleToggleCompletion = (recipeId: string) => {
     const wasCompleted = isRecipeCompleted(recipeId)
     toggleRecipeCompletion(recipeId)
-    // Trigger install prompt when marking as complete (not uncomplete)
-    if (!wasCompleted) {
+    // Trigger post-cook modal when marking as complete (not uncomplete)
+    if (!wasCompleted && recipes) {
+      const completedRecipe = recipes.find(r => r.id === recipeId)
+      if (completedRecipe) {
+        setPostCookRecipe(completedRecipe)
+        setShowPostCook(true)
+      }
       triggerInstallPrompt()
     }
   }
@@ -253,6 +265,38 @@ export default function SkillPage() {
           </div>
         )}
 
+        {/* Badge showcase */}
+        <div className="flex justify-center mb-4">
+          <BadgeShowcase maxVisible={5} />
+        </div>
+
+        {/* Reminder banner: completed recipes without photos */}
+        {hydrated && recipes && progression && progression.recipes.length > 0 && (() => {
+          const unpostedRecipes = recipes.filter(r =>
+            isRecipeCompleted(r.id) && !userPhotos?.has(r.id)
+          )
+          if (unpostedRecipes.length === 0) return null
+          const first = unpostedRecipes[0]
+          return (
+            <div className={`mb-4 rounded-xl border p-3 ${
+              mode === 'cookbook'
+                ? 'bg-amber-100/80 border-amber-200'
+                : 'bg-amber-900/20 border-amber-700/30'
+            }`}>
+              <p className={`text-sm ${mode === 'cookbook' ? 'text-amber-800' : 'text-amber-300'}`}>
+                {first.emoji} You cooked <span className="font-semibold">{first.title}</span>!{' '}
+                <button
+                  onClick={() => { setPostCookRecipe(first); setShowPostCook(true) }}
+                  className="underline font-medium hover:no-underline"
+                >
+                  Post your dish
+                </button>{' '}
+                to unlock more recipes.
+              </p>
+            </div>
+          )
+        })()}
+
         {/* Learning path */}
         {isLoading ? (
           <div className="flex flex-col items-center gap-12 py-12">
@@ -273,6 +317,7 @@ export default function SkillPage() {
               userPhotos={userPhotos}
               onPhotoUpload={handlePhotoUpload}
               uploadingRecipeId={uploadingRecipeId}
+              progression={progression}
             />
           </SectionErrorBoundary>
         ) : (
@@ -285,6 +330,12 @@ export default function SkillPage() {
       <PWAInstallPrompt
         isOpen={showInstallPrompt}
         onClose={() => setShowInstallPrompt(false)}
+      />
+
+      <PostCookModal
+        open={showPostCook}
+        onOpenChange={setShowPostCook}
+        recipe={postCookRecipe}
       />
     </div>
   )
