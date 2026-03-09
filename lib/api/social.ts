@@ -33,9 +33,12 @@ export async function getFeed(limit?: number): Promise<UserPost[]> {
   })
 }
 
-export async function getWorldFeed(limit?: number): Promise<UserPost[]> {
+export async function getWorldFeed(limit?: number, difficulty?: string): Promise<UserPost[]> {
+  const params: Record<string, string> = {}
+  if (limit) params.limit = String(limit)
+  if (difficulty) params.difficulty = difficulty
   return apiClient<UserPost[]>('/feed/world', {
-    params: limit ? { limit: String(limit) } : undefined,
+    params: Object.keys(params).length > 0 ? params : undefined,
   })
 }
 

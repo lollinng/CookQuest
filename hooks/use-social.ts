@@ -50,10 +50,10 @@ export function useFeed(limit: number = 30) {
   })
 }
 
-export function useWorldFeed(limit: number = 30) {
+export function useWorldFeed(limit: number = 30, difficulty?: string) {
   return useQuery({
-    queryKey: [...socialKeys.worldFeed(), limit],
-    queryFn: () => getWorldFeed(limit),
+    queryKey: [...socialKeys.worldFeed(), limit, difficulty ?? 'all'],
+    queryFn: () => getWorldFeed(limit, difficulty),
     staleTime: 1 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
   })

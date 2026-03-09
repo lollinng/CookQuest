@@ -10,7 +10,12 @@ const SKILL_RECIPES: Record<SkillType, string[]> = {
   'heat-control': ['sear-steak', 'simmer-soup', 'deep-fry', 'stir-fry', 'grill-chicken'],
   'flavor-building': ['make-sauce', 'season-taste', 'herb-pairing', 'spice-blend', 'marinate', 'balance-flavors', 'umami-boost'],
   'air-fryer': ['air-fryer-fries', 'air-fryer-chicken-wings', 'air-fryer-salmon', 'air-fryer-vegetables', 'air-fryer-tofu', 'air-fryer-donuts'],
-  'indian-cuisine': ['dal-tadka', 'butter-chicken', 'jeera-rice', 'aloo-gobi', 'naan-bread', 'chana-masala', 'mango-lassi'],
+  'indian-cuisine': [
+    'dal-tadka', 'butter-chicken', 'jeera-rice', 'aloo-gobi', 'naan-bread', 'chana-masala', 'mango-lassi',
+    'ic-cutting-onion', 'ic-chai-and-eggs', 'ic-masala-omelette', 'ic-plain-rice',
+    'ic-simple-dal', 'ic-aloo-sabzi', 'ic-first-full-meal', 'ic-roti',
+    'ic-egg-bhurji', 'ic-upma', 'ic-masala-base', 'ic-full-thali',
+  ],
 }
 
 export { SKILL_RECIPES }

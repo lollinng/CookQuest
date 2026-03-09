@@ -358,13 +358,14 @@ function mapPost(row: any) {
   }
 }
 
-// GET /api/v1/feed/world?limit=30 — Latest posts from all users
+// GET /api/v1/feed/world?limit=30&difficulty=beginner — Latest posts from all users
 router.get('/feed/world',
   authMiddleware,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.id
     const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 30, 1), 50)
-    const posts = await DatabaseService.getWorldFeed(userId, limit)
+    const difficulty = req.query.difficulty as string | undefined
+    const posts = await DatabaseService.getWorldFeed(userId, limit, difficulty)
 
     res.json({
       success: true,

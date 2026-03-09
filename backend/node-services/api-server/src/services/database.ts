@@ -946,6 +946,125 @@ class DatabaseServiceClass {
       logger.info('Post likes + notifications migration applied')
     }
 
+    // Indian cooking plan recipes (migration 017)
+    if (!(await this.isMigrationApplied('017_indian_plan_recipes'))) {
+      await this.pool.query(`
+        INSERT INTO recipes (id, title, description, skill, difficulty, time, image_url, emoji, ingredients, instructions, tips, xp_reward) VALUES
+
+        ('ic-cutting-onion', 'Kitchen Basics & Cutting Onion',
+         'Learn fundamental knife skills by practicing onion cutting techniques — the foundation of Indian cooking',
+         'indian-cuisine', 'beginner', '30 minutes',
+         'https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=800&fit=crop&q=80', '🔪',
+         '["2 onions", "1 tomato", "1 green chilli", "Cutting board", "Sharp chef knife"]',
+         '["Hold the knife with a firm grip — pinch the blade where it meets the handle", "Peel 2 onions by cutting off the top and removing the skin", "Cut each onion in half through the root", "Place flat side down and slice into thin half-moon pieces", "Dice one onion: make horizontal cuts, then vertical cuts, then slice across", "Practice chopping 1 tomato into small cubes", "Finely chop 1 green chilli (remove seeds for less heat)"]',
+         '["Always curl your fingers inward (claw grip) to protect them", "A sharp knife is safer than a dull one — it requires less force", "Keep the tip of the knife on the board and rock it for efficient chopping", "The root end of the onion holds it together — don''t cut it off until the end"]',
+         100),
+
+        ('ic-chai-and-eggs', 'Indian Chai & Boiled Eggs',
+         'Master heat control by making aromatic masala chai and perfectly boiled eggs',
+         'indian-cuisine', 'beginner', '20 minutes',
+         'https://images.unsplash.com/photo-1571934811356-5cc061b6821f?w=800&fit=crop&q=80', '☕',
+         '["1 cup water", "1 cup milk", "1 tsp tea leaves (Assam or CTC)", "Sugar to taste", "1 inch grated ginger", "2-3 eggs", "Pinch of salt"]',
+         '["CHAI: Boil 1 cup water in a saucepan", "Add tea leaves and grated ginger, simmer 1 minute", "Add 1 cup milk and sugar to taste", "Bring to a rolling boil, then simmer 2 minutes", "Strain into cups", "EGGS: Place eggs in a pot and cover with cold water", "Bring to a boil over medium-high heat", "Once boiling, cover and remove from heat — wait 8 minutes for hard boil", "Transfer eggs to cold water bath for 2 minutes, then peel"]',
+         '["Use full-fat milk for creamy chai", "Ginger is the soul of Indian chai — use fresh, not powder", "Don''t boil milk too rapidly or it will overflow", "Start eggs in cold water to prevent cracking", "The cold water bath makes peeling much easier"]',
+         100),
+
+        ('ic-masala-omelette', 'Indian Masala Omelette',
+         'A spiced Indian-style omelette loaded with onions, tomatoes, and green chillies',
+         'indian-cuisine', 'beginner', '15 minutes',
+         'https://images.unsplash.com/photo-1525184782196-8e2ded604bf7?w=800&fit=crop&q=80', '🍳',
+         '["2 eggs", "1 small onion (finely chopped)", "1 tomato (finely chopped)", "1 green chilli (finely chopped)", "2 tbsp fresh cilantro (chopped)", "1/4 tsp turmeric", "1/4 tsp red chilli powder", "Salt to taste", "1 tbsp oil or butter"]',
+         '["Crack 2 eggs into a bowl and beat well with a fork", "Add chopped onion, tomato, green chilli, and cilantro", "Season with turmeric, red chilli powder, and salt — mix well", "Heat oil or butter in a non-stick pan on medium heat", "Pour the egg mixture and spread evenly across the pan", "Cook undisturbed for 2-3 minutes until the bottom sets", "Carefully flip and cook the other side for 1-2 minutes", "Serve hot with bread or on its own"]',
+         '["Don''t over-beat the eggs — a few stirs is enough", "Medium heat is key — too hot and it burns outside while raw inside", "Add a pinch of garam masala for extra flavor", "Serve immediately — omelettes get rubbery when cold"]',
+         100),
+
+        ('ic-plain-rice', 'Perfect Plain Rice',
+         'Learn the absorption method for fluffy, separate grains of rice every time',
+         'indian-cuisine', 'beginner', '20 minutes',
+         'https://images.unsplash.com/photo-1516714435131-44d6b64dc6a2?w=800&fit=crop&q=80', '🍚',
+         '["1 cup long-grain or basmati rice", "2 cups water", "Pinch of salt", "1 tsp oil or ghee (optional)"]',
+         '["Measure 1 cup rice into a bowl", "Wash rice by rubbing gently in water — drain and repeat 3 times until water runs clear", "Add rice and 2 cups water to a heavy-bottomed pot", "Add a pinch of salt and optional oil/ghee", "Bring to a rolling boil on high heat", "Reduce heat to lowest setting, cover with tight-fitting lid", "Cook for 12 minutes without lifting the lid", "Turn off heat and let it rest covered for 5 minutes", "Fluff gently with a fork"]',
+         '["Washing removes excess starch for separate grains", "The 1:2 rice-to-water ratio is the golden rule for Indian rice", "Never stir rice while cooking — it makes it sticky", "Don''t lift the lid — steam is doing the cooking", "Resting after cooking lets moisture distribute evenly"]',
+         100),
+
+        ('ic-simple-dal', 'Simple Moong Dal',
+         'Your first lentil dish — a comforting yellow dal with a simple cumin-garlic tempering',
+         'indian-cuisine', 'beginner', '30 minutes',
+         'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&fit=crop&q=80', '🍲',
+         '["1/2 cup moong dal (or toor dal)", "2 cups water", "1/4 tsp turmeric", "Salt to taste", "1 tbsp oil or ghee", "1 tsp cumin seeds", "3 garlic cloves (sliced)", "1 dried red chilli", "Fresh cilantro for garnish"]',
+         '["Wash dal 3-4 times until water runs clear", "Add dal, 2 cups water, turmeric, and salt to a pressure cooker", "Pressure cook for 3 whistles (or simmer in pot for 25 minutes until soft)", "Mash the dal lightly with a spoon — it should be slightly soupy", "TADKA: Heat oil/ghee in a small pan", "Add cumin seeds — wait until they splutter (10 seconds)", "Add sliced garlic and dried red chilli — fry until garlic is golden (30 seconds)", "Pour the hot tadka over the dal — it will sizzle", "Garnish with fresh cilantro and serve with rice"]',
+         '["Tadka (tempering) is the heart of this dish — don''t skip it", "Dal thickens as it cools — keep it slightly runny", "If using a regular pot instead of pressure cooker, cook 25-30 minutes", "Ghee gives more authentic flavor than oil", "This is the most common everyday Indian home meal"]',
+         100),
+
+        ('ic-aloo-sabzi', 'Aloo Sabzi (Dry Potato Curry)',
+         'A simple spiced potato dish — the everyday staple of Indian kitchens',
+         'indian-cuisine', 'beginner', '25 minutes',
+         'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=800&fit=crop&q=80', '🥔',
+         '["2 medium potatoes", "1 tbsp oil", "1 tsp cumin seeds", "1/4 tsp turmeric", "1/2 tsp red chilli powder", "1/2 tsp coriander powder", "Salt to taste", "Fresh cilantro for garnish"]',
+         '["Peel and dice potatoes into 1/2 inch cubes", "Heat oil in a pan on medium heat", "Add cumin seeds — wait until they splutter (10 seconds)", "Add diced potatoes and stir to coat with cumin", "Add turmeric, red chilli powder, coriander powder, and salt", "Mix well so spices coat the potatoes evenly", "Cover with a lid and cook on low heat for 10-12 minutes", "Stir every 3-4 minutes to prevent sticking", "Potatoes are done when fork-tender and lightly golden", "Garnish with fresh cilantro"]',
+         '["Cut potatoes into equal sizes so they cook evenly", "Keep the lid on — potatoes cook in their own steam", "Don''t add water — this is a dry sabzi", "A squeeze of lemon at the end brightens the flavor", "Goes perfectly with roti or as part of a rice-dal meal"]',
+         100),
+
+        ('ic-first-full-meal', 'First Full Meal: Rice + Dal + Sabzi',
+         'Combine everything you have learned this week into your first complete Indian meal',
+         'indian-cuisine', 'beginner', '45 minutes',
+         'https://images.unsplash.com/photo-1567337710282-00832b415979?w=800&fit=crop&q=80', '🍽️',
+         '["Ingredients for plain rice (Day 4)", "Ingredients for simple dal (Day 5)", "Ingredients for aloo sabzi (Day 6)", "Lemon wedges for serving", "Papad or pickle (optional sides)"]',
+         '["PLAN YOUR TIMING: Start dal first (longest cook time)", "While dal pressure cooks, wash and start the rice", "While rice simmers, prepare and cook aloo sabzi", "Check dal — mash it and prepare the tadka", "ASSEMBLY: Serve rice in the center of a plate or thali", "Place dal in a small bowl alongside", "Add aloo sabzi on the side", "Garnish with lemon wedges, cilantro", "Optional: add papad or pickle for the full experience"]',
+         '["Meal timing is the real skill here — work on multiple dishes simultaneously", "Dal takes longest, so always start it first", "Keep rice covered and warm while you finish other dishes", "This is a classic North Indian everyday meal — simple but deeply satisfying", "Congratulations — you cooked a complete Indian meal from scratch!"]',
+         150),
+
+        ('ic-roti', 'Homemade Roti (Chapati)',
+         'Learn to knead dough and roll Indian flatbread on a hot tawa',
+         'indian-cuisine', 'beginner', '40 minutes',
+         'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&fit=crop&q=80', '🫓',
+         '["1 cup whole wheat flour (atta)", "Pinch of salt", "Warm water (about 1/2 cup)", "Extra flour for dusting", "Ghee or butter for brushing (optional)"]',
+         '["Mix atta and salt in a large bowl", "Add warm water gradually, mixing with your hand", "Knead for 5-7 minutes until dough is smooth and soft (like an earlobe)", "Cover with a damp cloth and rest for 10 minutes", "Divide dough into 6-8 small balls", "Dust a ball with flour and roll into a thin circle (about 6 inches)", "Heat a tawa (flat pan) on high heat until very hot", "Place roti on the dry tawa — cook until bubbles form (30 seconds)", "Flip and cook the other side until brown spots appear", "Optional: place directly on flame for 2-3 seconds to puff it up", "Brush with ghee and serve hot"]',
+         '["Dough consistency is everything — it should be soft, not sticky or dry", "Add water gradually — you can always add more but can''t take it back", "Resting the dough makes it easier to roll", "Roll evenly in all directions for a round shape", "The tawa must be very hot before you put the roti on", "Practice makes perfect — your first few rotis won''t be round, and that''s OK"]',
+         100),
+
+        ('ic-egg-bhurji', 'Egg Bhurji (Indian Scrambled Eggs)',
+         'Spiced scrambled eggs with onion, tomato, and turmeric — India''s favorite quick meal',
+         'indian-cuisine', 'beginner', '20 minutes',
+         'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=800&fit=crop&q=80', '🥚',
+         '["2-3 eggs", "1 onion (finely chopped)", "1 tomato (chopped)", "1 green chilli (chopped)", "1/4 tsp turmeric", "1/4 tsp red chilli powder", "1/4 tsp cumin powder", "Salt to taste", "1 tbsp oil", "Fresh cilantro for garnish"]',
+         '["Heat oil in a pan on medium heat", "Add chopped onion and cook until translucent (3-4 minutes)", "Add green chilli and cook 30 seconds", "Add chopped tomato, turmeric, red chilli powder, cumin powder, and salt", "Cook until tomato softens and oil separates (3-4 minutes)", "Crack eggs directly into the pan", "Stir and scramble continuously for 2-3 minutes until eggs are just cooked", "Garnish with cilantro and serve with roti or bread"]',
+         '["The onion-tomato-spice base (masala) is what makes this Indian, not just scrambled eggs", "Don''t overcook the eggs — they should be soft and moist", "This is a classic bachelor/hostel meal in India", "Add a pinch of garam masala at the end for extra warmth"]',
+         100),
+
+        ('ic-upma', 'Upma (Semolina Breakfast)',
+         'A savory South Indian breakfast of tempered semolina with vegetables',
+         'indian-cuisine', 'beginner', '25 minutes',
+         'https://images.unsplash.com/photo-1630383249896-424e482df921?w=800&fit=crop&q=80', '🥣',
+         '["1 cup rava (semolina/sooji)", "1 tsp mustard seeds", "8-10 curry leaves", "1 onion (finely chopped)", "1 green chilli (chopped)", "1 inch ginger (grated)", "2 cups water", "Salt to taste", "2 tbsp oil", "Juice of half a lemon", "Fresh cilantro for garnish"]',
+         '["Dry roast rava in a pan on low heat for 3-4 minutes until fragrant (no color change needed)", "Set roasted rava aside", "Heat oil in the same pan on medium heat", "Add mustard seeds — wait until they pop and splutter", "Add curry leaves (careful, they splatter) and green chilli", "Add chopped onion and grated ginger — cook until onion is soft (3-4 minutes)", "Add 2 cups water and salt — bring to a boil", "Reduce heat to low and slowly add roasted rava while stirring continuously", "Stir vigorously to prevent lumps — keep stirring for 2-3 minutes", "Cover and cook on low heat for 3-4 minutes until water is absorbed", "Add lemon juice, garnish with cilantro, serve hot"]',
+         '["Dry roasting rava prevents the upma from becoming gluey", "Add rava SLOWLY to boiling water while stirring — this is the key to no lumps", "Mustard seeds should pop before you add anything else", "Curry leaves are the signature flavor — don''t skip them", "Upma tastes best eaten immediately — it hardens as it cools"]',
+         100),
+
+        ('ic-masala-base', 'Onion Tomato Masala Base',
+         'The universal Indian curry base — master this and you can cook dozens of curries',
+         'indian-cuisine', 'beginner', '20 minutes',
+         'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=800&fit=crop&q=80', '🧅',
+         '["1 large onion (finely sliced)", "2 tomatoes (pureed or finely chopped)", "1 tbsp ginger-garlic paste (or 1 inch ginger + 3 garlic cloves minced)", "1/2 tsp turmeric", "1 tsp red chilli powder", "1 tsp coriander powder", "Salt to taste", "2 tbsp oil"]',
+         '["Heat oil in a heavy-bottomed pan on medium heat", "Add sliced onions and cook, stirring occasionally", "Cook until onions turn deep golden brown (8-10 minutes) — don''t rush this step", "Add ginger-garlic paste and cook 1 minute until raw smell goes", "Add turmeric, red chilli powder, coriander powder, and salt", "Stir spices for 30 seconds until fragrant", "Add tomato puree/chopped tomatoes", "Cook on medium heat until oil separates from the masala (5-7 minutes)", "When you see oil pooling around the edges, the masala is ready", "This base can now be used for any curry — just add your protein or vegetable + water"]',
+         '["Browning onions deeply is THE most important step — it gives the curry its rich flavor and color", "Oil separating from the masala means it is properly cooked", "Make a big batch and freeze in portions — it keeps for weeks", "This base is called bhuna masala and is used in most Indian curries", "You can add garam masala at the end for extra warmth"]',
+         100),
+
+        ('ic-full-thali', 'Full Indian Thali: Roti + Dal + Curry',
+         'Your graduation meal — a complete Indian thali with roti, dal, and chana masala',
+         'indian-cuisine', 'beginner', '60 minutes',
+         'https://images.unsplash.com/photo-1596797038530-2c107229654b?w=800&fit=crop&q=80', '🏆',
+         '["Ingredients for roti (Day 8)", "Ingredients for simple dal (Day 5)", "Ingredients for chana masala (or any sabzi)", "Yogurt/raita", "Lemon wedges", "Pickle (optional)", "Papad (optional)"]',
+         '["PLAN YOUR TIMING: Start dal in pressure cooker first", "While dal cooks, prepare roti dough and let it rest", "Start the chana masala or sabzi using your masala base (Day 12)", "Prepare tadka for dal when pressure releases", "Roll and cook rotis last — they are best served hot off the tawa", "ASSEMBLY: Arrange on a round plate or thali", "Place 2-3 rotis on one side", "Dal in a small bowl", "Chana masala/sabzi in another bowl", "Add a spoonful of yogurt, lemon wedge, and pickle", "This is a proper Indian thali — you did it!"]',
+         '["A thali is about variety and balance — dal for protein, roti for carbs, sabzi for vegetables", "Always make roti last so they are warm when served", "Indian meals are eaten with your right hand — tear roti, scoop dal/sabzi", "You have completed the 2-week plan! You now know the core techniques of Indian cooking", "Next steps: try more complex curries, experiment with different dals, learn to make paratha"]',
+         200)
+
+        ON CONFLICT (id) DO NOTHING;
+      `)
+      await this.recordMigration('017_indian_plan_recipes')
+      logger.info('Indian cooking plan recipes seeded')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
@@ -1521,7 +1640,16 @@ class DatabaseServiceClass {
     return rows[0]
   }
 
-  async getWorldFeed(userId: number, limit: number = 30): Promise<any[]> {
+  async getWorldFeed(userId: number, limit: number = 30, difficulty?: string): Promise<any[]> {
+    const validDifficulties = ['beginner', 'intermediate', 'advanced'];
+    const params: any[] = [limit, userId];
+    let whereClause = '';
+
+    if (difficulty && validDifficulties.includes(difficulty)) {
+      params.push(difficulty);
+      whereClause = `WHERE r.difficulty = $${params.length}`;
+    }
+
     const { rows } = await this.pool.query(
       `SELECT
         up.id, up.user_id, u.username, u.display_name, u.avatar_url,
@@ -1533,9 +1661,10 @@ class DatabaseServiceClass {
        FROM user_posts up
        JOIN users u ON u.id = up.user_id
        LEFT JOIN recipes r ON r.id = up.recipe_id
+       ${whereClause}
        ORDER BY up.created_at DESC
        LIMIT $1`,
-      [limit, userId]
+      params
     )
     return rows
   }

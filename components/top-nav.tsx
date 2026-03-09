@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Bell, ChefHat, Heart, Newspaper, Users, UtensilsCrossed } from 'lucide-react';
+import { Bell, ChefHat, Flame, Heart, Newspaper, Users, UtensilsCrossed } from 'lucide-react';
 import { UserMenu } from '@/components/auth/user-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useAuth } from '@/lib/auth-context';
@@ -36,6 +36,15 @@ export function TopNav() {
           >
             <UtensilsCrossed className="size-4" />
             <span className="hidden sm:inline">Recipes</span>
+          </Link>
+
+          {/* Indian Plan link */}
+          <Link
+            href="/indian-cooking"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-amber-500 hover:bg-cq-surface-hover transition-colors"
+          >
+            <Flame className="size-4 text-amber-500" />
+            <span className="hidden sm:inline">Indian Plan</span>
           </Link>
 
           {/* Favorites link */}

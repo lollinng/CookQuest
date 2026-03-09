@@ -10,12 +10,14 @@ import { useFeed, useWorldFeed } from '@/hooks/use-social';
 import { FeedPostCard } from '@/components/feed-post-card';
 
 type FeedTab = 'world' | 'friends';
+type DifficultyFilter = 'all' | 'beginner' | 'intermediate' | 'advanced';
 
 export default function FeedPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [tab, setTab] = useState<FeedTab>('world');
+  const [difficulty, setDifficulty] = useState<DifficultyFilter>('all');
 
-  const worldFeed = useWorldFeed();
+  const worldFeed = useWorldFeed(30, difficulty === 'all' ? undefined : difficulty);
   const friendsFeed = useFeed();
 
   const { data: posts, isLoading } = tab === 'world' ? worldFeed : friendsFeed;
@@ -45,7 +47,7 @@ export default function FeedPage() {
             World
           </button>
           <button
-            onClick={() => setTab('friends')}
+            onClick={() => { setTab('friends'); setDifficulty('all'); }}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
               tab === 'friends'
                 ? 'bg-cq-primary text-white'
@@ -58,11 +60,34 @@ export default function FeedPage() {
         </div>
       </div>
 
+      {tab === 'world' && (
+        <div className="flex items-center gap-2">
+          {(['all', 'beginner', 'intermediate', 'advanced'] as const).map((level) => (
+            <button
+              key={level}
+              onClick={() => setDifficulty(level)}
+              className={`px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
+                difficulty === level
+                  ? 'bg-cq-primary/15 text-cq-primary border border-cq-primary/30'
+                  : 'bg-cq-surface border border-cq-border text-cq-text-secondary hover:text-cq-text-primary hover:border-cq-text-muted'
+              }`}
+            >
+              {level}
+            </button>
+          ))}
+        </div>
+      )}
+
       {isLoading && <FeedSkeletons />}
 
       {!isLoading && posts && posts.length === 0 && (
         <div className="bg-cq-surface border border-cq-border rounded-xl p-8 text-center space-y-4">
-          {tab === 'world' ? (
+          {tab === 'world' && difficulty !== 'all' ? (
+            <>
+              <Globe className="size-12 mx-auto text-cq-text-muted" />
+              <p className="text-cq-text-secondary">No {difficulty} posts yet</p>
+            </>
+          ) : tab === 'world' ? (
             <>
               <Globe className="size-12 mx-auto text-cq-text-muted" />
               <p className="text-cq-text-secondary">No posts yet. Be the first to share!</p>
