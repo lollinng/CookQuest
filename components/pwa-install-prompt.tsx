@@ -10,7 +10,7 @@ interface PWAInstallPromptProps {
 }
 
 export function PWAInstallPrompt({ isOpen, onClose }: PWAInstallPromptProps) {
-  const { isIOS, canInstall, promptInstall, dismiss, shouldShow } = usePWAInstall();
+  const { isIOS, canInstall, promptInstall, dismiss } = usePWAInstall();
 
   // Lock body scroll when open
   useEffect(() => {
@@ -20,7 +20,7 @@ export function PWAInstallPrompt({ isOpen, onClose }: PWAInstallPromptProps) {
     }
   }, [isOpen]);
 
-  if (!isOpen || !shouldShow) return null;
+  if (!isOpen) return null;
 
   const handleDismiss = () => {
     dismiss();

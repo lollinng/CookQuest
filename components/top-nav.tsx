@@ -16,7 +16,7 @@ export function TopNav() {
   const favCount = favorites?.length ?? 0;
   const { data: unreadData } = useUnreadNotificationCount();
   const unreadCount = isAuthenticated ? (unreadData?.count ?? 0) : 0;
-  const { shouldShow: shouldShowInstall, canInstall, promptInstall } = usePWAInstall();
+  const { isStandalone, canInstall, promptInstall } = usePWAInstall();
   const [showInstallSheet, setShowInstallSheet] = useState(false);
 
   return (
@@ -100,7 +100,7 @@ export function TopNav() {
           )}
 
           {/* Install App */}
-          {shouldShowInstall && (
+          {!isStandalone && (
             <button
               onClick={() => {
                 if (canInstall) {

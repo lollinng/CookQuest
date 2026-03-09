@@ -96,6 +96,16 @@ export default function FeedPage() {
     <div className="max-w-xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-cq-text-primary">Feed</h1>
+        <div className="flex items-center gap-2">
+          {isAuthenticated && (
+            <button
+              onClick={() => setComposerOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-cq-primary text-white hover:bg-cq-primary-hover transition-colors"
+            >
+              <Plus className="size-4" />
+              <span>New Post</span>
+            </button>
+          )}
         <div className="flex items-center bg-cq-surface border border-cq-border rounded-full p-1">
           <button
             onClick={() => setTab('world')}
@@ -119,6 +129,7 @@ export default function FeedPage() {
             <Users className="size-3.5" />
             Friends
           </button>
+        </div>
         </div>
       </div>
 
@@ -181,7 +192,7 @@ export default function FeedPage() {
         <>
           <button
             onClick={() => setComposerOpen(true)}
-            className="fixed bottom-6 right-6 z-40 size-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-cq-primary-hover transition-colors flex items-center justify-center"
+            className="fixed bottom-20 right-6 z-50 size-14 rounded-full bg-cq-primary text-white shadow-lg shadow-cq-primary/25 hover:bg-cq-primary-hover transition-colors flex items-center justify-center"
             aria-label="New post"
           >
             <Plus className="size-6" />
