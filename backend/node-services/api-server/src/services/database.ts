@@ -949,7 +949,7 @@ class DatabaseServiceClass {
     // Indian cooking plan recipes (migration 017)
     if (!(await this.isMigrationApplied('017_indian_plan_recipes'))) {
       await this.pool.query(`
-        INSERT INTO recipes (id, title, description, skill, difficulty, time, image_url, emoji, ingredients, instructions, tips, xp_reward) VALUES
+        INSERT INTO recipes (id, title, description, skill_id, difficulty, total_time, image_url, emoji, ingredients, instructions, tips, xp_reward) VALUES
 
         ('ic-cutting-onion', 'Kitchen Basics & Cutting Onion',
          'Learn fundamental knife skills by practicing onion cutting techniques — the foundation of Indian cooking',
