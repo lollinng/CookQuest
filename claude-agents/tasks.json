@@ -69,5 +69,23 @@
     "completedAt": "2026-03-09T12:25:00.000Z",
     "retryCount": 0,
     "maxRetries": 3
+  },
+  {
+    "id": "task_155",
+    "title": "[Bug] Registration shows generic 'Validation failed' — password rules mismatch",
+    "status": "done",
+    "priority": 2,
+    "type": "bug-fix",
+    "description": "## Bug Report\n\n**Reported:** 2026-03-09 | **Severity:** HIGH — blocks new user registration\n\n### Symptoms\n- User fills in registration form (email, username, password, confirm password)\n- Clicks 'Create Account'\n- Gets a red banner saying 'Validation failed' with no details\n- Console shows: POST /api/v1/auth/register 400 (Bad Request)\n\n### Root Cause\nTwo issues:\n\n**1. Frontend-backend password validation mismatch**\n- Backend (`backend/.../routes/auth.ts:89`) requires: `/^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).+$/` — at least one uppercase, one lowercase, one number\n- Frontend (`components/auth/register-form.tsx:57-61`) only checks: `password.length < 8`\n- So passwords like 'damnit123' (no uppercase) pass frontend validation but fail backend validation\n\n**2. Generic error display**\n- Backend returns structured errors: `{ error: { message: 'Validation failed', details: [{ field: 'password', message: 'Password must contain...' }] } }`\n- Frontend (`register-form.tsx:83-86`) catches the error but only shows `err.message` which is the generic 'Validation failed', not the specific field-level messages\n- The `apiClient` wrapper likely strips the `details` array\n\n### Fix Required\n\n**Fix 1: Add matching password validation to frontend** (`register-form.tsx`)\nIn the `validate()` function, after the length check, add:\n```ts\nif (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)/.test(password)) {\n  newErrors.password = 'Password needs at least one uppercase letter, one lowercase letter, and a number.'\n}\n```\n\n**Fix 2: Surface backend validation details in error display** (`register-form.tsx`)\nIn the catch block, parse backend error details if available and show field-specific errors instead of just the generic message. Check how `apiClient` surfaces error details — it may need to include `details` in the thrown error.\n\n### Files to modify\n- `components/auth/register-form.tsx` — add password complexity validation + improve error display\n- Possibly `lib/api/client.ts` — ensure validation details are included in thrown errors\n\n### Acceptance Criteria\n- Given password 'abc12345' (no uppercase), frontend shows 'Password needs at least one uppercase letter, one lowercase letter, and a number' BEFORE submitting\n- Given any backend validation error with details, the specific field error is shown (not just 'Validation failed')\n- Given valid registration data, user is registered successfully",
+    "files": [
+      "components/auth/register-form.tsx",
+      "lib/api/client.ts"
+    ],
+    "createdAt": "2026-03-09T12:30:00.000Z",
+    "assignedTo": "implementer-agent-2",
+    "assignedAt": "2026-03-09T12:35:00.000Z",
+    "completedAt": "2026-03-09T12:40:00.000Z",
+    "retryCount": 0,
+    "maxRetries": 3
   }
 ]

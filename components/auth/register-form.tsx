@@ -12,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Loader2Icon, ChefHatIcon } from 'lucide-react'
+import { Loader2Icon, ChefHatIcon, CheckCircle2, Circle } from 'lucide-react'
 
 interface RegisterFormProps {
   onSwitchToLogin?: () => void
@@ -56,8 +56,15 @@ export function RegisterForm({ onSwitchToLogin, onSuccess, embedded = false }: R
 
     if (!password) {
       newErrors.password = 'Password is required.'
-    } else if (password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters.'
+    } else {
+      const missing: string[] = []
+      if (password.length < 8) missing.push('at least 8 characters')
+      if (!/[a-z]/.test(password)) missing.push('a lowercase letter')
+      if (!/[A-Z]/.test(password)) missing.push('an uppercase letter')
+      if (!/\d/.test(password)) missing.push('a number')
+      if (missing.length > 0) {
+        newErrors.password = `Password needs ${missing.join(', ')}.`
+      }
     }
 
     if (!confirmPassword) {
@@ -143,6 +150,25 @@ export function RegisterForm({ onSwitchToLogin, onSuccess, embedded = false }: R
           required
         />
         {errors.password && <p className="text-xs text-red-600">{errors.password}</p>}
+        {password.length > 0 && (
+          <div className="space-y-1 pt-1">
+            {[
+              { met: password.length >= 8, label: '8+ characters' },
+              { met: /[a-z]/.test(password), label: 'Lowercase letter' },
+              { met: /[A-Z]/.test(password), label: 'Uppercase letter' },
+              { met: /\d/.test(password), label: 'Number' },
+            ].map(({ met, label }) => (
+              <div key={label} className="flex items-center gap-1.5 text-xs">
+                {met ? (
+                  <CheckCircle2 className="size-3.5 text-green-500" />
+                ) : (
+                  <Circle className="size-3.5 text-cq-text-muted" />
+                )}
+                <span className={met ? 'text-green-600' : 'text-cq-text-muted'}>{label}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">
