@@ -13,8 +13,6 @@ export {
   apiClient,
   API_BASE_URL,
   ApiError,
-  getToken,
-  setToken,
   removeToken,
 } from './client'
 export type {

@@ -5,6 +5,8 @@ import { RedisService } from '../services/redis'
 import { optionalAuth, AuthenticatedRequest } from '../middleware/auth'
 import { validateRequest } from '../middleware/validation'
 import { asyncHandler } from '../middleware/error-handler'
+import { VALID_SKILL_IDS } from '../constants'
+import { calculateSkillProgress, enrichRecipesWithProgress } from '../utils/progression-helpers'
 
 const router = Router()
 
@@ -29,22 +31,11 @@ router.get('/',
       skillsWithProgress = await Promise.all(skills.map(async (skill) => {
         const skillRecipes = await DatabaseService.getRecipesBySkill(skill.id)
         const skillRecipeIds = skillRecipes.map(r => r.id)
-        
-        // Calculate progress for this skill
-        const completedInSkill = userProgress.filter(p => 
-          skillRecipeIds.includes(p.recipe_id) && p.completed
-        ).length
-        
-        const progress = {
-          completed: completedInSkill,
-          total: skillRecipeIds.length,
-          percentage: skillRecipeIds.length > 0 ? Math.round((completedInSkill / skillRecipeIds.length) * 100) : 0
-        }
 
         return {
           ...skill,
           recipes: skillRecipeIds,
-          user_progress: progress
+          user_progress: calculateSkillProgress(userProgress, skillRecipeIds)
         }
       }))
     } else {
@@ -76,7 +67,7 @@ router.get('/',
 router.get('/:id',
   optionalAuth,
   validateRequest([
-    param('id').isIn(['basic-cooking', 'heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine'])
+    param('id').isIn([...VALID_SKILL_IDS])
   ]),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const { id } = req.params
@@ -103,28 +94,11 @@ router.get('/:id',
     if (req.user) {
       const userProgress = await DatabaseService.getUserProgress(req.user.id)
       const skillRecipeIds = recipes.map(r => r.id)
-      
-      const completedInSkill = userProgress.filter(p => 
-        skillRecipeIds.includes(p.recipe_id) && p.completed
-      ).length
-      
-      const progress = {
-        completed: completedInSkill,
-        total: skillRecipeIds.length,
-        percentage: skillRecipeIds.length > 0 ? Math.round((completedInSkill / skillRecipeIds.length) * 100) : 0
-      }
-
-      // Add progress to each recipe
-      const progressMap = new Map(userProgress.map(p => [p.recipe_id, p]))
-      const recipesWithProgress = recipes.map(recipe => ({
-        ...recipe,
-        user_progress: progressMap.get(recipe.id) || null
-      }))
 
       skillData = {
         ...skill,
-        recipes: recipesWithProgress,
-        user_progress: progress
+        recipes: enrichRecipesWithProgress(recipes, userProgress),
+        user_progress: calculateSkillProgress(userProgress, skillRecipeIds)
       }
     }
 

@@ -87,9 +87,9 @@ export function RegisterForm({ onSwitchToLogin, onSuccess, embedded = false }: R
     try {
       await register(email.trim(), username.trim(), password)
       onSuccess?.()
-    } catch (err: any) {
+    } catch (err: unknown) {
       setErrors({
-        general: err?.message || 'Registration failed. Please try again.',
+        general: err instanceof Error ? err.message : 'Registration failed. Please try again.',
       })
     } finally {
       setIsSubmitting(false)

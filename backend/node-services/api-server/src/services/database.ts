@@ -1408,6 +1408,57 @@ class DatabaseServiceClass {
       logger.info('Migration 023: Cook-to-unlock progression schema applied')
     }
 
+    // Trust tiers, appeals, photo verifications, recipe views (migration 025)
+    if (!(await this.isMigrationApplied('025_trust_and_signals'))) {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS user_trust_tiers (
+          user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          tier TEXT NOT NULL DEFAULT 'new',
+          verified_count INTEGER DEFAULT 0,
+          rejected_count INTEGER DEFAULT 0,
+          last_updated TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS photo_verifications (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          recipe_id TEXT NOT NULL,
+          photo_url TEXT,
+          dhash TEXT,
+          signals JSONB DEFAULT '[]',
+          passed_count INTEGER DEFAULT 0,
+          total_count INTEGER DEFAULT 0,
+          verdict TEXT NOT NULL DEFAULT 'pending',
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_photo_verifications_user ON photo_verifications(user_id);
+        CREATE INDEX IF NOT EXISTS idx_photo_verifications_dhash ON photo_verifications(dhash);
+
+        CREATE TABLE IF NOT EXISTS photo_appeals (
+          id SERIAL PRIMARY KEY,
+          verification_id INTEGER NOT NULL REFERENCES photo_verifications(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          reason TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          reviewed_by INTEGER REFERENCES users(id),
+          reviewed_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_appeals_user ON photo_appeals(user_id);
+        CREATE INDEX IF NOT EXISTS idx_appeals_status ON photo_appeals(status);
+
+        CREATE TABLE IF NOT EXISTS recipe_views (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          recipe_id TEXT NOT NULL,
+          viewed_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_recipe_views_lookup ON recipe_views(user_id, recipe_id, viewed_at);
+      `)
+      await this.recordMigration('025_trust_and_signals')
+      logger.info('Migration 025: Trust tiers, photo verifications, appeals, and recipe views applied')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
@@ -2774,6 +2825,227 @@ class DatabaseServiceClass {
       idleCount: this.pool.idleCount,
       waitingCount: this.pool.waitingCount,
     }
+  }
+
+  // --- Photo verification & trust tier helpers ---
+
+  async getRecentRecipeView(userId: number, recipeId: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM recipe_views
+       WHERE user_id = $1 AND recipe_id = $2 AND viewed_at > NOW() - INTERVAL '30 minutes'
+       LIMIT 1`,
+      [userId, recipeId]
+    )
+    return rows.length > 0
+  }
+
+  async recordRecipeView(userId: number, recipeId: string): Promise<void> {
+    await this.pool.query(
+      'INSERT INTO recipe_views (user_id, recipe_id) VALUES ($1, $2)',
+      [userId, recipeId]
+    )
+  }
+
+  async getUserPhotoHashes(userId: number, limit: number = 50): Promise<string[]> {
+    const { rows } = await this.pool.query(
+      `SELECT dhash FROM photo_verifications
+       WHERE user_id = $1 AND dhash IS NOT NULL
+       ORDER BY created_at DESC LIMIT $2`,
+      [userId, limit]
+    )
+    return rows.map((r: { dhash: string }) => r.dhash)
+  }
+
+  async getUserTrustTier(userId: number): Promise<{ tier: string; verified_count: number }> {
+    const { rows } = await this.pool.query(
+      'SELECT tier, verified_count FROM user_trust_tiers WHERE user_id = $1',
+      [userId]
+    )
+    if (rows.length === 0) {
+      return { tier: 'new', verified_count: 0 }
+    }
+    return { tier: rows[0].tier, verified_count: rows[0].verified_count }
+  }
+
+  async updateTrustTier(userId: number, verdict: 'verified' | 'rejected'): Promise<void> {
+    const col = verdict === 'verified' ? 'verified_count' : 'rejected_count'
+    await this.pool.query(
+      `INSERT INTO user_trust_tiers (user_id, ${col})
+       VALUES ($1, 1)
+       ON CONFLICT (user_id) DO UPDATE SET
+         ${col} = user_trust_tiers.${col} + 1,
+         last_updated = NOW()`,
+      [userId]
+    )
+    // Recalculate tier based on verified_count
+    await this.pool.query(
+      `UPDATE user_trust_tiers SET tier = CASE
+         WHEN verified_count >= 20 THEN 'veteran'
+         WHEN verified_count >= 5 THEN 'trusted'
+         ELSE 'new'
+       END
+       WHERE user_id = $1`,
+      [userId]
+    )
+  }
+
+  async savePhotoVerification(
+    userId: number,
+    recipeId: string,
+    photoUrl: string | null,
+    dhash: string | null,
+    signals: { name: string; score: number; passed: boolean; details: string }[],
+    verdict: string
+  ): Promise<number> {
+    const passedCount = signals.filter(s => s.passed).length
+    const { rows } = await this.pool.query(
+      `INSERT INTO photo_verifications (user_id, recipe_id, photo_url, dhash, signals, passed_count, total_count, verdict)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [userId, recipeId, photoUrl, dhash, JSON.stringify(signals), passedCount, signals.length, verdict]
+    )
+    return rows[0].id
+  }
+
+  // --- Appeals ---
+
+  async createAppeal(userId: number, verificationId: number, reason?: string): Promise<{ id: number; status: string; created_at: string }> {
+    const { rows } = await this.pool.query(
+      `INSERT INTO photo_appeals (verification_id, user_id, reason)
+       VALUES ($1, $2, $3)
+       RETURNING id, status, created_at`,
+      [verificationId, userId, reason || null]
+    )
+    return rows[0]
+  }
+
+  async getVerificationById(verificationId: number): Promise<{ id: number; user_id: number; verdict: string; passed_count: number } | null> {
+    const { rows } = await this.pool.query(
+      'SELECT id, user_id, verdict, passed_count FROM photo_verifications WHERE id = $1',
+      [verificationId]
+    )
+    return rows[0] || null
+  }
+
+  async getPendingAppealForVerification(verificationId: number): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM photo_appeals WHERE verification_id = $1 AND status = 'pending'`,
+      [verificationId]
+    )
+    return rows.length > 0
+  }
+
+  async getUserDailyAppealCount(userId: number): Promise<number> {
+    const { rows } = await this.pool.query(
+      `SELECT COUNT(*) AS count FROM photo_appeals
+       WHERE user_id = $1 AND created_at >= NOW() - INTERVAL '24 hours'`,
+      [userId]
+    )
+    return parseInt(rows[0].count, 10)
+  }
+
+  async getUserAppeals(userId: number): Promise<Array<{
+    id: number; verification_id: number; reason: string | null;
+    status: string; created_at: string; verdict: string; passed_count: number;
+  }>> {
+    const { rows } = await this.pool.query(
+      `SELECT a.id, a.verification_id, a.reason, a.status, a.created_at,
+              v.verdict, v.passed_count
+       FROM photo_appeals a
+       JOIN photo_verifications v ON v.id = a.verification_id
+       WHERE a.user_id = $1
+       ORDER BY a.created_at DESC`,
+      [userId]
+    )
+    return rows
+  }
+
+  async resolveAppeal(appealId: number, adminId: number, status: 'approved' | 'denied'): Promise<{
+    appeal: { id: number; verification_id: number; user_id: number; status: string; reviewed_at: string } | null;
+    previousVerdict: string | null;
+  }> {
+    const { rows } = await this.pool.query(
+      `UPDATE photo_appeals SET status = $1, reviewed_by = $2, reviewed_at = NOW()
+       WHERE id = $3 AND status = 'pending'
+       RETURNING id, verification_id, user_id, status, reviewed_at`,
+      [status, adminId, appealId]
+    )
+    if (rows.length === 0) return { appeal: null, previousVerdict: null }
+
+    const appeal = rows[0]
+
+    // Get previous verdict
+    const { rows: vRows } = await this.pool.query(
+      'SELECT verdict FROM photo_verifications WHERE id = $1',
+      [appeal.verification_id]
+    )
+    const previousVerdict = vRows[0]?.verdict || null
+
+    return { appeal, previousVerdict }
+  }
+
+  async updateVerificationVerdict(verificationId: number, newVerdict: string): Promise<void> {
+    await this.pool.query(
+      'UPDATE photo_verifications SET verdict = $1 WHERE id = $2',
+      [newVerdict, verificationId]
+    )
+  }
+
+  async getVerificationStats(): Promise<{
+    totalVerified: number;
+    verdictBreakdown: { accepted: number; marginal: number; rejected: number };
+    avgScore: number;
+    appealStats: { pending: number; approved: number; denied: number };
+    trustTierDistribution: { new: number; trusted: number; veteran: number };
+  }> {
+    // Verdict breakdown
+    const { rows: verdictRows } = await this.pool.query(
+      `SELECT verdict, COUNT(*) AS count FROM photo_verifications GROUP BY verdict`
+    )
+    const verdictBreakdown = { accepted: 0, marginal: 0, rejected: 0 }
+    let totalVerified = 0
+    for (const row of verdictRows) {
+      const v = row.verdict as keyof typeof verdictBreakdown
+      if (v in verdictBreakdown) verdictBreakdown[v] = parseInt(row.count, 10)
+      totalVerified += parseInt(row.count, 10)
+    }
+
+    // Average score
+    const { rows: avgRows } = await this.pool.query(
+      `SELECT COALESCE(AVG(passed_count), 0) AS avg_score FROM photo_verifications`
+    )
+    const avgScore = parseFloat(avgRows[0].avg_score) || 0
+
+    // Appeal stats
+    const { rows: appealRows } = await this.pool.query(
+      `SELECT status, COUNT(*) AS count FROM photo_appeals GROUP BY status`
+    )
+    const appealStats = { pending: 0, approved: 0, denied: 0 }
+    for (const row of appealRows) {
+      const s = row.status as keyof typeof appealStats
+      if (s in appealStats) appealStats[s] = parseInt(row.count, 10)
+    }
+
+    // Trust tier distribution
+    const { rows: tierRows } = await this.pool.query(
+      `SELECT tier, COUNT(*) AS count FROM user_trust_tiers GROUP BY tier`
+    )
+    const trustTierDistribution = { new: 0, trusted: 0, veteran: 0 }
+    for (const row of tierRows) {
+      const t = row.tier as keyof typeof trustTierDistribution
+      if (t in trustTierDistribution) trustTierDistribution[t] = parseInt(row.count, 10)
+    }
+
+    return { totalVerified, verdictBreakdown, avgScore, appealStats, trustTierDistribution }
+  }
+
+  // Get recipe_id from verification for progression recalculation
+  async getVerificationRecipeInfo(verificationId: number): Promise<{ recipe_id: string; user_id: number } | null> {
+    const { rows } = await this.pool.query(
+      'SELECT recipe_id, user_id FROM photo_verifications WHERE id = $1',
+      [verificationId]
+    )
+    return rows[0] || null
   }
 
   async close(): Promise<void> {

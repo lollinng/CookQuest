@@ -5,15 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatTime(minutes: number): string {
-  if (minutes < 60) {
-    return `${minutes}m`
-  }
-  const hours = Math.floor(minutes / 60)
-  const remainingMinutes = minutes % 60
-  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`
-}
-
 export function getDifficultyColor(difficulty: 'beginner' | 'intermediate' | 'advanced'): string {
   switch (difficulty) {
     case 'beginner':
@@ -27,20 +18,7 @@ export function getDifficultyColor(difficulty: 'beginner' | 'intermediate' | 'ad
   }
 }
 
-export function getSkillColor(skill: string): string {
-  switch (skill) {
-    case 'basic-cooking':
-      return 'bg-blue-500'
-    case 'heat-control':
-      return 'bg-orange-500'
-    case 'flavor-building':
-      return 'bg-purple-500'
-    default:
-      return 'bg-gray-500'
-  }
-}
-
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number
 ): (...args: Parameters<T>) => void {

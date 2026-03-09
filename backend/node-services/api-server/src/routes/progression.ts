@@ -4,10 +4,11 @@ import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
 import { validateRequest } from '../middleware/validation'
 import { asyncHandler } from '../middleware/error-handler'
 import { DatabaseService } from '../services/database'
+import { VALID_SKILL_IDS } from '../constants'
+import { calculateUserLevel } from '../utils/progression-helpers'
+import type { LeaderboardRow } from '../types'
 
 const router = Router()
-
-const VALID_SKILLS = ['basic-cooking', 'heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine']
 
 // GET /api/v1/progression/overview — All skills with unlock status
 router.get('/overview',
@@ -27,7 +28,7 @@ router.get('/overview',
 router.get('/skills/:skillId',
   authMiddleware,
   validateRequest([
-    param('skillId').isIn(VALID_SKILLS),
+    param('skillId').isIn([...VALID_SKILL_IDS]),
   ]),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const userId = req.user!.id
@@ -75,15 +76,15 @@ router.get('/xp',
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const userId = req.user!.id
     const totalXP = await DatabaseService.getUserTotalXP(userId)
-    const level = Math.floor(totalXP / 1000) + 1
+    const { level, progressInLevel, xpToNextLevel } = calculateUserLevel(totalXP)
 
     res.json({
       success: true,
       data: {
         totalXP,
         level,
-        currentLevelXP: totalXP - (level - 1) * 1000,
-        xpToNextLevel: level * 1000 - totalXP,
+        currentLevelXP: progressInLevel,
+        xpToNextLevel,
       },
     })
   })
@@ -98,7 +99,7 @@ router.get('/leaderboard/weekly',
 
     res.json({
       success: true,
-      data: rows.map((r: any, i: number) => ({
+      data: rows.map((r: LeaderboardRow, i: number) => ({
         rank: i + 1,
         id: r.id,
         username: r.username,

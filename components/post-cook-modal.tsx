@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Camera, X, Loader2, Unlock, Eye, EyeOff } from 'lucide-react'
+import { VerificationResult } from '@/components/verification-result'
 import { useIsMobile } from '@/hooks/use-platform'
 import { PhotoSourceSheet } from '@/components/ui/photo-source-sheet'
 import { Button } from '@/components/ui/button'
@@ -17,7 +18,7 @@ import { useCreatePost, useUploadPhoto } from '@/hooks/use-social'
 import { useUploadRecipePhoto } from '@/hooks/use-recipes'
 import { useQueryClient } from '@tanstack/react-query'
 import { progressionKeys } from '@/hooks/use-progression'
-import type { Recipe } from '@/lib/types'
+import type { Recipe, PhotoVerification } from '@/lib/types'
 
 interface PostCookModalProps {
   open: boolean
@@ -37,6 +38,11 @@ export function PostCookModal({ open, onOpenChange, recipe, onPosted }: PostCook
   const [difficultyRating, setDifficultyRating] = useState(0)
   const [isPrivate, setIsPrivate] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [captureSource, setCaptureSource] = useState<'in-app-camera' | 'gallery' | undefined>(undefined)
+
+  type ModalPhase = 'compose' | 'verifying' | 'result'
+  const [phase, setPhase] = useState<ModalPhase>('compose')
+  const [verificationResult, setVerificationResult] = useState<PhotoVerification | null>(null)
 
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false)
   const isMobile = useIsMobile()
@@ -77,32 +83,51 @@ export function PostCookModal({ open, onOpenChange, recipe, onPosted }: PostCook
   const handleSubmit = async () => {
     if (!canPost || !recipe) return
     setError(null)
+    setPhase('verifying')
 
     try {
-      // Upload recipe photo (for progression gating)
-      await uploadRecipePhoto.mutateAsync({ recipeId: recipe.id, file: photo! })
+      // Upload recipe photo (for progression gating + verification)
+      const uploadResult = await uploadRecipePhoto.mutateAsync({
+        recipeId: recipe.id,
+        file: photo!,
+        captureSource,
+      })
 
-      // Upload to general photos for the feed post
-      const result = await uploadPhoto.mutateAsync(photo!)
+      const verification = uploadResult.verification
+      if (verification) {
+        setVerificationResult(verification)
+        setPhase('result')
 
-      // Create the feed post (unless private)
-      if (!isPrivate) {
-        await createPost.mutateAsync({
-          postType: 'photo_upload',
-          recipeId: recipe.id,
-          photoUrl: result.photoUrl,
-          caption: caption.trim() || undefined,
-        })
+        // Only create feed post if accepted and not private
+        if (verification.verdict === 'accepted' && !isPrivate) {
+          const feedResult = await uploadPhoto.mutateAsync(photo!)
+          await createPost.mutateAsync({
+            postType: 'photo_upload',
+            recipeId: recipe.id,
+            photoUrl: feedResult.photoUrl,
+            caption: caption.trim() || undefined,
+          })
+        }
+      } else {
+        // Fallback: no verification in response (backward compat)
+        const result = await uploadPhoto.mutateAsync(photo!)
+        if (!isPrivate) {
+          await createPost.mutateAsync({
+            postType: 'photo_upload',
+            recipeId: recipe.id,
+            photoUrl: result.photoUrl,
+            caption: caption.trim() || undefined,
+          })
+        }
+        resetForm()
+        onOpenChange(false)
+        onPosted?.()
       }
 
-      // Invalidate progression data so unlock status refreshes
       queryClient.invalidateQueries({ queryKey: progressionKeys.all })
-
-      resetForm()
-      onOpenChange(false)
-      onPosted?.()
-    } catch (err: any) {
-      setError(err.message || 'Failed to post')
+    } catch (err: unknown) {
+      setPhase('compose')
+      setError(err instanceof Error ? err.message : 'Failed to post')
     }
   }
 
@@ -113,6 +138,9 @@ export function PostCookModal({ open, onOpenChange, recipe, onPosted }: PostCook
     setDifficultyRating(0)
     setIsPrivate(false)
     setError(null)
+    setCaptureSource(undefined)
+    setPhase('compose')
+    setVerificationResult(null)
   }
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -126,7 +154,43 @@ export function PostCookModal({ open, onOpenChange, recipe, onPosted }: PostCook
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl bg-cq-bg border-cq-border max-h-[90vh] overflow-y-auto pb-8">
+      <SheetContent side="bottom" className="rounded-t-3xl bg-cq-bg border-cq-border max-h-[90vh] overflow-y-auto pb-8 relative">
+        {/* Verifying overlay */}
+        {phase === 'verifying' && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-cq-bg/90 backdrop-blur-sm rounded-t-3xl">
+            <div className="size-16 rounded-full bg-cq-surface animate-pulse flex items-center justify-center">
+              <Camera className="size-8 text-cq-text-muted animate-bounce" />
+            </div>
+            <p className="mt-4 text-sm text-cq-text-secondary">Checking your photo...</p>
+            <p className="mt-1 text-xs text-cq-text-muted">This only takes a moment</p>
+          </div>
+        )}
+
+        {/* Result phase */}
+        {phase === 'result' && verificationResult && (
+          <div className="px-2 py-4">
+            <div className="flex items-center gap-2 rounded-full bg-cq-surface border border-cq-border px-4 py-2 w-fit mx-auto mb-4">
+              <span className="text-lg">{recipe.emoji || '🍽️'}</span>
+              <span className="text-sm font-medium text-cq-text-primary">{recipe.title}</span>
+            </div>
+            <VerificationResult
+              verification={verificationResult}
+              onContinue={() => {
+                resetForm()
+                onOpenChange(false)
+                onPosted?.()
+              }}
+              onRetry={() => {
+                setPhase('compose')
+                setVerificationResult(null)
+                removePhoto()
+              }}
+            />
+          </div>
+        )}
+
+        {phase === 'compose' && (
+        <>
         <SheetHeader className="text-center pb-1">
           <SheetTitle className="text-cq-text-primary text-lg">
             Show us what you cooked!
@@ -180,10 +244,11 @@ export function PostCookModal({ open, onOpenChange, recipe, onPosted }: PostCook
             <PhotoSourceSheet
               open={photoSheetOpen}
               onOpenChange={setPhotoSheetOpen}
-              onFileSelected={(file) => {
+              onFileSelected={(file, source) => {
                 setError(null);
                 setPhoto(file);
                 setPhotoPreview(URL.createObjectURL(file));
+                setCaptureSource(source);
               }}
             />
           )}
@@ -266,6 +331,8 @@ export function PostCookModal({ open, onOpenChange, recipe, onPosted }: PostCook
             Skip for now
           </button>
         </div>
+        </>
+        )}
       </SheetContent>
     </Sheet>
   )

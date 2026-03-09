@@ -85,10 +85,10 @@ export function FeedPostComposer({ isOpen, onClose, onPostCreated }: FeedPostCom
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const data = await getRecipes({ search: query, limit: 6 });
-        setRecipeResults(data.recipes.map((r: any) => ({
+        setRecipeResults(data.recipes.map((r) => ({
           ...r,
-          imageUrl: r.image_url || r.imageUrl || '',
-          xpReward: r.xp_reward || r.xpReward || 0,
+          imageUrl: r.imageUrl || '',
+          xpReward: r.xpReward || 0,
           ingredients: r.ingredients || [],
           instructions: r.instructions || [],
         })));
@@ -134,8 +134,8 @@ export function FeedPostComposer({ isOpen, onClose, onPostCreated }: FeedPostCom
       resetForm();
       onClose();
       onPostCreated?.();
-    } catch (err: any) {
-      setError(err.message || 'Failed to create post');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create post');
     }
   };
 

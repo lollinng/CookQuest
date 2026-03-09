@@ -48,15 +48,16 @@ export const authMiddleware = async (
 
     if (!token) {
       return res.status(401).json({
-        error: 'Authorization token required',
-        message: 'Please provide a valid token'
+        success: false,
+        error: { message: 'Authorization token required' }
       })
     }
-    
+
     if (!process.env.JWT_SECRET) {
       logger.error('JWT_SECRET not configured')
       return res.status(500).json({
-        error: 'Server configuration error'
+        success: false,
+        error: { message: 'Server configuration error' }
       })
     }
 
@@ -72,8 +73,8 @@ export const authMiddleware = async (
 
     if (!user) {
       return res.status(401).json({
-        error: 'Invalid token',
-        message: 'User not found'
+        success: false,
+        error: { message: 'Invalid token — user not found' }
       })
     }
 
@@ -86,8 +87,8 @@ export const authMiddleware = async (
 
     if (!session) {
       return res.status(401).json({
-        error: 'Session expired',
-        message: 'Please log in again'
+        success: false,
+        error: { message: 'Session expired — please log in again' }
       })
     }
 
@@ -106,14 +107,15 @@ export const authMiddleware = async (
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
       return res.status(401).json({
-        error: 'Invalid token',
-        message: error.message
+        success: false,
+        error: { message: 'Invalid token' }
       })
     }
 
     logger.error({ err: error }, 'Auth middleware error')
     return res.status(500).json({
-      error: 'Authentication error'
+      success: false,
+      error: { message: 'Authentication error' }
     })
   }
 }
@@ -185,39 +187,4 @@ export const adminMiddleware = (
     })
   }
   next()
-}
-
-// Rate limiting per user
-export const userRateLimit = (maxRequests: number, windowMs: number) => {
-  const requests = new Map()
-
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return next()
-    }
-
-    const userId = req.user.id
-    const now = Date.now()
-    const windowStart = now - windowMs
-
-    if (!requests.has(userId)) {
-      requests.set(userId, [])
-    }
-
-    const userRequests = requests.get(userId)
-    
-    // Remove old requests outside the window
-    const validRequests = userRequests.filter((time: number) => time > windowStart)
-    requests.set(userId, validRequests)
-
-    if (validRequests.length >= maxRequests) {
-      return res.status(429).json({
-        error: 'Too many requests',
-        message: `Maximum ${maxRequests} requests per ${windowMs / 1000} seconds`
-      })
-    }
-
-    validRequests.push(now)
-    next()
-  }
 }

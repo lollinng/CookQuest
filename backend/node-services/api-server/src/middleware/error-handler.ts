@@ -99,16 +99,3 @@ export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) =
     Promise.resolve(fn(req, res, next)).catch(next)
   }
 }
-
-// 404 handler
-export const notFound = (req: Request, res: Response) => {
-  res.status(404).json({
-    success: false,
-    error: {
-      message: 'Route not found'
-    },
-    timestamp: new Date().toISOString(),
-    path: req.originalUrl,
-    method: req.method
-  })
-}

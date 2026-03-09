@@ -1,4 +1,5 @@
-import { apiClient, API_BASE_URL, getToken, ApiError } from './client'
+import { apiClient } from './client'
+import { uploadFile } from './upload-helpers'
 import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy, LeaderboardEntry, Notification } from '../types'
 
 export async function followUser(userId: number): Promise<{ following: boolean }> {
@@ -34,11 +35,11 @@ export async function getFeed(limit?: number): Promise<UserPost[]> {
 }
 
 export async function getWorldFeed(limit?: number, difficulty?: string): Promise<UserPost[]> {
-  const params: Record<string, string> = {}
-  if (limit) params.limit = String(limit)
-  if (difficulty) params.difficulty = difficulty
   return apiClient<UserPost[]>('/feed/world', {
-    params: Object.keys(params).length > 0 ? params : undefined,
+    params: {
+      ...(limit ? { limit: String(limit) } : {}),
+      ...(difficulty ? { difficulty } : {}),
+    },
   })
 }
 
@@ -66,25 +67,7 @@ export async function getUserSkillTrophies(userId: number): Promise<SkillTrophy[
 }
 
 export async function uploadAvatar(file: File): Promise<{ avatarUrl: string }> {
-  const formData = new FormData()
-  formData.append('avatar', file)
-
-  const headers: Record<string, string> = {}
-  const token = getToken()
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
-  const res = await fetch(`${API_BASE_URL}/users/me/avatar`, {
-    method: 'PATCH',
-    headers,
-    body: formData,
-    credentials: 'include',
-  })
-
-  const json = await res.json()
-  if (!json.success) {
-    throw new ApiError(json.error?.message || 'Avatar upload failed', res.status)
-  }
-  return json.data
+  return uploadFile('/users/me/avatar', file, 'avatar', 'PATCH')
 }
 
 export async function deleteAvatar(): Promise<void> {

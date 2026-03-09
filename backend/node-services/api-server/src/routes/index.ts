@@ -16,6 +16,7 @@ import { onboardingRoutes } from './onboarding'
 import { demoRoutes } from './demo'
 import { uploadRoutes } from './uploads'
 import { progressionRoutes } from './progression'
+import { appealRoutes } from './appeals'
 
 export function initializeRoutes(app: Express) {
   // API version prefix
@@ -41,12 +42,13 @@ export function initializeRoutes(app: Express) {
   app.use(`${apiPrefix}/uploads`, uploadRoutes)
 
   // Protected routes (authentication + alpha access required)
-  // authMiddleware runs first to populate req.user, then allowedMiddleware checks isAllowed
-  // (progress routes also apply authMiddleware internally — double-call is a safe no-op)
   app.use(`${apiPrefix}/progress`, authMiddleware, allowedMiddleware, progressRoutes)
 
   // Photos — handles /api/v1/recipes/:id/photos and /api/v1/users/me/photos
   app.use(apiPrefix, photoRoutes)
+
+  // Appeals — handles /api/v1/photos/appeals/*, /api/v1/admin/appeals/*, /api/v1/admin/verification-stats
+  app.use(apiPrefix, appealRoutes)
 
   // Favorites — handles /api/v1/recipes/:id/favorite and /api/v1/users/me/favorites
   app.use(apiPrefix, favoriteRoutes)
@@ -76,11 +78,8 @@ export function initializeRoutes(app: Express) {
         recipes: {
           'GET /recipes': 'List all recipes (with filters)',
           'GET /recipes/:id': 'Get recipe by ID',
-          'POST /recipes': 'Create new recipe (admin)',
-          'PUT /recipes/:id': 'Update recipe (admin)',
-          'DELETE /recipes/:id': 'Delete recipe (admin)',
-          'POST /recipes/:id/review': 'Add recipe review',
-          'GET /recipes/:id/reviews': 'Get recipe reviews'
+          'POST /recipes/:id/progress': 'Update recipe progress (auth required)',
+          'GET /recipes/skill/:skillId': 'Get recipes by skill'
         },
         skills: {
           'GET /skills': 'List all skills',

@@ -1,10 +1,11 @@
 'use client'
 
-import { Check, Lock, Star, Crown, Camera } from 'lucide-react'
+import { Star, Crown, Camera } from 'lucide-react'
 import type { Recipe, RecipePhoto, SkillProgression } from '@/lib/types'
-import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { PhotoNode } from './photo-node'
+import { PathNode, type ColorConfig } from './path-node'
+import { ChefCharacter } from './chef-character'
 import { GatePrompt } from './ui/gate-prompt'
 
 interface LearningPathProps {
@@ -21,15 +22,7 @@ interface LearningPathProps {
   progression?: SkillProgression
 }
 
-const COLOR_MAP: Record<string, {
-  node: string
-  nodeHover: string
-  glow: string
-  shadow: string
-  ring: string
-  accent: string
-  banner: string
-}> = {
+const COLOR_MAP: Record<string, ColorConfig> = {
   blue: {
     node: 'bg-blue-500',
     nodeHover: 'hover:bg-blue-400',
@@ -109,171 +102,13 @@ function getLabelSide(x: number, index: number): 'left' | 'right' {
   return index % 2 === 0 ? 'right' : 'left'
 }
 
-function PathNode({
-  recipe,
-  isCompleted,
-  isLocked,
-  isCurrent,
-  index,
-  colors,
-  onToggle,
-  labelSide,
-  gateMessage,
-}: {
+type CookbookNode = {
   recipe: Recipe
-  isCompleted: boolean
-  isLocked: boolean
-  isCurrent: boolean
-  index: number
-  colors: typeof COLOR_MAP.blue
-  onToggle: (id: string) => void
-  labelSide: 'left' | 'right'
-  gateMessage?: string
-}) {
-  const [isPressed, setIsPressed] = useState(false)
-  const isCheckpoint = index % 3 === 0
-
-  const nodeSize = isCheckpoint ? 'w-24 h-24' : 'w-20 h-20'
-  const innerSize = isCheckpoint ? 'w-20 h-20' : 'w-16 h-16'
-
-  const handleClick = (e: React.MouseEvent) => {
-    if (isLocked) return
-    e.preventDefault()
-    setIsPressed(true)
-    setTimeout(() => setIsPressed(false), 200)
-  }
-
-  const nodeContent = (
-    <div className="relative">
-      {/* The node circle */}
-      <div
-        className={`
-          ${nodeSize} rounded-full flex items-center justify-center
-          transition-all duration-150 relative
-          ${isPressed ? 'scale-90' : ''}
-          ${isLocked
-            ? 'bg-gray-700 shadow-[0_8px_0_0_rgb(55,65,81)] cursor-not-allowed'
-            : isCompleted
-              ? 'bg-green-500 shadow-[0_8px_0_0_rgb(22,101,52)]'
-              : `${colors.node} ${colors.shadow} ${colors.nodeHover} cursor-pointer`
-          }
-          ${isCurrent && !isCompleted ? `${colors.glow} ring-4 ${colors.ring} animate-pulse` : ''}
-        `}
-        onMouseDown={handleClick}
-        onMouseUp={() => setIsPressed(false)}
-      >
-        <div className={`
-          ${innerSize} rounded-full flex items-center justify-center
-          ${isLocked
-            ? 'bg-gray-600'
-            : isCompleted
-              ? 'bg-green-400'
-              : 'bg-white/10'
-          }
-        `}>
-          {isLocked ? (
-            <Lock className="size-8 text-cq-text-muted" />
-          ) : isCompleted ? (
-            <Check className="size-10 text-white stroke-[3]" />
-          ) : isCheckpoint ? (
-            <Star className="size-10 text-white/90 fill-white/20" />
-          ) : (
-            <span className="text-4xl select-none">{recipe.emoji || '🍳'}</span>
-          )}
-        </div>
-      </div>
-
-      {/* Stars above checkpoints */}
-      {isCheckpoint && isCompleted && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex gap-1">
-          <Star className="size-5 fill-yellow-400 text-yellow-400 drop-shadow-[0_0_4px_rgba(250,204,21,0.8)]" />
-          <Star className="size-6 fill-yellow-400 text-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.8)]" />
-          <Star className="size-5 fill-yellow-400 text-yellow-400 drop-shadow-[0_0_4px_rgba(250,204,21,0.8)]" />
-        </div>
-      )}
-
-      {/* START indicator */}
-      {isCurrent && !isCompleted && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2">
-          <div className={`px-4 py-1.5 rounded-full text-xs font-bold text-white ${colors.node} animate-bounce`}>
-            START
-          </div>
-        </div>
-      )}
-
-      {/* Side label */}
-      <div className={`absolute top-1/2 -translate-y-1/2 w-[120px] ${
-        labelSide === 'right'
-          ? 'left-full ml-4 text-left'
-          : 'right-full mr-4 text-right'
-      }`}>
-        <div className={`text-sm font-semibold leading-tight ${
-          isLocked ? 'text-cq-text-muted' : isCompleted ? 'text-green-400' : 'text-cq-text-primary'
-        }`}>
-          {recipe.title}
-        </div>
-        <div className={`text-xs mt-0.5 ${isLocked ? 'text-cq-text-muted' : 'text-cq-text-secondary'}`}>
-          {recipe.time}
-        </div>
-        {!isLocked && !isCompleted && (
-          <button
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(recipe.id) }}
-            className={`
-              mt-1.5 px-3 py-1 rounded-full text-xs font-bold
-              ${colors.node} text-white ${colors.nodeHover}
-              transition-all hover:scale-105 active:scale-95 shadow-lg
-            `}
-          >
-            COMPLETE
-          </button>
-        )}
-        {!isLocked && isCompleted && (
-          <button
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(recipe.id) }}
-            className="mt-1.5 px-3 py-1 rounded-full text-xs font-medium text-cq-text-muted hover:text-cq-text-primary border border-cq-border hover:border-cq-text-muted transition-all"
-          >
-            UNDO
-          </button>
-        )}
-        {isLocked && gateMessage && (
-          <div className="mt-1 text-xs text-amber-500 font-medium flex items-center gap-1">
-            <Camera className="size-3" />
-            {gateMessage}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-
-  if (isLocked) return <>{nodeContent}</>
-
-  return (
-    <Link href={`/recipe/${recipe.id}`}>
-      {nodeContent}
-    </Link>
-  )
-}
-
-function ChefCharacter({ position, message, size = 'md', cookbookMode = false }: { position: 'left' | 'right'; message: string; size?: 'md' | 'lg'; cookbookMode?: boolean }) {
-  const sizeClass = size === 'lg' ? 'text-7xl' : 'text-5xl'
-  const bubbleBg = cookbookMode ? 'bg-white border-amber-200' : 'bg-gray-800 border-gray-700'
-  const textColor = cookbookMode ? 'text-stone-700' : 'text-gray-200'
-  const tailLeft = cookbookMode
-    ? 'left-[-8px] border-r-[8px] border-r-white border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent'
-    : 'left-[-8px] border-r-[8px] border-r-gray-800 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent'
-  const tailRight = cookbookMode
-    ? 'right-[-8px] border-l-[8px] border-l-white border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent'
-    : 'right-[-8px] border-l-[8px] border-l-gray-800 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent'
-
-  return (
-    <div className={`flex items-end gap-3 ${position === 'right' ? 'flex-row-reverse' : ''}`}>
-      <div className={`${sizeClass} select-none drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)]`}>👨‍🍳</div>
-      <div className={`${bubbleBg} rounded-2xl px-4 py-2.5 shadow-xl border max-w-[180px] relative`}>
-        <p className={`text-sm ${textColor} font-medium`}>{message}</p>
-        <div className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 ${position === 'right' ? tailRight : tailLeft}`} />
-      </div>
-    </div>
-  )
+  recipeIndex: number
+  photoUrl: string | undefined
+  photoNumber: number
+  totalPhotos: number
+  isAddNode: boolean
 }
 
 export function LearningPath({
@@ -302,7 +137,6 @@ export function LearningPath({
   const [gateOpen, setGateOpen] = useState(false)
   const [gatedRecipe, setGatedRecipe] = useState<Recipe | null>(null)
 
-  // Check if a recipe is gated (locked by progression, not just sequence)
   const isRecipeGated = (recipeId: string): boolean => {
     if (!progression || progression.recipes.length === 0) return false
     const entry = progression.recipes.find(r => r.recipeId === recipeId)
@@ -315,56 +149,29 @@ export function LearningPath({
     setGateOpen(true)
   }
 
-  // In cookbook mode, build expanded node list (multiple photo nodes per recipe)
-  type CookbookNode = {
-    recipe: Recipe
-    recipeIndex: number
-    photoUrl: string | undefined
-    photoNumber: number
-    totalPhotos: number
-    isAddNode: boolean // empty "add photo" placeholder
-  }
-
+  // Build cookbook nodes
   const cookbookNodes: CookbookNode[] = []
   if (isCookbook) {
     for (let ri = 0; ri < recipes.length; ri++) {
       const recipe = recipes[ri]
       const photos = userPhotos?.get(recipe.id) || []
       const total = photos.length
-      // Render a node for each existing photo
       for (const photo of photos) {
-        cookbookNodes.push({
-          recipe,
-          recipeIndex: ri,
-          photoUrl: photo.photoUrl,
-          photoNumber: photo.photoNumber,
-          totalPhotos: total,
-          isAddNode: false,
-        })
+        cookbookNodes.push({ recipe, recipeIndex: ri, photoUrl: photo.photoUrl, photoNumber: photo.photoNumber, totalPhotos: total, isAddNode: false })
       }
-      // If under 3, add one empty upload node
       if (total < 3) {
-        cookbookNodes.push({
-          recipe,
-          recipeIndex: ri,
-          photoUrl: undefined,
-          photoNumber: total + 1,
-          totalPhotos: total,
-          isAddNode: true,
-        })
+        cookbookNodes.push({ recipe, recipeIndex: ri, photoUrl: undefined, photoNumber: total + 1, totalPhotos: total, isAddNode: true })
       }
     }
   }
 
   const nodeCount = isCookbook ? cookbookNodes.length : recipes.length
 
-  // Chef messages config
   const chefMessages = [
     { afterIndex: 0, position: 'right' as const, message: "Nice work! You're on your way!" },
     { afterIndex: Math.floor(recipes.length / 2), position: 'left' as const, message: "Halfway there! Keep cooking!" },
   ]
 
-  // Calculate node positions with extra space for chef messages
   const CHEF_EXTRA = 100
   const START_Y = 100
   const spacing = isCookbook ? COOKBOOK_NODE_SPACING : NODE_SPACING
@@ -373,7 +180,6 @@ export function LearningPath({
   for (let i = 0; i < nodeCount; i++) {
     positions.push({ x: getNodePosition(i, containerWidth).x, y: cumulativeY })
     cumulativeY += spacing
-    // Chef messages only in learn mode (based on recipe index)
     if (!isCookbook) {
       const hasChef = chefMessages.some(cm => cm.afterIndex === i && isRecipeCompleted(recipes[i].id))
       if (hasChef) cumulativeY += CHEF_EXTRA
@@ -391,29 +197,23 @@ export function LearningPath({
         isCookbook ? 'bg-amber-50' : ''
       }`}
     >
-      {/* Photo progress tracker — only when gating is active */}
+      {/* Photo progress tracker */}
       {progression && progression.recipes.length > 0 && progression.photosNeededForNextUnlock > 0 && !isCookbook && (
         <div className="w-full max-w-lg mb-4 px-1">
-          <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border ${
-            isCookbook
-              ? 'bg-amber-100/80 border-amber-200'
-              : 'bg-cq-surface border-cq-border'
-          }`}>
-            <Camera className={`size-4 flex-shrink-0 ${isCookbook ? 'text-amber-600' : colors.accent}`} />
+          <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border bg-cq-surface border-cq-border`}>
+            <Camera className={`size-4 flex-shrink-0 ${colors.accent}`} />
             <div className="flex-1 min-w-0">
               <div className="flex justify-between text-xs mb-1">
-                <span className={isCookbook ? 'text-stone-600' : 'text-cq-text-secondary'}>
+                <span className="text-cq-text-secondary">
                   {progression.photosPosted} photo{progression.photosPosted !== 1 ? 's' : ''} posted
                 </span>
-                <span className={`font-medium ${isCookbook ? 'text-stone-700' : 'text-cq-text-primary'}`}>
+                <span className="font-medium text-cq-text-primary">
                   {Math.max(0, progression.photosNeededForNextUnlock - progression.photosPosted)} more to unlock
                 </span>
               </div>
-              <div className={`h-2 rounded-full overflow-hidden ${isCookbook ? 'bg-amber-200' : 'bg-cq-track'}`}>
+              <div className="h-2 rounded-full overflow-hidden bg-cq-track">
                 <div
-                  className={`h-full rounded-full transition-all duration-700 ${
-                    isCookbook ? 'bg-amber-500' : colors.node
-                  }`}
+                  className={`h-full rounded-full transition-all duration-700 ${colors.node}`}
                   style={{
                     width: `${Math.min(100, (progression.photosPosted / progression.photosNeededForNextUnlock) * 100)}%`,
                   }}
@@ -451,7 +251,7 @@ export function LearningPath({
 
       {/* Path area */}
       <div className="relative mx-auto overflow-hidden" style={{ width: containerWidth, height: totalHeight }}>
-        {/* SVG continuous path through all nodes */}
+        {/* SVG path */}
         <svg
           className="absolute inset-0 pointer-events-none"
           width={containerWidth}
@@ -461,7 +261,6 @@ export function LearningPath({
           {allPoints.map((point, i) => {
             if (i >= allPoints.length - 1) return null
             const next = allPoints[i + 1]
-            // For cookbook mode, get recipe completion from cookbookNodes
             const isComp = isCookbook
               ? (i < cookbookNodes.length && isRecipeCompleted(cookbookNodes[i].recipe.id))
               : (i < recipes.length && isRecipeCompleted(recipes[i].id))
@@ -471,11 +270,7 @@ export function LearningPath({
                 key={i}
                 d={`M ${centerX + point.x} ${point.y} C ${centerX + point.x} ${midY}, ${centerX + next.x} ${midY}, ${centerX + next.x} ${next.y}`}
                 fill="none"
-                stroke={
-                  isCookbook
-                    ? (isComp ? '#f59e0b' : '#d97706')
-                    : (isComp ? '#4ade80' : '#374151')
-                }
+                stroke={isCookbook ? (isComp ? '#f59e0b' : '#d97706') : (isComp ? '#4ade80' : '#374151')}
                 strokeWidth={4}
                 strokeDasharray={isComp ? undefined : '8 8'}
                 strokeLinecap="round"
@@ -498,17 +293,12 @@ export function LearningPath({
               <div
                 key={`${node.recipe.id}-${node.photoNumber}`}
                 className="absolute"
-                style={{
-                  left: centerX + pos.x,
-                  top: pos.y,
-                  transform: 'translate(-50%, -50%)',
-                }}
+                style={{ left: centerX + pos.x, top: pos.y, transform: 'translate(-50%, -50%)' }}
               >
                 <PhotoNode
                   recipeId={node.recipe.id}
                   photoUrl={node.photoUrl}
                   isLocked={isLocked}
-                  isCompleted={isCompleted}
                   isCheckpoint={isCheckpoint}
                   onUpload={onPhotoUpload || (() => {})}
                   isUploading={uploadingRecipeId === node.recipe.id}
@@ -534,36 +324,22 @@ export function LearningPath({
               <div
                 key={recipe.id}
                 className={`absolute ${gated && !sequentialLock ? 'opacity-50 grayscale' : ''}`}
-                style={{
-                  left: centerX + pos.x,
-                  top: pos.y,
-                  transform: 'translate(-50%, -50%)',
-                }}
+                style={{ left: centerX + pos.x, top: pos.y, transform: 'translate(-50%, -50%)' }}
               >
                 {gated ? (
                   <div onClick={() => handleGatedNodeClick(recipe)} className="cursor-pointer">
                     <PathNode
-                      recipe={recipe}
-                      isCompleted={isCompleted}
-                      isLocked={isLocked}
-                      isCurrent={false}
-                      index={index}
-                      colors={colors}
-                      onToggle={() => {}}
-                      labelSide={labelSide}
+                      recipe={recipe} isCompleted={isCompleted} isLocked={isLocked}
+                      isCurrent={false} index={index} colors={colors}
+                      onToggle={() => {}} labelSide={labelSide}
                       gateMessage="Cook & post to unlock"
                     />
                   </div>
                 ) : (
                   <PathNode
-                    recipe={recipe}
-                    isCompleted={isCompleted}
-                    isLocked={isLocked}
-                    isCurrent={isCurrent}
-                    index={index}
-                    colors={colors}
-                    onToggle={onToggleCompletion}
-                    labelSide={labelSide}
+                    recipe={recipe} isCompleted={isCompleted} isLocked={isLocked}
+                    isCurrent={isCurrent} index={index} colors={colors}
+                    onToggle={onToggleCompletion} labelSide={labelSide}
                   />
                 )}
               </div>
@@ -571,25 +347,19 @@ export function LearningPath({
           })
         )}
 
-        {/* Chef messages between nodes */}
+        {/* Chef messages */}
         {chefMessages.map((cm, i) => {
           if (cm.afterIndex >= recipes.length) return null
           if (!isRecipeCompleted(recipes[cm.afterIndex].id)) return null
           const pos = positions[cm.afterIndex]
-          const nextPos = cm.afterIndex + 1 < positions.length
-            ? positions[cm.afterIndex + 1]
-            : trophyPos
+          const nextPos = cm.afterIndex + 1 < positions.length ? positions[cm.afterIndex + 1] : trophyPos
           const midY = (pos.y + nextPos.y) / 2
 
           return (
             <div
               key={`chef-${i}`}
               className="absolute"
-              style={{
-                left: centerX + (cm.position === 'right' ? 80 : -80),
-                top: midY,
-                transform: 'translate(-50%, -50%)',
-              }}
+              style={{ left: centerX + (cm.position === 'right' ? 80 : -80), top: midY, transform: 'translate(-50%, -50%)' }}
             >
               <ChefCharacter position={cm.position} message={cm.message} cookbookMode={isCookbook} />
             </div>
@@ -603,8 +373,7 @@ export function LearningPath({
         >
           <div className="flex flex-col items-center">
             <div className={`
-              w-28 h-28 rounded-full flex items-center justify-center
-              transition-all duration-500
+              w-28 h-28 rounded-full flex items-center justify-center transition-all duration-500
               ${allCompleted
                 ? 'bg-gradient-to-br from-yellow-400 to-amber-500 shadow-[0_0_40px_rgba(250,204,21,0.6),0_8px_0_0_rgb(161,98,7)] animate-bounce'
                 : isCookbook ? 'bg-amber-100 shadow-[0_8px_0_0_rgb(217,119,6)]' : 'bg-gray-800 shadow-[0_8px_0_0_rgb(31,41,55)]'
@@ -636,7 +405,7 @@ export function LearningPath({
           </div>
         </div>
 
-        {/* End chef character */}
+        {/* End chef */}
         <div
           className="absolute"
           style={{ left: centerX, top: trophyPos.y + 220, transform: 'translate(-50%, 0)' }}
@@ -650,7 +419,7 @@ export function LearningPath({
         </div>
       </div>
 
-      {/* Gate prompt bottom sheet */}
+      {/* Gate prompt */}
       {gatedRecipe && (
         <GatePrompt
           open={gateOpen}

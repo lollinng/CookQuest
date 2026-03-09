@@ -1,14 +1,13 @@
 import { Router } from 'express'
 import { param } from 'express-validator'
 import { DatabaseService } from '../services/database'
-import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
+import { AuthenticatedRequest } from '../middleware/auth'
 import { validateRequest } from '../middleware/validation'
 import { asyncHandler } from '../middleware/error-handler'
+import { calculateUserLevel, calculateSkillProgress } from '../utils/progression-helpers'
+import { VALID_SKILL_IDS, RECIPE_ID_REGEX } from '../constants'
 
 const router = Router()
-
-// All progress routes require authentication
-router.use(authMiddleware)
 
 // GET /api/v1/progress - Get user's overall progress summary
 router.get('/',
@@ -26,26 +25,18 @@ router.get('/',
     const skillProgress = await Promise.all(skills.map(async (skill) => {
       const skillRecipes = await DatabaseService.getRecipesBySkill(skill.id)
       const skillRecipeIds = skillRecipes.map(r => r.id)
-      
-      const completedInSkill = userProgress.filter(p => 
-        skillRecipeIds.includes(p.recipe_id) && p.completed
-      ).length
-      
+      const progress = calculateSkillProgress(userProgress, skillRecipeIds)
+
       return {
         skill_id: skill.id,
         skill_name: skill.name,
-        completed: completedInSkill,
-        total: skillRecipeIds.length,
-        percentage: skillRecipeIds.length > 0 ? Math.round((completedInSkill / skillRecipeIds.length) * 100) : 0
+        ...progress,
       }
     }))
 
     // Calculate level and XP from xp_actions table
     const xp = await DatabaseService.getUserTotalXP(req.user!.id)
-    const level = Math.floor(xp / 1000) + 1
-    const currentLevelXP = (level - 1) * 1000
-    const nextLevelXP = level * 1000
-    const experience = xp - currentLevelXP
+    const { level, progressInLevel: experience, nextLevelXP, currentLevelXP } = calculateUserLevel(xp)
     const nextLevelAt = nextLevelXP - currentLevelXP
 
     // Calculate streak (simplified - count consecutive days with completed recipes)
@@ -107,8 +98,9 @@ router.get('/skills',
     
     const detailedSkillProgress = await Promise.all(skills.map(async (skill) => {
       const skillRecipes = await DatabaseService.getRecipesBySkill(skill.id)
+      const skillRecipeIds = skillRecipes.map(r => r.id)
       const progressMap = new Map(userProgress.map(p => [p.recipe_id, p]))
-      
+
       const recipesWithProgress = skillRecipes.map(recipe => ({
         ...recipe,
         user_progress: progressMap.get(recipe.id) || {
@@ -118,16 +110,10 @@ router.get('/skills',
           notes: null
         }
       }))
-      
-      const completedInSkill = recipesWithProgress.filter(r => r.user_progress.completed).length
-      
+
       return {
         skill: skill,
-        progress: {
-          completed: completedInSkill,
-          total: skillRecipes.length,
-          percentage: skillRecipes.length > 0 ? Math.round((completedInSkill / skillRecipes.length) * 100) : 0
-        },
+        progress: calculateSkillProgress(userProgress, skillRecipeIds),
         recipes: recipesWithProgress
       }
     }))
@@ -144,7 +130,7 @@ router.get('/skills',
 // GET /api/v1/progress/skills/:skillId - Get specific skill progress
 router.get('/skills/:skillId',
   validateRequest([
-    param('skillId').isIn(['basic-cooking', 'heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine'])
+    param('skillId').isIn([...VALID_SKILL_IDS])
   ]),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const { skillId } = req.params
@@ -193,7 +179,7 @@ router.get('/skills/:skillId',
 // GET /api/v1/progress/recipes/:recipeId - Get specific recipe progress
 router.get('/recipes/:recipeId',
   validateRequest([
-    param('recipeId').matches(/^[a-z0-9][a-z0-9-]{2,49}$/).withMessage('Invalid recipe ID format')
+    param('recipeId').matches(RECIPE_ID_REGEX).withMessage('Invalid recipe ID format')
   ]),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const { recipeId } = req.params

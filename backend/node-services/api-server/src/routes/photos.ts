@@ -4,7 +4,9 @@ import crypto from 'crypto'
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
 import { DatabaseService } from '../services/database'
 import { getStorageService } from '../services/storage'
+import { verifyAndPersist } from '../services/photo-verification'
 import { logger } from '../services/logger'
+import { RECIPE_ID_REGEX } from '../constants'
 
 const router = Router()
 
@@ -120,7 +122,7 @@ router.post('/recipes/:id/photos', authMiddleware, (req: Request, res: Response,
     const recipeId = req.params.id
 
     // Validate recipe ID format
-    if (!/^[a-z0-9][a-z0-9-]{2,49}$/.test(recipeId)) {
+    if (!RECIPE_ID_REGEX.test(recipeId)) {
       return res.status(400).json({ success: false, error: { message: 'Invalid recipe ID format' } })
     }
 
@@ -166,7 +168,7 @@ router.post('/recipes/:id/photos', authMiddleware, (req: Request, res: Response,
       logger.warn({ err: sharpErr }, 'Sharp resize failed, keeping original')
     }
 
-    // Upload via storage service (GCS or local disk)
+    // Upload via storage service (GCS or local disk) — photo is ALWAYS saved
     const storage = getStorageService()
     await storage.upload(finalBuffer, filename, 'image/jpeg')
 
@@ -175,26 +177,56 @@ router.post('/recipes/:id/photos', authMiddleware, (req: Request, res: Response,
 
     const result = await DatabaseService.addRecipePhoto(userId, recipeId, photoUrl, filename)
 
-    // Create or update feed post for the photo upload
-    const hasPost = await DatabaseService.hasPhotoUploadPost(userId, recipeId)
-    if (!hasPost) {
-      await DatabaseService.createPost(userId, 'photo_upload', recipeId, photoUrl, undefined)
-    } else {
-      // Update existing post's photo_url to the latest
-      await DatabaseService.updatePostPhotoUrl(userId, recipeId, photoUrl)
+    // Run photo verification (gracefully falls back to 'accepted' on error)
+    const verification = await verifyAndPersist(
+      finalBuffer,
+      { mimetype: req.file.mimetype, size: req.file.size },
+      userId,
+      recipeId,
+      photoUrl,
+      req.headers as Record<string, string | undefined>
+    )
+
+    // Feed post logic based on verdict
+    if (verification.verdict !== 'rejected') {
+      const hasPost = await DatabaseService.hasPhotoUploadPost(userId, recipeId)
+      if (!hasPost) {
+        await DatabaseService.createPost(userId, 'photo_upload', recipeId, photoUrl, undefined)
+      } else {
+        await DatabaseService.updatePostPhotoUrl(userId, recipeId, photoUrl)
+      }
     }
 
-    // Award +80 XP for posting a photo
-    await DatabaseService.awardXP(userId, 'photo_post', 80, `recipe:${recipeId}`)
+    // Award XP based on verification verdict
+    if (verification.xpAwarded > 0) {
+      await DatabaseService.awardXP(userId, 'photo_post', verification.xpAwarded, `recipe:${recipeId}`)
+    }
     const newBadges = await DatabaseService.checkAndAwardBadges(userId)
 
-    // Check for newly unlocked recipes after this upload
+    // Check for newly unlocked recipes (rejected verdicts don't count toward progression)
     let newUnlocks: { id: string; title: string }[] = []
-    if (skillId) {
+    if (skillId && verification.verdict !== 'rejected') {
       newUnlocks = await DatabaseService.getNewlyUnlockedRecipes(userId, skillId, previousPhotoCount)
     }
 
-    res.json({ success: true, data: { photo_url: photoUrl, recipe_id: recipeId, photo_number: result.photo_number, newUnlocks, newBadges } })
+    res.json({
+      success: true,
+      data: {
+        photo_url: photoUrl,
+        recipe_id: recipeId,
+        photo_number: result.photo_number,
+        newUnlocks,
+        newBadges,
+        verification: {
+          verdict: verification.verdict,
+          score: verification.totalScore,
+          maxScore: verification.maxScore,
+          xpAwarded: verification.xpAwarded,
+          feedback: verification.feedback,
+          tips: verification.tips,
+        },
+      },
+    })
   } catch (error: any) {
     logger.error({ err: error }, 'Photo upload error')
     res.status(500).json({ success: false, error: { message: 'Upload failed' } })

@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import { Camera, ImageIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   Drawer,
   DrawerContent,
@@ -12,7 +13,7 @@ import {
 interface PhotoSourceSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onFileSelected: (file: File) => void;
+  onFileSelected: (file: File, captureSource: 'in-app-camera' | 'gallery') => void;
   maxSizeMB?: number;
 }
 
@@ -26,6 +27,7 @@ export function PhotoSourceSheet({
 }: PhotoSourceSheetProps) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
+  const pendingSourceRef = useRef<'in-app-camera' | 'gallery'>('gallery');
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -33,16 +35,16 @@ export function PhotoSourceSheet({
     if (!file) return;
 
     if (!VALID_TYPES.includes(file.type)) {
-      alert('Only JPEG, PNG, and WebP images are allowed');
+      toast.error('Only JPEG, PNG, and WebP images are allowed');
       return;
     }
     if (file.size > maxSizeMB * 1024 * 1024) {
-      alert(`Image must be under ${maxSizeMB}MB`);
+      toast.error(`Image must be under ${maxSizeMB}MB`);
       return;
     }
 
     onOpenChange(false);
-    onFileSelected(file);
+    onFileSelected(file, pendingSourceRef.current);
   };
 
   return (
@@ -54,7 +56,7 @@ export function PhotoSourceSheet({
 
         <div className="px-4 space-y-2">
           <button
-            onClick={() => cameraInputRef.current?.click()}
+            onClick={() => { pendingSourceRef.current = 'in-app-camera'; cameraInputRef.current?.click(); }}
             className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-muted/60 active:bg-muted transition-colors min-h-12"
           >
             <Camera className="size-5 text-amber-500" />
@@ -62,7 +64,7 @@ export function PhotoSourceSheet({
           </button>
 
           <button
-            onClick={() => libraryInputRef.current?.click()}
+            onClick={() => { pendingSourceRef.current = 'gallery'; libraryInputRef.current?.click(); }}
             className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-muted/60 active:bg-muted transition-colors min-h-12"
           >
             <ImageIcon className="size-5 text-blue-500" />

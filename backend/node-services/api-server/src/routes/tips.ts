@@ -4,6 +4,7 @@ import { DatabaseService } from '../services/database'
 import { RedisService } from '../services/redis'
 import { validateRequest } from '../middleware/validation'
 import { asyncHandler } from '../middleware/error-handler'
+import { VALID_SKILL_IDS } from '../constants'
 
 const router = Router()
 
@@ -11,7 +12,7 @@ const router = Router()
 router.get('/',
   validateRequest([
     query('type').optional().isIn(['tip', 'joke', 'fact']),
-    query('skill').optional().isIn(['basic-cooking', 'heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine']),
+    query('skill').optional().isIn([...VALID_SKILL_IDS]),
     query('limit').optional().isInt({ min: 1, max: 50 })
   ]),
   asyncHandler(async (req, res) => {

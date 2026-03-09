@@ -208,3 +208,24 @@ export interface PostRatings {
   tasteRating: number
   difficultyRating: number
 }
+
+// ── Photo Verification ──
+
+export interface PhotoVerification {
+  verdict: 'accepted' | 'marginal' | 'rejected'
+  score: number
+  maxScore: number
+  xpAwarded: number
+  feedback: string
+  tips?: string[]
+  canAppeal?: boolean
+}
+
+export interface RecipePhotoUploadResponse {
+  photo_url: string
+  recipe_id: string
+  photo_number: number
+  newUnlocks: Array<{ id: string; title: string }>
+  newBadges: Array<{ badge_key: string; badge_name: string; badge_emoji: string }>
+  verification?: PhotoVerification
+}

@@ -119,7 +119,7 @@ export function RecipeFilterBar({ filters, onFiltersChange, skills }: RecipeFilt
         {skills.map((skill) => (
           <button
             key={skill.id}
-            onClick={() => onFiltersChange({ ...filters, skill: filters.skill === skill.id ? undefined : skill.id as any, page: 1 })}
+            onClick={() => onFiltersChange({ ...filters, skill: filters.skill === skill.id ? undefined : skill.id as RecipeFilters['skill'], page: 1 })}
             className={`flex-shrink-0 rounded-full px-3 py-1.5 text-sm transition-colors ${
               filters.skill === skill.id
                 ? 'bg-cq-primary text-cq-primary-text font-medium'

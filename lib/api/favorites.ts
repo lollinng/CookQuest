@@ -7,7 +7,7 @@ interface FavoriteToggleResponse {
 }
 
 interface FavoritesListResponse {
-  recipes: any[]
+  recipes: Recipe[]
   total: number
 }
 

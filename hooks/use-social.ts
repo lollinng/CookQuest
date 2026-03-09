@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy, LeaderboardEntry, Notification } from '@/lib/types'
+import { invalidateFeedQueries, invalidateUserSocialQueries } from '@/lib/api/query-helpers'
 import {
   followUser as apiFollowUser,
   unfollowUser as apiUnfollowUser,
@@ -159,10 +160,7 @@ export function useAddComment() {
     },
     onSuccess: (_data, { postId }) => {
       queryClient.invalidateQueries({ queryKey: socialKeys.comments(postId) })
-      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
-      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
-      // Invalidate all user posts queries (we don't know which user's post it is)
-      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+      invalidateFeedQueries(queryClient)
     },
   })
 }
@@ -176,9 +174,7 @@ export function useDeleteComment() {
     },
     onSuccess: (_data, { postId }) => {
       queryClient.invalidateQueries({ queryKey: socialKeys.comments(postId) })
-      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
-      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
-      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+      invalidateFeedQueries(queryClient)
     },
   })
 }
@@ -189,9 +185,7 @@ export function useCreatePost() {
   return useMutation({
     mutationFn: apiCreatePost,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
-      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
-      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+      invalidateFeedQueries(queryClient)
     },
   })
 }
@@ -211,9 +205,7 @@ export function useDeletePost() {
   return useMutation({
     mutationFn: (postId: number) => apiDeletePost(postId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
-      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
-      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+      invalidateFeedQueries(queryClient)
     },
   })
 }
@@ -237,9 +229,10 @@ export function useFollowUser() {
     mutationFn: async (userId: number) => {
       try {
         return await apiFollowUser(userId);
-      } catch (err: any) {
+      } catch (err: unknown) {
         // 409 = already following — treat as success
-        if (err?.status === 409 || err?.message?.includes('Already following')) {
+        const e = err as { status?: number; message?: string };
+        if (e?.status === 409 || e?.message?.includes('Already following')) {
           return { following: true };
         }
         throw err;
@@ -276,11 +269,8 @@ export function useFollowUser() {
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'search'] })
     },
     onSettled: (_data, _err, userId) => {
-      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
-      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
-      queryClient.invalidateQueries({ queryKey: socialKeys.profile(userId) })
-      queryClient.invalidateQueries({ queryKey: socialKeys.followers(userId) })
-      queryClient.invalidateQueries({ queryKey: socialKeys.following(userId) })
+      invalidateFeedQueries(queryClient)
+      invalidateUserSocialQueries(queryClient, userId)
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'search'] })
     },
   })
@@ -293,9 +283,10 @@ export function useUnfollowUser() {
     mutationFn: async (userId: number) => {
       try {
         return await apiUnfollowUser(userId);
-      } catch (err: any) {
+      } catch (err: unknown) {
         // 404 = not following — treat as success
-        if (err?.status === 404 || err?.message?.includes('Not following')) {
+        const e = err as { status?: number; message?: string };
+        if (e?.status === 404 || e?.message?.includes('Not following')) {
           return { following: false };
         }
         throw err;
@@ -330,11 +321,8 @@ export function useUnfollowUser() {
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'search'] })
     },
     onSettled: (_data, _err, userId) => {
-      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
-      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
-      queryClient.invalidateQueries({ queryKey: socialKeys.profile(userId) })
-      queryClient.invalidateQueries({ queryKey: socialKeys.followers(userId) })
-      queryClient.invalidateQueries({ queryKey: socialKeys.following(userId) })
+      invalidateFeedQueries(queryClient)
+      invalidateUserSocialQueries(queryClient, userId)
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'search'] })
     },
   })
@@ -347,9 +335,7 @@ export function useUploadAvatar() {
     mutationFn: apiUploadAvatar,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'profile'] })
-      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
-      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
-      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+      invalidateFeedQueries(queryClient)
     },
   })
 }
@@ -360,9 +346,7 @@ export function useTogglePostLike() {
   return useMutation({
     mutationFn: (postId: number) => apiTogglePostLike(postId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
-      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
-      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+      invalidateFeedQueries(queryClient)
     },
   })
 }

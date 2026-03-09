@@ -1,35 +1,39 @@
 import { useQuery, useQueryClient, useMutation, keepPreviousData } from '@tanstack/react-query'
-import type { Recipe, RecipePhoto, SkillType, StructuredIngredient } from '@/lib/types'
+import type { Recipe, RecipePhoto, RecipePhotoUploadResponse, SkillType, StructuredIngredient } from '@/lib/types'
 import { getRecipes, getRecipeById, getRecipesBySkill, type RecipeFilters } from '@/lib/api/recipes'
 import { completeRecipe as apiCompleteRecipe, uncompleteRecipe as apiUncompleteRecipe, type CompletionResult } from '@/lib/api/progress'
 import { getSkills, getSkillById } from '@/lib/api/skills'
 import { getRandomTip, getDailyTip } from '@/lib/api/tips'
 import { addFavorite, removeFavorite, getFavoriteRecipes } from '@/lib/api/favorites'
-import { apiClient, getToken, API_BASE_URL } from '@/lib/api/client'
+import { apiClient } from '@/lib/api/client'
+import { uploadFile } from '@/lib/api/upload-helpers'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw API responses have mixed snake_case/camelCase shapes
+type RawRecipe = Record<string, any>
 
 // Map backend snake_case recipe to frontend camelCase
-function mapRecipe(raw: any): Recipe {
+function mapRecipe(raw: RawRecipe): Recipe {
   return {
     id: raw.id,
     title: raw.title,
     description: raw.description,
-    skill: raw.skill,
-    difficulty: raw.difficulty,
+    skill: raw.skill as SkillType,
+    difficulty: raw.difficulty as Recipe['difficulty'],
     time: raw.time,
     imageUrl: raw.image_url || raw.imageUrl || '',
     emoji: raw.emoji,
     xpReward: raw.xp_reward || raw.xpReward || 100,
     ingredients: raw.ingredients || [],
-    structuredIngredients: (raw.structured_ingredients || raw.structuredIngredients || []).map((si: any): StructuredIngredient => ({
+    structuredIngredients: (raw.structured_ingredients || raw.structuredIngredients || []).map((si: RawRecipe): StructuredIngredient => ({
       id: si.id,
       name: si.name,
-      category: si.category,
+      category: si.category ?? null,
       amount: si.amount != null ? Number(si.amount) : null,
-      unit: si.unit,
-      preparation: si.preparation,
+      unit: si.unit ?? null,
+      preparation: si.preparation ?? null,
       optional: si.optional,
       sortOrder: si.sort_order ?? si.sortOrder ?? 0,
-      notes: si.notes,
+      notes: si.notes ?? null,
     })),
     instructions: raw.instructions || [],
     tips: raw.tips || [],
@@ -42,7 +46,7 @@ function mapRecipe(raw: any): Recipe {
 export const recipeKeys = {
   all: ['recipes'] as const,
   lists: () => [...recipeKeys.all, 'list'] as const,
-  list: (filters: Record<string, any>) => [...recipeKeys.lists(), { filters }] as const,
+  list: (filters: RecipeFilters) => [...recipeKeys.lists(), { filters }] as const,
   details: () => [...recipeKeys.all, 'detail'] as const,
   detail: (id: string) => [...recipeKeys.details(), id] as const,
   skills: () => [...recipeKeys.all, 'skills'] as const,
@@ -142,8 +146,8 @@ export function useRandomTip() {
   return useQuery({
     queryKey: tipKeys.random,
     queryFn: async () => {
-      const tip = await getRandomTip() as any
-      return { content: tip.content || tip.description || '' }
+      const tip = await getRandomTip()
+      return { content: tip.description || '' }
     },
     staleTime: 0, // Always fetch fresh on refetch
     gcTime: 5 * 60 * 1000,
@@ -225,25 +229,14 @@ export function useUploadRecipePhoto() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ recipeId, file }: { recipeId: string; file: File }) => {
-      const formData = new FormData()
-      formData.append('photo', file)
-
-      const token = getToken()
-      const response = await fetch(`${API_BASE_URL}/recipes/${recipeId}/photos`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        const json = await response.json().catch(() => ({}))
-        throw new Error(json.error?.message || 'Upload failed')
-      }
-
-      const json = await response.json()
-      return json.data as { photo_url: string; recipe_id: string; photo_number: number }
+    mutationFn: async ({ recipeId, file, captureSource }: {
+      recipeId: string;
+      file: File;
+      captureSource?: 'in-app-camera' | 'gallery';
+    }) => {
+      const extraHeaders: Record<string, string> = {}
+      if (captureSource) extraHeaders['X-CQ-Capture-Source'] = captureSource
+      return uploadFile(`/recipes/${recipeId}/photos`, file, 'photo', 'POST', extraHeaders) as Promise<RecipePhotoUploadResponse>
     },
     onSuccess: () => {
       // Invalidate to refetch all photos with proper grouping

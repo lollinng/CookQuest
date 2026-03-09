@@ -5,11 +5,12 @@ import { RedisService } from '../services/redis'
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
 import { validateRequest } from '../middleware/validation'
 import { asyncHandler } from '../middleware/error-handler'
+import { RECIPE_ID_REGEX } from '../constants'
 
 const router = Router()
 
 const recipeIdValidation = param('id')
-  .matches(/^[a-z0-9][a-z0-9-]{2,49}$/)
+  .matches(RECIPE_ID_REGEX)
   .withMessage('Invalid recipe ID format')
 
 // POST /api/v1/recipes/:id/favorite — Add to favorites (idempotent)

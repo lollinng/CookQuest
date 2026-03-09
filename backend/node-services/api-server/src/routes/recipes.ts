@@ -5,6 +5,8 @@ import { RedisService } from '../services/redis'
 import { authMiddleware, optionalAuth, AuthenticatedRequest } from '../middleware/auth'
 import { validateRequest } from '../middleware/validation'
 import { asyncHandler } from '../middleware/error-handler'
+import { calculateUserLevel, calculateSkillProgress, enrichRecipesWithProgress } from '../utils/progression-helpers'
+import { VALID_SKILL_IDS, RECIPE_ID_REGEX } from '../constants'
 
 const router = Router()
 
@@ -12,7 +14,7 @@ const router = Router()
 router.get('/', 
   optionalAuth,
   validateRequest([
-    query('skill').optional().isIn(['basic-cooking', 'heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine']),
+    query('skill').optional().isIn([...VALID_SKILL_IDS]),
     query('difficulty').optional().isIn(['beginner', 'intermediate', 'advanced']),
     query('sort').optional().matches(/^-?(title|difficulty|time|xp)$/).withMessage('sort must be one of: title, -title, difficulty, -difficulty, time, -time, xp, -xp'),
     query('search').optional().isString().trim().isLength({ min: 1, max: 100 }).withMessage('search must be 1-100 characters'),
@@ -85,13 +87,7 @@ router.get('/',
         DatabaseService.getUserProgress(req.user.id),
         DatabaseService.getUserFavoriteIds(req.user.id)
       ])
-      const progressMap = new Map(userProgress.map(p => [p.recipe_id, p]))
-
-      recipesWithProgress = paginatedRecipes.map(recipe => ({
-        ...recipe,
-        user_progress: progressMap.get(recipe.id) || null,
-        is_favorited: favoriteIds.has(recipe.id)
-      }))
+      recipesWithProgress = enrichRecipesWithProgress(paginatedRecipes, userProgress, favoriteIds)
     }
 
     const response = {
@@ -118,7 +114,7 @@ router.get('/',
 router.get('/:id',
   optionalAuth,
   validateRequest([
-    param('id').matches(/^[a-z0-9][a-z0-9-]{2,49}$/).withMessage('Invalid recipe ID format')
+    param('id').matches(RECIPE_ID_REGEX).withMessage('Invalid recipe ID format')
   ]),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const { id } = req.params
@@ -133,13 +129,13 @@ router.get('/:id',
       })
     }
 
-    let recipeWithProgress: Record<string, any> = recipe
+    let recipeData = recipe as typeof recipe & { user_progress?: unknown; is_favorited?: boolean }
     if (req.user) {
       const [progress, favoriteIds] = await Promise.all([
         DatabaseService.getRecipeProgress(req.user.id, id),
         DatabaseService.getUserFavoriteIds(req.user.id)
       ])
-      recipeWithProgress = {
+      recipeData = {
         ...recipe,
         user_progress: progress,
         is_favorited: favoriteIds.has(id)
@@ -149,7 +145,7 @@ router.get('/:id',
     res.json({
       success: true,
       data: {
-        recipe: recipeWithProgress
+        recipe: recipeData
       }
     })
   })
@@ -159,7 +155,7 @@ router.get('/:id',
 router.post('/:id/progress',
   authMiddleware,
   validateRequest([
-    param('id').matches(/^[a-z0-9][a-z0-9-]{2,49}$/).withMessage('Invalid recipe ID format'),
+    param('id').matches(RECIPE_ID_REGEX).withMessage('Invalid recipe ID format'),
     body('completed').isBoolean().withMessage('completed must be a boolean'),
     body('rating').optional().isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),
     body('notes').optional().isString().trim().isLength({ max: 1000 }).withMessage('Notes must be under 1000 characters')
@@ -184,7 +180,7 @@ router.post('/:id/progress',
     const existingProgress = await DatabaseService.getRecipeProgress(userId, id)
     const wasAlreadyCompleted = existingProgress?.completed === true
 
-    const progressData: any = {
+    const progressData: Record<string, unknown> = {
       completed
     }
 
@@ -214,7 +210,7 @@ router.post('/:id/progress',
     }
 
     // Check for newly unlocked skills (only on NEW completions)
-    let skills_unlocked: any[] = []
+    let skills_unlocked: { id: string; name: string; icon: string; color: string }[] = []
     if (completed && !wasAlreadyCompleted) {
       skills_unlocked = await DatabaseService.getNewlyUnlockedSkills(userId, recipe.skill)
     }
@@ -240,13 +236,11 @@ router.post('/:id/progress',
     const allUserProgress = await DatabaseService.getUserProgress(userId)
     const totalCompleted = allUserProgress.filter(p => p.completed).length
     const totalXP = await DatabaseService.getUserTotalXP(userId)
-    const level = Math.floor(totalXP / 1000) + 1
-    const currentLevelXP = (level - 1) * 1000
-    const nextLevelXP = level * 1000
+    const { level, currentLevelXP, nextLevelXP } = calculateUserLevel(totalXP)
 
     // Check if this completion caused a level-up
     const prevTotalXP = totalXP - xp_earned
-    const prevLevel = Math.floor(prevTotalXP / 1000) + 1
+    const { level: prevLevel } = calculateUserLevel(prevTotalXP)
     const level_up = level > prevLevel ? { new_level: level, previous_level: prevLevel } : null
 
     // Compute streak from completion dates
@@ -275,8 +269,8 @@ router.post('/:id/progress',
 
     // Compute skill progress for this recipe's skill
     const skillRecipes = await DatabaseService.getRecipesBySkill(recipe.skill)
-    const skillRecipeIds = new Set(skillRecipes.map(r => r.id))
-    const skillCompleted = allUserProgress.filter(p => p.completed && skillRecipeIds.has(p.recipe_id)).length
+    const skillRecipeIds = skillRecipes.map(r => r.id)
+    const skillProgress = calculateSkillProgress(allUserProgress, skillRecipeIds)
 
     res.json({
       success: true,
@@ -295,9 +289,7 @@ router.post('/:id/progress',
         },
         skill_progress: {
           skill_id: recipe.skill,
-          completed: skillCompleted,
-          total: skillRecipes.length,
-          percentage: skillRecipes.length > 0 ? Math.round((skillCompleted / skillRecipes.length) * 100) : 0,
+          ...skillProgress,
         },
         level_up,
         skills_unlocked: skills_unlocked.map(s => ({
@@ -318,7 +310,7 @@ router.post('/:id/progress',
 router.get('/skill/:skillId',
   optionalAuth,
   validateRequest([
-    param('skillId').isIn(['basic-cooking', 'heat-control', 'flavor-building', 'air-fryer', 'indian-cuisine'])
+    param('skillId').isIn([...VALID_SKILL_IDS])
   ]),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const { skillId } = req.params
@@ -337,13 +329,7 @@ router.get('/skill/:skillId',
         DatabaseService.getUserProgress(req.user.id),
         DatabaseService.getUserFavoriteIds(req.user.id)
       ])
-      const progressMap = new Map(userProgress.map(p => [p.recipe_id, p]))
-
-      recipesWithProgress = recipes.map(recipe => ({
-        ...recipe,
-        user_progress: progressMap.get(recipe.id) || null,
-        is_favorited: favoriteIds.has(recipe.id)
-      }))
+      recipesWithProgress = enrichRecipesWithProgress(recipes, userProgress, favoriteIds)
     }
 
     const response = {
@@ -357,6 +343,18 @@ router.get('/skill/:skillId',
 
     await RedisService.cacheResponse(cacheKey, response, 600) // Cache for 10 minutes
     res.json(response)
+  })
+)
+
+// POST /api/v1/recipes/:id/view - Track recipe page view for session context signal
+router.post('/:id/view',
+  authMiddleware,
+  validateRequest([
+    param('id').matches(RECIPE_ID_REGEX).withMessage('Invalid recipe ID format')
+  ]),
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    await DatabaseService.recordRecipeView(req.user!.id, req.params.id)
+    res.json({ success: true })
   })
 )
 

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { Camera, Lock, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/use-platform'
 import { PhotoSourceSheet } from '@/components/ui/photo-source-sheet'
 
@@ -9,7 +10,6 @@ interface PhotoNodeProps {
   recipeId: string
   photoUrl: string | undefined
   isLocked: boolean
-  isCompleted: boolean
   isCheckpoint: boolean
   onUpload: (recipeId: string, file: File) => void
   isUploading: boolean
@@ -50,12 +50,12 @@ export function PhotoNode({
     if (file) {
       const validTypes = ['image/jpeg', 'image/png', 'image/webp']
       if (!validTypes.includes(file.type)) {
-        alert('Only JPEG, PNG, and WebP images are allowed')
+        toast.error('Only JPEG, PNG, and WebP images are allowed')
         if (inputRef.current) inputRef.current.value = ''
         return
       }
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image must be under 5MB')
+        toast.error('Image must be under 5MB')
         if (inputRef.current) inputRef.current.value = ''
         return
       }

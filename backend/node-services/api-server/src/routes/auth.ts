@@ -9,6 +9,7 @@ import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
 import { validateRequest } from '../middleware/validation'
 import { asyncHandler, APIError } from '../middleware/error-handler'
 import { logger } from '../services/logger'
+import { formatUserResponse } from '../utils/response-helpers'
 
 const COOKIE_NAME = 'cookquest_token'
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -43,7 +44,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     success: false,
-    error: 'Too many authentication attempts. Please try again in 15 minutes.',
+    error: { message: 'Too many authentication attempts. Please try again in 15 minutes.' },
   },
   handler: (req, res, next, options) => {
     logger.warn({ ip: req.ip, path: req.path, email: req.body?.email }, 'Auth rate limit exceeded')
@@ -147,14 +148,7 @@ router.post('/register',
       success: true,
       message: 'User registered successfully',
       data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          username: user.username,
-          profile: user.profile,
-          is_allowed: user.is_allowed ?? false,
-          is_admin: user.is_admin ?? false,
-        },
+        user: formatUserResponse(user),
         token // Still returned for backward compatibility
       }
     })
@@ -199,14 +193,7 @@ router.post('/login',
       success: true,
       message: 'Login successful',
       data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          username: user.username,
-          profile: user.profile,
-          is_allowed: user.is_allowed ?? false,
-          is_admin: user.is_admin ?? false,
-        },
+        user: formatUserResponse(user),
         token // Still returned for backward compatibility
       }
     })
@@ -249,15 +236,7 @@ router.get('/me',
     res.json({
       success: true,
       data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          username: user.username,
-          profile: user.profile,
-          created_at: user.created_at,
-          is_allowed: user.is_allowed ?? false,
-          is_admin: user.is_admin ?? false,
-        }
+        user: formatUserResponse(user, { includeCreatedAt: true })
       }
     })
   })
@@ -294,14 +273,7 @@ router.post('/refresh',
       message: 'Token refreshed',
       data: {
         token: newToken,
-        user: {
-          id: user.id,
-          email: user.email,
-          username: user.username,
-          profile: user.profile,
-          is_allowed: user.is_allowed ?? false,
-          is_admin: user.is_admin ?? false,
-        }
+        user: formatUserResponse(user)
       }
     })
   })

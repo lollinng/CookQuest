@@ -5,6 +5,10 @@ import { useState, useEffect, useCallback } from 'react';
 const DISMISS_KEY = 'cookquest-pwa-dismissed';
 const DISMISS_DAYS = 7;
 
+declare global {
+  interface Navigator { standalone?: boolean; }
+}
+
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -23,7 +27,7 @@ export function usePWAInstall() {
     // Check standalone mode
     const standalone =
       window.matchMedia('(display-mode: standalone)').matches ||
-      (navigator as any).standalone === true;
+      navigator.standalone === true;
     setIsStandalone(standalone);
 
     // Check dismiss timestamp

@@ -41,8 +41,8 @@ export function LoginForm({ onSwitchToRegister, onSuccess, embedded = false }: L
     try {
       await login(email.trim(), password)
       onSuccess?.()
-    } catch (err: any) {
-      setError(err?.message || 'Login failed. Please check your credentials and try again.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials and try again.')
     } finally {
       setIsSubmitting(false)
     }
