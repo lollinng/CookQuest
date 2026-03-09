@@ -118,6 +118,8 @@ export interface PostComment {
   avatarUrl: string | null
   content: string
   createdAt: string
+  likesCount: number
+  isLiked: boolean
 }
 
 export interface SkillTrophy {

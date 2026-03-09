@@ -95,7 +95,7 @@ See `claude-agents/agent-config.json` for thresholds and settings.
 
 When the user asks to run a UI/UX audit, review the app visually, or create improvement tasks:
 
-1. **Read** `claude-agents/ui-ux-auditor-agent.md` — it contains the full process, checklists, quality bar, and task format
+1. **Read** `claude-agents/on-demand/ui-ux-auditor-agent.md` — it contains the full process, checklists, quality bar, and task format
 2. **Follow** the infinite loop defined there: screenshot → review → write tasks to `claude-agents/tasks.json`
 3. **Max 10 open tasks** in the queue at any time
 4. Tasks use the schema defined in `claude-agents/task-queue.js` (see `addTask()` method)
@@ -107,7 +107,7 @@ When the user asks to run a UI/UX audit, review the app visually, or create impr
 
 When the user reports a bug, provides a screenshot of an issue, or asks to file a bug ticket:
 
-1. **Read** `claude-agents/bug-triage-agent.md` — it contains the full triage process, priority guide, and task schema
+1. **Read** `claude-agents/on-demand/bug-triage-agent.md` — it contains the full triage process, priority guide, and task schema
 2. **Investigate** the code to pinpoint the likely source (file paths, line numbers)
 3. **Create ticket** in `claude-agents/tasks.json` with type `"bug-fix"` and title starting with `[Bug]`
 6. **Do NOT fix the bug** — only triage and ticket. Implementer agents handle fixes.
@@ -152,71 +152,7 @@ claude-agents/    - Multi-agent pipeline system (tasks.json, configs)
 - Fallback patterns: API data → local fallback (see `components/cooking-tip.tsx`)
 
 ### Pattern Reference Card
-
-**Adding a frontend feature (end-to-end checklist):**
-1. Define types in `lib/types.ts`
-2. Create API module in `lib/api/{name}.ts` using `apiClient` wrapper
-3. Create TanStack Query hook in `hooks/use-{name}.ts` (or add to `hooks/use-recipes.ts`)
-4. Create component in `components/{kebab-name}.tsx`
-5. Integrate into page in `app/` directory
-
-**Adding a backend endpoint (end-to-end checklist):**
-1. Create route in `backend/node-services/api-server/src/routes/{name}.ts`
-2. Register in `backend/node-services/api-server/src/routes/index.ts`
-3. Add DB queries to `backend/node-services/api-server/src/services/database.ts`
-4. Add schema changes to `backend/shared/schema-pg.sql` + migration in database.ts
-5. Response format: `{ success: true, data: {} }` or `{ success: false, error: { message } }`
-
-**Component template:**
-```tsx
-'use client';
-
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-interface MyComponentProps {
-  title: string;
-}
-
-export function MyComponent({ title }: MyComponentProps) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* content */}
-      </CardContent>
-    </Card>
-  );
-}
-```
-
-**Query hook template:**
-```ts
-export const myKeys = {
-  all: ['my-resource'] as const,
-  detail: (id: string) => [...myKeys.all, id] as const,
-};
-
-export function useMyResource() {
-  return useQuery({
-    queryKey: myKeys.all,
-    queryFn: () => getMyResource(),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-  });
-}
-```
-
-**API module template:**
-```ts
-import { apiClient } from './client';
-
-// apiClient unwraps the envelope — returns T, not { success, data: T }
-export async function getMyResource(): Promise<MyType[]> {
-  return apiClient<MyType[]>('/my-resource');
-}
-```
+**See `CLAUDE-TEMPLATES.md`** for component, hook, API module, and route templates.
 
 ### Common Pitfalls & Gotchas
 

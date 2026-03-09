@@ -41,8 +41,8 @@ FILE_MAP = {
     'claude-agents/agent-config.json': 'agent-system/agent-config.json',
     'claude-agents/memory.md': 'agent-system/memory.md',
     'claude-agents/README.md': 'agent-system/README.md',
-    'claude-agents/ui-ux-auditor-agent.md': 'agent-system/ui-ux-auditor-agent.md',
-    'claude-agents/bug-triage-agent.md': 'agent-system/bug-triage-agent.md',
+    'claude-agents/on-demand/ui-ux-auditor-agent.md': 'agent-system/ui-ux-auditor-agent.md',
+    'claude-agents/on-demand/bug-triage-agent.md': 'agent-system/bug-triage-agent.md',
     'claude-agents/agent-roster.json': 'agent-system/agent-roster.json',
 }
 

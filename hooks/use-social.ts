@@ -13,6 +13,8 @@ import {
   getPostComments,
   addComment as apiAddComment,
   deleteComment as apiDeleteComment,
+  deletePost as apiDeletePost,
+  toggleCommentLike as apiToggleCommentLike,
   getUserSkillTrophies,
   uploadAvatar as apiUploadAvatar,
   getWorldLeaderboard,
@@ -172,6 +174,31 @@ export function useDeleteComment() {
       queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
       queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+    },
+  })
+}
+
+export function useDeletePost() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (postId: number) => apiDeletePost(postId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
+      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+    },
+  })
+}
+
+export function useToggleCommentLike() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ postId, commentId }: { postId: number; commentId: number }) =>
+      apiToggleCommentLike(postId, commentId),
+    onSuccess: (_data, { postId }) => {
+      queryClient.invalidateQueries({ queryKey: socialKeys.comments(postId) })
     },
   })
 }

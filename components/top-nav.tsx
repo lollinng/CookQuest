@@ -68,8 +68,8 @@ export function TopNav() {
             </Tooltip>
           )}
 
-          {/* People link (authenticated only) */}
-          {isAuthenticated && (
+          {/* People link */}
+          {isAuthenticated ? (
             <Link
               href="/people"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-cq-text-primary hover:bg-cq-surface-hover transition-colors"
@@ -77,10 +77,25 @@ export function TopNav() {
               <Users className="size-4" />
               <span className="hidden sm:inline">People</span>
             </Link>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/people"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-muted opacity-60 hover:opacity-80 hover:bg-cq-surface-hover transition-all"
+                >
+                  <Users className="size-4" />
+                  <span className="hidden sm:inline">People</span>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-cq-surface text-cq-text-primary border border-cq-border">
+                Sign in to find people
+              </TooltipContent>
+            </Tooltip>
           )}
 
-          {/* Feed (authenticated only) */}
-          {isAuthenticated && (
+          {/* Feed link */}
+          {isAuthenticated ? (
             <Link
               href="/feed"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-cq-text-primary hover:bg-cq-surface-hover transition-colors"
@@ -88,6 +103,21 @@ export function TopNav() {
               <Newspaper className="size-4" />
               <span className="hidden sm:inline">Feed</span>
             </Link>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/feed"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-muted opacity-60 hover:opacity-80 hover:bg-cq-surface-hover transition-all"
+                >
+                  <Newspaper className="size-4" />
+                  <span className="hidden sm:inline">Feed</span>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-cq-surface text-cq-text-primary border border-cq-border">
+                Sign in to see your feed
+              </TooltipContent>
+            </Tooltip>
           )}
 
           {/* User Menu / Auth */}

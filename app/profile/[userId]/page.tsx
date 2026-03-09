@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import { useState, useRef } from 'react';
-import { ArrowLeft, ChefHat, Camera, Trophy, Clock, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChefHat, Camera, Trophy, Clock, Loader2, Trash2 } from 'lucide-react';
 import { CommentSection } from '@/components/post-comments';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,6 +23,7 @@ import {
   useFollowUser,
   useUnfollowUser,
   useUploadAvatar,
+  useDeletePost,
 } from '@/hooks/use-social';
 import type { FollowUser } from '@/lib/types';
 import { toast } from 'sonner';
@@ -295,7 +296,17 @@ function FollowListModal({
 
 // ── Activity Item ──
 
-function ActivityItem({ post }: { post: UserPost }) {
+function ActivityItem({
+  post,
+  isOwnProfile,
+  onDeletePost,
+  isDeleting,
+}: {
+  post: UserPost;
+  isOwnProfile: boolean;
+  onDeletePost: (postId: number) => void;
+  isDeleting: boolean;
+}) {
   let icon = <ChefHat className="size-4 text-orange-400" />;
   let label = '';
 
@@ -324,7 +335,7 @@ function ActivityItem({ post }: { post: UserPost }) {
             <img
               src={post.recipeImageUrl}
               alt={post.recipeTitle || 'Recipe'}
-              className="h-16 w-24 object-cover rounded-lg"
+              className="w-full aspect-video object-cover rounded-lg"
             />
           </div>
         )}
@@ -333,14 +344,26 @@ function ActivityItem({ post }: { post: UserPost }) {
             <img
               src={post.photoUrl}
               alt={post.recipeTitle || 'Photo'}
-              className="h-16 w-24 object-cover rounded-lg"
+              className="w-full aspect-video object-cover rounded-lg"
             />
           </div>
         )}
       </div>
-      <div className="flex items-center gap-1 text-xs text-cq-text-muted whitespace-nowrap">
-        <Clock className="size-3" />
-        {relativeTime(post.createdAt)}
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 text-xs text-cq-text-muted whitespace-nowrap">
+          <Clock className="size-3" />
+          {relativeTime(post.createdAt)}
+        </div>
+        {isOwnProfile && (
+          <button
+            onClick={() => onDeletePost(post.id)}
+            disabled={isDeleting}
+            className="text-cq-text-muted hover:text-red-400 transition-colors p-1"
+            aria-label="Delete post"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -467,6 +490,7 @@ export default function ProfilePage() {
   } = useUserPosts(userId);
 
   const uploadAvatarMutation = useUploadAvatar();
+  const deletePostMutation = useDeletePost();
   const isOwnProfile = currentUser?.id === userId;
 
   const handleAvatarChange = (file: File) => {
@@ -588,7 +612,12 @@ export default function ProfilePage() {
           <div>
             {recentPosts.map((post) => (
               <div key={post.id}>
-                <ActivityItem post={post} />
+                <ActivityItem
+                  post={post}
+                  isOwnProfile={isOwnProfile}
+                  onDeletePost={(postId) => deletePostMutation.mutate(postId)}
+                  isDeleting={deletePostMutation.isPending}
+                />
                 <CommentSection postId={post.id} commentsCount={post.commentsCount || 0} />
               </div>
             ))}

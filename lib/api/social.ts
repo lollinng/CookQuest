@@ -88,6 +88,14 @@ export async function deleteAvatar(): Promise<void> {
   return apiClient<void>('/users/me/avatar', { method: 'DELETE' })
 }
 
+export async function deletePost(postId: number): Promise<void> {
+  return apiClient<void>(`/posts/${postId}`, { method: 'DELETE' })
+}
+
+export async function toggleCommentLike(postId: number, commentId: number): Promise<{ liked: boolean; likesCount: number }> {
+  return apiClient<{ liked: boolean; likesCount: number }>(`/posts/${postId}/comments/${commentId}/like`, { method: 'POST' })
+}
+
 export async function getWorldLeaderboard(limit = 10): Promise<LeaderboardEntry[]> {
   return apiClient<LeaderboardEntry[]>('/leaderboard/world', {
     params: { limit: String(limit) },

@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, Trash2, Send, Loader2 } from 'lucide-react';
+import { MessageCircle, Trash2, Send, Loader2, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
-import { usePostComments, useAddComment, useDeleteComment } from '@/hooks/use-social';
+import { usePostComments, useAddComment, useDeleteComment, useToggleCommentLike } from '@/hooks/use-social';
 import { getAvatarColor, getInitials, formatRelativeTime } from '@/lib/social-helpers';
 import type { PostComment } from '@/lib/types';
 
@@ -14,14 +14,18 @@ import type { PostComment } from '@/lib/types';
 
 function CommentItem({
   comment,
+  postId,
   currentUserId,
   onDelete,
   isDeleting,
+  onToggleLike,
 }: {
   comment: PostComment;
+  postId: number;
   currentUserId: number | undefined;
   onDelete: (commentId: number) => void;
   isDeleting: boolean;
+  onToggleLike: (postId: number, commentId: number) => void;
 }) {
   const displayName = comment.displayName ?? comment.username;
   const isOwn = currentUserId === comment.userId;
@@ -40,16 +44,36 @@ function CommentItem({
         </div>
         <p className="text-sm text-cq-text-primary mt-0.5 break-words">{comment.content}</p>
       </div>
-      {isOwn && (
-        <button
-          onClick={() => onDelete(comment.id)}
-          disabled={isDeleting}
-          className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1"
-          aria-label="Delete comment"
-        >
-          <Trash2 className="size-3.5" />
-        </button>
-      )}
+      <div className="flex items-center gap-1 shrink-0 mt-1">
+        {currentUserId && (
+          <button
+            onClick={() => onToggleLike(postId, comment.id)}
+            className="flex items-center gap-1 text-xs"
+            aria-label={comment.isLiked ? 'Unlike comment' : 'Like comment'}
+          >
+            <Heart
+              className={`w-3.5 h-3.5 transition-colors ${
+                comment.isLiked ? 'fill-red-500 text-red-500' : 'text-muted-foreground hover:text-red-400'
+              }`}
+            />
+            {comment.likesCount > 0 && (
+              <span className={comment.isLiked ? 'text-red-500' : 'text-muted-foreground'}>
+                {comment.likesCount}
+              </span>
+            )}
+          </button>
+        )}
+        {isOwn && (
+          <button
+            onClick={() => onDelete(comment.id)}
+            disabled={isDeleting}
+            className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-label="Delete comment"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -71,6 +95,7 @@ export function CommentSection({
   const { data: comments, isLoading } = usePostComments(isOpen ? postId : 0);
   const addComment = useAddComment();
   const deleteComment = useDeleteComment();
+  const toggleLike = useToggleCommentLike();
 
   const displayCount = comments?.length ?? commentsCount;
 
@@ -135,9 +160,11 @@ export function CommentSection({
                 <CommentItem
                   key={c.id}
                   comment={c}
+                  postId={postId}
                   currentUserId={user?.id}
                   onDelete={handleDelete}
                   isDeleting={deleteComment.isPending}
+                  onToggleLike={(pId, cId) => toggleLike.mutate({ postId: pId, commentId: cId })}
                 />
               ))}
               <div ref={listEndRef} />
