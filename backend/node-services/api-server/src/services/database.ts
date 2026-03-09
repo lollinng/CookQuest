@@ -776,9 +776,9 @@ class DatabaseServiceClass {
       logger.info('Post comments migration applied')
     }
 
-    // Seed community users with posts, progress & mutual follows (migration 014) — dev only
+    // Seed community users with posts, progress & mutual follows (migration 014)
     const seedUsersApplied = await this.isMigrationApplied('014_seed_community_users')
-    if (!seedUsersApplied && process.env.NODE_ENV !== 'production') {
+    if (!seedUsersApplied) {
       // Insert 3 seed users (ON CONFLICT ensures idempotency)
       await this.pool.query(`
         INSERT INTO users (email, username, password_hash, display_name, is_active, email_verified, is_allowed, created_at)
