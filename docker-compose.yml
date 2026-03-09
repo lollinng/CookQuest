@@ -91,6 +91,9 @@ services:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - EMAIL_USER=${EMAIL_USER:-}
+      - EMAIL_APP_PASSWORD=${EMAIL_APP_PASSWORD:-}
+      - APP_URL=${APP_URL:-http://localhost:3000}
       - SHARED_DIR=/shared
     volumes:
       - ./backend/shared:/shared:ro

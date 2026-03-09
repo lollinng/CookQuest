@@ -17,12 +17,14 @@ import { demoRoutes } from './demo'
 import { uploadRoutes } from './uploads'
 import { progressionRoutes } from './progression'
 import { appealRoutes } from './appeals'
+import { waitlistRoutes } from './waitlist'
 
 export function initializeRoutes(app: Express) {
   // API version prefix
   const apiPrefix = '/api/v1'
 
   // Public routes (no authentication required, no alpha gate)
+  app.use(`${apiPrefix}/waitlist`, waitlistRoutes)
   app.use(`${apiPrefix}/auth`, authRoutes)
   app.use(`${apiPrefix}/recipes`, recipeRoutes) // Some endpoints public, some protected
   app.use(`${apiPrefix}/skills`, skillRoutes) // Public read access

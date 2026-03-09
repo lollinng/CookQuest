@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Bell, ChefHat, Download, Flame, Heart, Newspaper, Trophy, Users, UtensilsCrossed } from 'lucide-react';
+import { Bell, ChefHat, Download, Flame, Heart, Newspaper, Users, UtensilsCrossed } from 'lucide-react';
 import { UserMenu } from '@/components/auth/user-menu';
 import { useAuth } from '@/lib/auth-context';
 import { useFavoriteRecipes } from '@/hooks/use-recipes';
@@ -83,15 +83,6 @@ export function TopNav() {
             >
               <Newspaper className="size-4" />
               <span className="hidden sm:inline">Feed</span>
-            </Link>
-
-            {/* Leaderboard link */}
-            <Link
-              href="/leaderboard"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-amber-500 hover:bg-cq-surface-hover transition-colors"
-            >
-              <Trophy className="size-4" />
-              <span className="hidden sm:inline">Ranks</span>
             </Link>
 
             {/* Notifications bell */}

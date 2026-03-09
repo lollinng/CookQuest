@@ -1459,6 +1459,34 @@ class DatabaseServiceClass {
       logger.info('Migration 025: Trust tiers, photo verifications, appeals, and recipe views applied')
     }
 
+    if (!(await this.isMigrationApplied('026_waitlist'))) {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS waitlist_entries (
+          id SERIAL PRIMARY KEY,
+          email TEXT UNIQUE NOT NULL,
+          verified BOOLEAN DEFAULT FALSE,
+          verified_at TIMESTAMPTZ,
+          ip_address TEXT,
+          user_agent TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_waitlist_email ON waitlist_entries(email);
+
+        CREATE TABLE IF NOT EXISTS email_verification_tokens (
+          id SERIAL PRIMARY KEY,
+          email TEXT NOT NULL,
+          token TEXT UNIQUE NOT NULL,
+          expires_at TIMESTAMPTZ NOT NULL,
+          used BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_email_verif_token ON email_verification_tokens(token);
+        CREATE INDEX IF NOT EXISTS idx_email_verif_email ON email_verification_tokens(email);
+      `)
+      await this.recordMigration('026_waitlist')
+      logger.info('Migration 026: Waitlist and email verification tokens applied')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
@@ -3046,6 +3074,68 @@ class DatabaseServiceClass {
       [verificationId]
     )
     return rows[0] || null
+  }
+
+  // Waitlist methods
+  async getWaitlistEntry(email: string) {
+    const result = await this.pool.query(
+      'SELECT * FROM waitlist_entries WHERE email = $1', [email]
+    );
+    return result.rows[0] || null;
+  }
+
+  async upsertWaitlistEntry(email: string, ip?: string, userAgent?: string) {
+    await this.pool.query(
+      `INSERT INTO waitlist_entries (email, ip_address, user_agent)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (email) DO UPDATE SET ip_address = $2, user_agent = $3`,
+      [email, ip || null, userAgent || null]
+    );
+  }
+
+  async verifyWaitlistEntry(email: string) {
+    await this.pool.query(
+      'UPDATE waitlist_entries SET verified = true, verified_at = NOW() WHERE email = $1',
+      [email]
+    );
+  }
+
+  async createVerificationToken(email: string, token: string, expiresAt: Date) {
+    await this.pool.query(
+      'INSERT INTO email_verification_tokens (email, token, expires_at) VALUES ($1, $2, $3)',
+      [email, token, expiresAt.toISOString()]
+    );
+  }
+
+  async getVerificationToken(token: string) {
+    const result = await this.pool.query(
+      'SELECT * FROM email_verification_tokens WHERE token = $1 AND used = false AND expires_at > NOW()',
+      [token]
+    );
+    return result.rows[0] || null;
+  }
+
+  async markTokenUsed(token: string) {
+    await this.pool.query(
+      'UPDATE email_verification_tokens SET used = true WHERE token = $1',
+      [token]
+    );
+  }
+
+  async deleteUnusedTokensForEmail(email: string) {
+    await this.pool.query(
+      'DELETE FROM email_verification_tokens WHERE email = $1 AND used = false',
+      [email]
+    );
+  }
+
+  async getRecentSignupCount(email: string, windowMinutes: number) {
+    const result = await this.pool.query(
+      `SELECT COUNT(*) as count FROM email_verification_tokens
+       WHERE email = $1 AND created_at > NOW() - INTERVAL '1 minute' * $2`,
+      [email, windowMinutes]
+    );
+    return parseInt(result.rows[0].count, 10);
   }
 
   async close(): Promise<void> {

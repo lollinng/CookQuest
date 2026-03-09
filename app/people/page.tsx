@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, Trophy } from 'lucide-react';
+import { Search, Trophy, Crown, Medal } from 'lucide-react';
 import Link from 'next/link';
 import { UserCard } from '@/components/user-card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,95 +17,117 @@ import { DemoModeBanner } from '@/components/onboarding/demo-mode-banner';
 import { useDemoPeople } from '@/hooks/use-onboarding';
 import type { LeaderboardEntry } from '@/lib/types';
 
+const RANK_STYLES: Record<number, { icon: React.ReactNode; bg: string }> = {
+  1: { icon: <Crown className="size-5 text-yellow-400 fill-yellow-400" />, bg: 'bg-yellow-500/10 border-yellow-500/30' },
+  2: { icon: <Medal className="size-5 text-gray-300" />, bg: 'bg-gray-400/10 border-gray-400/30' },
+  3: { icon: <Medal className="size-5 text-amber-600" />, bg: 'bg-amber-600/10 border-amber-600/30' },
+};
+
+function getAvatarColor(name: string): string {
+  const colors = [
+    'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500',
+    'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-red-500',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+
 function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
-  const rankDisplay =
-    entry.rank === 1 ? '🥇' :
-    entry.rank === 2 ? '🥈' :
-    entry.rank === 3 ? '🥉' : null;
+  const style = RANK_STYLES[entry.rank];
+  const displayName = entry.displayName ?? entry.username;
 
   return (
-    <Link
-      href={`/profile/${entry.id}`}
-      className="flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-white/5 transition-colors"
-    >
-      <div className="w-8 text-center font-bold text-lg">
-        {rankDisplay ?? <span className="text-cq-text-muted text-sm">{entry.rank}</span>}
+    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+      style?.bg || 'bg-cq-surface border-cq-border'
+    }`}>
+      <div className="w-8 flex items-center justify-center">
+        {style?.icon || (
+          <span className="text-sm font-bold text-cq-text-muted">#{entry.rank}</span>
+        )}
       </div>
       {entry.avatarUrl ? (
-        <img
-          src={entry.avatarUrl}
-          alt={entry.displayName || entry.username}
-          className="size-10 rounded-full object-cover border border-cq-border shrink-0"
-        />
+        <Link href={`/profile/${entry.id}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={entry.avatarUrl}
+            alt={displayName}
+            className="size-10 rounded-full object-cover"
+          />
+        </Link>
       ) : (
-        <div className="size-10 rounded-full bg-cq-primary flex items-center justify-center text-white text-sm font-bold border border-cq-border shrink-0">
-          {(entry.displayName || entry.username).charAt(0).toUpperCase()}
-        </div>
+        <Link href={`/profile/${entry.id}`}>
+          <div className={`size-10 rounded-full flex items-center justify-center text-sm font-bold text-white ${getAvatarColor(entry.username)}`}>
+            {displayName.charAt(0).toUpperCase()}
+          </div>
+        </Link>
       )}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-cq-text-primary truncate">
-          {entry.displayName || entry.username}
-        </p>
+        <Link href={`/profile/${entry.id}`} className="text-sm font-semibold text-cq-text-primary hover:underline truncate block">
+          {displayName}
+        </Link>
         <p className="text-xs text-cq-text-muted">@{entry.username}</p>
       </div>
       <div className="text-right">
-        <div className="text-sm font-bold text-cq-primary">{entry.recipesCompleted}</div>
-        <div className="text-[10px] text-cq-text-muted">recipes</div>
+        <span className="text-lg font-black text-cq-text-primary">{entry.recipesCompleted}</span>
+        <p className="text-xs text-cq-text-muted">dishes</p>
       </div>
-    </Link>
+    </div>
   );
 }
 
 function LeaderboardSection() {
   const [tab, setTab] = useState<'world' | 'friends'>('world');
-  const worldQuery = useWorldLeaderboard(10);
-  const friendsQuery = useFriendsLeaderboard(10);
+  const { isAuthenticated } = useAuth();
+  const worldQuery = useWorldLeaderboard(20);
+  const friendsQuery = useFriendsLeaderboard(20);
 
   const { data: entries, isLoading } = tab === 'world' ? worldQuery : friendsQuery;
 
   return (
     <div className="bg-cq-surface border border-cq-border rounded-xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-cq-text-primary flex items-center gap-2">
-          <Trophy className="size-4 text-amber-400" />
-          Leaderboard
-        </h2>
-        <div className="flex items-center bg-cq-bg border border-cq-border rounded-full p-0.5">
-          <button
-            onClick={() => setTab('world')}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              tab === 'world' ? 'bg-cq-primary text-white' : 'text-cq-text-secondary hover:text-cq-text-primary'
-            }`}
-          >
-            World
-          </button>
+      <div className="flex items-center gap-2 mb-4">
+        <Trophy className="size-5 text-amber-500" />
+        <h2 className="text-lg font-bold text-cq-text-primary">Leaderboard</h2>
+      </div>
+
+      <div className="flex items-center bg-cq-bg border border-cq-border rounded-full p-1 mb-4">
+        <button
+          onClick={() => setTab('world')}
+          className={`flex-1 py-2 rounded-full text-sm font-medium transition-colors ${
+            tab === 'world' ? 'bg-cq-primary text-white' : 'text-cq-text-secondary hover:text-cq-text-primary'
+          }`}
+        >
+          This Week
+        </button>
+        {isAuthenticated && (
           <button
             onClick={() => setTab('friends')}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+            className={`flex-1 py-2 rounded-full text-sm font-medium transition-colors ${
               tab === 'friends' ? 'bg-cq-primary text-white' : 'text-cq-text-secondary hover:text-cq-text-primary'
             }`}
           >
             Friends
           </button>
-        </div>
+        )}
       </div>
 
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-3 py-2">
-              <Skeleton className="w-8 h-6 rounded" />
+            <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-cq-surface border border-cq-border">
+              <Skeleton className="w-8 h-5" />
               <Skeleton className="size-10 rounded-full" />
               <div className="flex-1 space-y-1">
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-16" />
               </div>
-              <Skeleton className="h-5 w-8" />
+              <Skeleton className="h-6 w-8" />
             </div>
           ))}
         </div>
       ) : entries && entries.length > 0 ? (
-        <div className="divide-y divide-cq-border/50">
+        <div className="space-y-2">
           {entries.map((entry) => (
             <LeaderboardRow key={entry.id} entry={entry} />
           ))}
@@ -114,7 +136,7 @@ function LeaderboardSection() {
         <p className="text-sm text-cq-text-muted py-8 text-center">
           {tab === 'friends'
             ? 'Follow people to see how you compare!'
-            : 'No users yet.'}
+            : 'No cooks this week yet. Be the first!'}
         </p>
       )}
     </div>

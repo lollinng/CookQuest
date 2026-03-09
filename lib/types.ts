@@ -229,3 +229,14 @@ export interface RecipePhotoUploadResponse {
   newBadges: Array<{ badge_key: string; badge_name: string; badge_emoji: string }>
   verification?: PhotoVerification
 }
+
+// -- Waitlist --
+
+export interface WaitlistSignupResponse {
+  message: string;
+}
+
+export interface WaitlistVerifyResponse {
+  message: string;
+  verified: boolean;
+}
