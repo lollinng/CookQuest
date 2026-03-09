@@ -1,5 +1,5 @@
 import { apiClient, API_BASE_URL, getToken, ApiError } from './client'
-import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy, LeaderboardEntry } from '../types'
+import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy, LeaderboardEntry, Notification } from '../types'
 
 export async function followUser(userId: number): Promise<{ following: boolean }> {
   return apiClient<{ following: boolean }>(`/users/${userId}/follow`, { method: 'POST' })
@@ -106,4 +106,26 @@ export async function getFriendsLeaderboard(limit = 10): Promise<LeaderboardEntr
   return apiClient<LeaderboardEntry[]>('/leaderboard/friends', {
     params: { limit: String(limit) },
   })
+}
+
+export async function togglePostLike(postId: number): Promise<{ liked: boolean; likesCount: number }> {
+  return apiClient<{ liked: boolean; likesCount: number }>(`/posts/${postId}/like`, { method: 'POST' })
+}
+
+export async function getNotifications(limit?: number): Promise<Notification[]> {
+  return apiClient<Notification[]>('/notifications', {
+    params: limit ? { limit: String(limit) } : undefined,
+  })
+}
+
+export async function getUnreadNotificationCount(): Promise<{ count: number }> {
+  return apiClient<{ count: number }>('/notifications/unread-count')
+}
+
+export async function markNotificationRead(id: number): Promise<void> {
+  return apiClient<void>(`/notifications/${id}/read`, { method: 'PATCH' })
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  return apiClient<void>('/notifications/read-all', { method: 'PATCH' })
 }

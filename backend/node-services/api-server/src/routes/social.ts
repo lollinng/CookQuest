@@ -13,6 +13,63 @@ const router = Router()
 const userIdValidation = param('id').isInt({ min: 1 }).withMessage('Invalid user ID')
 const searchValidation = query('q').isString().isLength({ min: 1, max: 100 }).withMessage('Search query required (1-100 chars)')
 
+// ── Notifications (must be before /users/:id to avoid param collision) ──
+
+// GET /api/v1/notifications?limit=30 — Get user's notifications
+router.get('/notifications',
+  authMiddleware,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.id
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 30, 1), 50)
+    const notifications = await DatabaseService.getNotifications(userId, limit)
+
+    res.json({
+      success: true,
+      data: notifications.map((n: any) => ({
+        id: n.id,
+        userId: n.user_id,
+        actorId: n.actor_id,
+        actorUsername: n.actor_username,
+        actorDisplayName: n.actor_display_name,
+        actorAvatarUrl: n.actor_avatar_url,
+        type: n.type,
+        postId: n.post_id,
+        postCaption: n.post_caption,
+        isRead: n.is_read,
+        createdAt: n.created_at,
+      }))
+    })
+  })
+)
+
+// GET /api/v1/notifications/unread-count — Get unread count for badge
+router.get('/notifications/unread-count',
+  authMiddleware,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const count = await DatabaseService.getUnreadNotificationCount(req.user!.id)
+    res.json({ success: true, data: { count } })
+  })
+)
+
+// PATCH /api/v1/notifications/read-all — Mark all notifications read
+router.patch('/notifications/read-all',
+  authMiddleware,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    await DatabaseService.markAllNotificationsRead(req.user!.id)
+    res.json({ success: true })
+  })
+)
+
+// PATCH /api/v1/notifications/:id/read — Mark single notification read
+router.patch('/notifications/:id/read',
+  authMiddleware,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const notificationId = parseInt(req.params.id, 10)
+    await DatabaseService.markNotificationRead(notificationId, req.user!.id)
+    res.json({ success: true })
+  })
+)
+
 // ── Leaderboard ──
 
 // GET /api/v1/leaderboard/world?limit=10 — Top users globally by recipes completed
@@ -90,6 +147,7 @@ router.post('/users/:id/follow',
     }
 
     await DatabaseService.followUser(followerId, followingId)
+    await DatabaseService.createNotification(followingId, followerId, 'follow')
 
     res.json({
       success: true,
@@ -294,6 +352,8 @@ function mapPost(row: any) {
     photoUrl: row.photo_url,
     caption: row.caption,
     commentsCount: row.comments_count || 0,
+    likesCount: row.likes_count || 0,
+    isLiked: row.is_liked || false,
     createdAt: row.created_at,
   }
 }
@@ -302,8 +362,9 @@ function mapPost(row: any) {
 router.get('/feed/world',
   authMiddleware,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.id
     const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 30, 1), 50)
-    const posts = await DatabaseService.getWorldFeed(limit)
+    const posts = await DatabaseService.getWorldFeed(userId, limit)
 
     res.json({
       success: true,
@@ -506,6 +567,35 @@ router.delete('/posts/:postId/comments/:commentId',
     }
 
     res.json({ success: true })
+  })
+)
+
+// POST /api/v1/posts/:postId/like — Toggle like on a post
+router.post('/posts/:postId/like',
+  authMiddleware,
+  validateRequest([postIdValidation]),
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const postId = parseInt(req.params.postId, 10)
+    const userId = req.user!.id
+
+    const post = await DatabaseService.getPostById(postId)
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Post not found' }
+      })
+    }
+
+    const result = await DatabaseService.togglePostLike(postId, userId)
+
+    if (result.liked) {
+      await DatabaseService.createNotification(post.user_id, userId, 'post_like', postId)
+    }
+
+    res.json({
+      success: true,
+      data: result
+    })
   })
 )
 

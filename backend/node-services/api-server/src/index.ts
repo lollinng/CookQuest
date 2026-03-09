@@ -116,8 +116,11 @@ app.use(cors({
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher limit in dev
-  message: 'Too many requests from this IP, please try again later.',
+  max: process.env.NODE_ENV === 'production' ? 500 : 2000, // SPA makes ~10+ calls per page load
+  message: {
+    success: false,
+    error: { message: 'Too many requests from this IP, please try again later.' },
+  },
   standardHeaders: true,
   legacyHeaders: false,
 })

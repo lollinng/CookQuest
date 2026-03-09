@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy, LeaderboardEntry } from '@/lib/types'
+import type { UserProfile, UserPost, FollowUser, PostComment, SkillTrophy, LeaderboardEntry, Notification } from '@/lib/types'
 import {
   followUser as apiFollowUser,
   unfollowUser as apiUnfollowUser,
@@ -15,10 +15,14 @@ import {
   deleteComment as apiDeleteComment,
   deletePost as apiDeletePost,
   toggleCommentLike as apiToggleCommentLike,
+  togglePostLike as apiTogglePostLike,
   getUserSkillTrophies,
   uploadAvatar as apiUploadAvatar,
   getWorldLeaderboard,
   getFriendsLeaderboard,
+  getNotifications,
+  getUnreadNotificationCount,
+  markAllNotificationsRead as apiMarkAllRead,
 } from '@/lib/api/social'
 
 // Query keys
@@ -323,6 +327,51 @@ export function useUploadAvatar() {
       queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
       queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+    },
+  })
+}
+
+export function useTogglePostLike() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (postId: number) => apiTogglePostLike(postId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
+      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+    },
+  })
+}
+
+// ── Notifications ──
+
+export function useNotifications(limit: number = 30) {
+  return useQuery({
+    queryKey: [...socialKeys.all, 'notifications', limit],
+    queryFn: () => getNotifications(limit),
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+  })
+}
+
+export function useUnreadNotificationCount() {
+  return useQuery({
+    queryKey: [...socialKeys.all, 'notifications', 'unread-count'],
+    queryFn: () => getUnreadNotificationCount(),
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+    refetchInterval: 60 * 1000,
+  })
+}
+
+export function useMarkAllNotificationsRead() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => apiMarkAllRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'notifications'] })
     },
   })
 }

@@ -916,6 +916,36 @@ class DatabaseServiceClass {
       logger.info('Comment likes migration applied')
     }
 
+    // Post likes + notifications tables (migration 016)
+    if (!(await this.isMigrationApplied('016_post_likes_notifications'))) {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS post_likes (
+          id SERIAL PRIMARY KEY,
+          post_id INTEGER NOT NULL REFERENCES user_posts(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(post_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_post_likes_post ON post_likes(post_id);
+        CREATE INDEX IF NOT EXISTS idx_post_likes_user ON post_likes(user_id);
+        ALTER TABLE user_posts ADD COLUMN IF NOT EXISTS likes_count INTEGER DEFAULT 0;
+
+        CREATE TABLE IF NOT EXISTS notifications (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          actor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          type TEXT NOT NULL CHECK (type IN ('follow', 'post_like', 'comment', 'comment_like')),
+          post_id INTEGER REFERENCES user_posts(id) ON DELETE CASCADE,
+          is_read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_notifications_actor ON notifications(actor_id);
+      `)
+      await this.recordMigration('016_post_likes_notifications')
+      logger.info('Post likes + notifications migration applied')
+    }
+
     logger.info('Database initialized (PostgreSQL)')
   }
 
@@ -1491,18 +1521,21 @@ class DatabaseServiceClass {
     return rows[0]
   }
 
-  async getWorldFeed(limit: number = 30): Promise<any[]> {
+  async getWorldFeed(userId: number, limit: number = 30): Promise<any[]> {
     const { rows } = await this.pool.query(
       `SELECT
         up.id, up.user_id, u.username, u.display_name, u.avatar_url,
         up.post_type, up.recipe_id, r.title AS recipe_title, r.image_url AS recipe_image_url,
-        up.photo_url, up.caption, COALESCE(up.comments_count, 0) AS comments_count, up.created_at
+        up.photo_url, up.caption, COALESCE(up.comments_count, 0) AS comments_count,
+        COALESCE(up.likes_count, 0) AS likes_count,
+        EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = up.id AND pl.user_id = $2) AS is_liked,
+        up.created_at
        FROM user_posts up
        JOIN users u ON u.id = up.user_id
        LEFT JOIN recipes r ON r.id = up.recipe_id
        ORDER BY up.created_at DESC
        LIMIT $1`,
-      [limit]
+      [limit, userId]
     )
     return rows
   }
@@ -1541,7 +1574,10 @@ class DatabaseServiceClass {
       `SELECT
         up.id, up.user_id, u.username, u.display_name, u.avatar_url,
         up.post_type, up.recipe_id, r.title AS recipe_title, r.image_url AS recipe_image_url,
-        up.photo_url, up.caption, COALESCE(up.comments_count, 0) AS comments_count, up.created_at
+        up.photo_url, up.caption, COALESCE(up.comments_count, 0) AS comments_count,
+        COALESCE(up.likes_count, 0) AS likes_count,
+        EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = up.id AND pl.user_id = $1) AS is_liked,
+        up.created_at
        FROM user_posts up
        JOIN user_follows uf ON uf.following_id = up.user_id AND uf.follower_id = $1
        JOIN users u ON u.id = up.user_id
@@ -1698,6 +1734,75 @@ class DatabaseServiceClass {
       [postId]
     )
     return rows[0]?.count ?? 0
+  }
+
+  // ── Post likes ──
+
+  async togglePostLike(postId: number, userId: number): Promise<{ liked: boolean; likesCount: number }> {
+    return this.transaction(async (client) => {
+      const { rows: existing } = await client.query(
+        'SELECT id FROM post_likes WHERE post_id = $1 AND user_id = $2',
+        [postId, userId]
+      )
+      if (existing.length > 0) {
+        await client.query('DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2', [postId, userId])
+        await client.query('UPDATE user_posts SET likes_count = GREATEST(COALESCE(likes_count, 0) - 1, 0) WHERE id = $1', [postId])
+      } else {
+        await client.query('INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, userId])
+        await client.query('UPDATE user_posts SET likes_count = COALESCE(likes_count, 0) + 1 WHERE id = $1', [postId])
+      }
+      const { rows } = await client.query('SELECT COALESCE(likes_count, 0) AS likes_count FROM user_posts WHERE id = $1', [postId])
+      return { liked: existing.length === 0, likesCount: rows[0]?.likes_count ?? 0 }
+    })
+  }
+
+  // ── Notifications ──
+
+  async createNotification(userId: number, actorId: number, type: string, postId?: number): Promise<void> {
+    if (userId === actorId) return
+    await this.pool.query(
+      'INSERT INTO notifications (user_id, actor_id, type, post_id) VALUES ($1, $2, $3, $4)',
+      [userId, actorId, type, postId ?? null]
+    )
+  }
+
+  async getNotifications(userId: number, limit: number = 30): Promise<any[]> {
+    const { rows } = await this.pool.query(
+      `SELECT n.id, n.user_id, n.actor_id, u.username AS actor_username,
+              u.display_name AS actor_display_name, u.avatar_url AS actor_avatar_url,
+              n.type, n.post_id, up.caption AS post_caption,
+              n.is_read, n.created_at
+       FROM notifications n
+       JOIN users u ON u.id = n.actor_id
+       LEFT JOIN user_posts up ON up.id = n.post_id
+       WHERE n.user_id = $1
+       ORDER BY n.created_at DESC
+       LIMIT $2`,
+      [userId, limit]
+    )
+    return rows
+  }
+
+  async getUnreadNotificationCount(userId: number): Promise<number> {
+    const { rows } = await this.pool.query(
+      'SELECT COUNT(*)::int AS count FROM notifications WHERE user_id = $1 AND is_read = FALSE',
+      [userId]
+    )
+    return rows[0]?.count ?? 0
+  }
+
+  async markNotificationRead(notificationId: number, userId: number): Promise<void> {
+    await this.pool.query(
+      'UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2',
+      [notificationId, userId]
+    )
+  }
+
+  async markAllNotificationsRead(userId: number): Promise<void> {
+    await this.pool.query(
+      'UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE',
+      [userId]
+    )
   }
 
   // Generic query helpers (used by routes that haven't been fully migrated)

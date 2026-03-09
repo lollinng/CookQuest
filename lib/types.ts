@@ -106,6 +106,8 @@ export interface UserPost {
   photoUrl: string | null
   caption: string | null
   commentsCount: number
+  likesCount: number
+  isLiked: boolean
   createdAt: string
 }
 
@@ -148,4 +150,18 @@ export interface FollowUser {
   displayName: string | null
   avatarUrl: string | null
   isFollowing?: boolean
+}
+
+export interface Notification {
+  id: number
+  userId: number
+  actorId: number
+  actorUsername: string
+  actorDisplayName: string | null
+  actorAvatarUrl: string | null
+  type: 'follow' | 'post_like' | 'comment' | 'comment_like'
+  postId: number | null
+  postCaption: string | null
+  isRead: boolean
+  createdAt: string
 }

@@ -1,16 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { ChefHat, Heart, Newspaper, Users, UtensilsCrossed } from 'lucide-react';
+import { Bell, ChefHat, Heart, Newspaper, Users, UtensilsCrossed } from 'lucide-react';
 import { UserMenu } from '@/components/auth/user-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useAuth } from '@/lib/auth-context';
 import { useFavoriteRecipes } from '@/hooks/use-recipes';
+import { useUnreadNotificationCount } from '@/hooks/use-social';
 
 export function TopNav() {
   const { isAuthenticated } = useAuth();
   const { data: favorites } = useFavoriteRecipes();
   const favCount = favorites?.length ?? 0;
+  const { data: unreadData } = useUnreadNotificationCount();
+  const unreadCount = isAuthenticated ? (unreadData?.count ?? 0) : 0;
 
   return (
     <nav
@@ -118,6 +121,21 @@ export function TopNav() {
                 Sign in to see your feed
               </TooltipContent>
             </Tooltip>
+          )}
+
+          {/* Notifications bell */}
+          {isAuthenticated && (
+            <Link
+              href="/notifications"
+              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-cq-text-secondary hover:text-cq-text-primary hover:bg-cq-surface-hover transition-colors"
+            >
+              <Bell className="size-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full size-4 flex items-center justify-center leading-none">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
           )}
 
           {/* User Menu / Auth */}

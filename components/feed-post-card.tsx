@@ -1,13 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { Trophy } from 'lucide-react';
+import { Heart, MessageCircle, Trophy } from 'lucide-react';
 import { CommentSection } from '@/components/post-comments';
+import { useTogglePostLike } from '@/hooks/use-social';
+import { useAuth } from '@/lib/auth-context';
 import { getAvatarColor, getInitials, formatRelativeTime, getActionText } from '@/lib/social-helpers';
 import type { UserPost } from '@/lib/types';
 
 export function FeedPostCard({ post }: { post: UserPost }) {
   const displayName = post.displayName ?? post.username;
+  const { isAuthenticated } = useAuth();
+  const toggleLike = useTogglePostLike();
 
   return (
     <div data-testid="feed-post-card" className="bg-cq-surface border border-cq-border rounded-xl overflow-hidden">
@@ -64,6 +68,37 @@ export function FeedPostCard({ post }: { post: UserPost }) {
         {post.caption && post.postType !== 'milestone' && (
           <p className="text-sm text-cq-text-secondary">{post.caption}</p>
         )}
+      </div>
+
+      {/* Like + comment counts */}
+      <div className="flex items-center gap-4 px-4 py-2 border-t border-cq-border/50">
+        <button
+          onClick={() => isAuthenticated && toggleLike.mutate(post.id)}
+          disabled={!isAuthenticated || toggleLike.isPending}
+          className="flex items-center gap-1.5 text-sm transition-colors disabled:opacity-50"
+        >
+          <Heart
+            className={`size-5 transition-all ${
+              post.isLiked
+                ? 'fill-red-500 text-red-500 animate-[like-bounce_0.3s_ease-in-out]'
+                : 'text-cq-text-muted hover:text-red-400'
+            }`}
+          />
+          {(post.likesCount ?? 0) > 0 && (
+            <span className={`text-sm font-medium ${
+              post.isLiked ? 'text-red-500' : 'text-cq-text-muted'
+            }`}>
+              {post.likesCount}
+            </span>
+          )}
+        </button>
+
+        <div className="flex items-center gap-1.5 text-sm text-cq-text-muted">
+          <MessageCircle className="size-5" />
+          {(post.commentsCount ?? 0) > 0 && (
+            <span className="font-medium">{post.commentsCount}</span>
+          )}
+        </div>
       </div>
 
       {/* Comments */}
