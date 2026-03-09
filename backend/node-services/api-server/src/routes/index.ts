@@ -14,6 +14,7 @@ import { socialRoutes } from './social'
 import { adminRoutes } from './admin'
 import { onboardingRoutes } from './onboarding'
 import { demoRoutes } from './demo'
+import { uploadRoutes } from './uploads'
 
 export function initializeRoutes(app: Express) {
   // API version prefix
@@ -34,6 +35,9 @@ export function initializeRoutes(app: Express) {
 
   // Demo routes (public, no auth required)
   app.use(`${apiPrefix}/demo`, demoRoutes)
+
+  // Uploads — general photo upload (auth handled inside route)
+  app.use(`${apiPrefix}/uploads`, uploadRoutes)
 
   // Protected routes (authentication + alpha access required)
   // authMiddleware runs first to populate req.user, then allowedMiddleware checks isAllowed

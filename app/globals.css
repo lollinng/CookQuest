@@ -351,6 +351,28 @@ body {
   }
 }
 
+/* PWA standalone mode fixes */
+html, body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media all and (display-mode: standalone) {
+  body {
+    overscroll-behavior-y: contain;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@supports (padding-top: env(safe-area-inset-top)) {
+  @media (display-mode: standalone) {
+    nav[data-testid='top-nav'] {
+      padding-top: env(safe-area-inset-top);
+    }
+  }
+}
+
 /* Print styles */
 @media print {
   .no-print {

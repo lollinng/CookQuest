@@ -13,6 +13,7 @@ import {
   getPostComments,
   addComment as apiAddComment,
   deleteComment as apiDeleteComment,
+  createPost as apiCreatePost,
   deletePost as apiDeletePost,
   toggleCommentLike as apiToggleCommentLike,
   togglePostLike as apiTogglePostLike,
@@ -178,6 +179,28 @@ export function useDeleteComment() {
       queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
       queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
       queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+    },
+  })
+}
+
+export function useCreatePost() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: apiCreatePost,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: socialKeys.feed() })
+      queryClient.invalidateQueries({ queryKey: socialKeys.worldFeed() })
+      queryClient.invalidateQueries({ queryKey: [...socialKeys.all, 'posts'] })
+    },
+  })
+}
+
+export function useUploadPhoto() {
+  return useMutation({
+    mutationFn: (file: File) => {
+      // Dynamic import to avoid circular dependency issues
+      return import('@/lib/api/uploads').then(m => m.uploadPhoto(file))
     },
   })
 }

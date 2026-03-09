@@ -4,12 +4,14 @@ import './globals.css'
 import { Providers } from './providers'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { TopNav } from '@/components/top-nav'
+import { PWARegister } from './pwa-register'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
   themeColor: '#0F172A',
 }
 
@@ -53,6 +55,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           <ErrorBoundary>
+            <PWARegister />
             <div className="min-h-screen bg-cq-bg">
               <TopNav />
               <main className="container mx-auto px-4 py-6">

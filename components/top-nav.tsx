@@ -1,11 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { Bell, ChefHat, Flame, Heart, Newspaper, Users, UtensilsCrossed } from 'lucide-react';
+import { Bell, ChefHat, Download, Flame, Heart, Newspaper, Users, UtensilsCrossed } from 'lucide-react';
 import { UserMenu } from '@/components/auth/user-menu';
 import { useAuth } from '@/lib/auth-context';
 import { useFavoriteRecipes } from '@/hooks/use-recipes';
 import { useUnreadNotificationCount } from '@/hooks/use-social';
+import { usePWAInstall } from '@/hooks/use-pwa-install';
+import { PWAInstallPrompt } from '@/components/pwa-install-prompt';
 
 export function TopNav() {
   const { isAuthenticated } = useAuth();
@@ -13,6 +16,8 @@ export function TopNav() {
   const favCount = favorites?.length ?? 0;
   const { data: unreadData } = useUnreadNotificationCount();
   const unreadCount = isAuthenticated ? (unreadData?.count ?? 0) : 0;
+  const { shouldShow: shouldShowInstall, canInstall, promptInstall } = usePWAInstall();
+  const [showInstallSheet, setShowInstallSheet] = useState(false);
 
   return (
     <nav
@@ -94,10 +99,32 @@ export function TopNav() {
             </Link>
           )}
 
+          {/* Install App */}
+          {shouldShowInstall && (
+            <button
+              onClick={() => {
+                if (canInstall) {
+                  promptInstall();
+                } else {
+                  setShowInstallSheet(true);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors"
+            >
+              <Download className="size-4" />
+              <span className="hidden sm:inline">Install App</span>
+            </button>
+          )}
+
           {/* User Menu / Auth */}
           <UserMenu />
         </div>
       </div>
+
+      <PWAInstallPrompt
+        isOpen={showInstallSheet}
+        onClose={() => setShowInstallSheet(false)}
+      />
     </nav>
   );
 }

@@ -91,6 +91,15 @@ export async function deleteAvatar(): Promise<void> {
   return apiClient<void>('/users/me/avatar', { method: 'DELETE' })
 }
 
+export async function createPost(data: {
+  postType: 'recipe_completed' | 'photo_upload' | 'milestone'
+  recipeId?: string
+  photoUrl?: string
+  caption?: string
+}): Promise<UserPost> {
+  return apiClient<UserPost>('/posts', { method: 'POST', body: data })
+}
+
 export async function deletePost(postId: number): Promise<void> {
   return apiClient<void>(`/posts/${postId}`, { method: 'DELETE' })
 }

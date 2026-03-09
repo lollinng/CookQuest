@@ -10,7 +10,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { SkillType } from '@/lib/types'
 import Link from 'next/link'
 import { SectionErrorBoundary } from '@/components/section-error-boundary'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { usePWAInstall } from '@/hooks/use-pwa-install'
+import { PWAInstallPrompt } from '@/components/pwa-install-prompt'
 
 const SKILL_META: Record<string, {
   gradient: string
@@ -72,6 +74,9 @@ export default function SkillPage() {
 
   const [mode, setMode] = useState<'learn' | 'cookbook'>('learn')
   const [uploadingRecipeId, setUploadingRecipeId] = useState<string | null>(null)
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false)
+  const hasPrompted = useRef(false)
+  const { shouldShow: shouldShowInstall } = usePWAInstall()
 
   // Persist toggle state in localStorage
   useEffect(() => {
@@ -91,12 +96,29 @@ export default function SkillPage() {
   const { data: userPhotos } = useUserPhotos()
   const uploadPhoto = useUploadRecipePhoto()
 
+  const triggerInstallPrompt = () => {
+    if (shouldShowInstall && !hasPrompted.current) {
+      setShowInstallPrompt(true)
+      hasPrompted.current = true
+    }
+  }
+
   const handlePhotoUpload = async (recipeId: string, file: File) => {
     setUploadingRecipeId(recipeId)
     try {
       await uploadPhoto.mutateAsync({ recipeId, file })
+      triggerInstallPrompt()
     } finally {
       setUploadingRecipeId(null)
+    }
+  }
+
+  const handleToggleCompletion = (recipeId: string) => {
+    const wasCompleted = isRecipeCompleted(recipeId)
+    toggleRecipeCompletion(recipeId)
+    // Trigger install prompt when marking as complete (not uncomplete)
+    if (!wasCompleted) {
+      triggerInstallPrompt()
     }
   }
 
@@ -243,7 +265,7 @@ export default function SkillPage() {
             <LearningPath
               recipes={recipes}
               isRecipeCompleted={hydrated ? isRecipeCompleted : () => false}
-              onToggleCompletion={toggleRecipeCompletion}
+              onToggleCompletion={handleToggleCompletion}
               skillColor={color}
               skillIcon={icon}
               skillName={name}
@@ -259,6 +281,11 @@ export default function SkillPage() {
           </div>
         )}
       </div>
+
+      <PWAInstallPrompt
+        isOpen={showInstallPrompt}
+        onClose={() => setShowInstallPrompt(false)}
+      />
     </div>
   )
 }

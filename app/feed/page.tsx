@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Users, Globe, Heart, MessageCircle, Trophy } from 'lucide-react';
+import { Users, Globe, Heart, MessageCircle, Trophy, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
 import { useFeed, useWorldFeed } from '@/hooks/use-social';
 import { FeedPostCard } from '@/components/feed-post-card';
+import { FeedPostComposer } from '@/components/feed-post-composer';
 import { DemoModeBanner } from '@/components/onboarding/demo-mode-banner';
 import { useDemoFeed } from '@/hooks/use-onboarding';
 
@@ -64,6 +65,7 @@ export default function FeedPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [tab, setTab] = useState<FeedTab>('world');
   const [difficulty, setDifficulty] = useState<DifficultyFilter>('all');
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const worldFeed = useWorldFeed(30, difficulty === 'all' ? undefined : difficulty);
   const friendsFeed = useFeed();
@@ -172,6 +174,23 @@ export default function FeedPage() {
             <FeedPostCard key={post.id} post={post} />
           ))}
         </div>
+      )}
+
+      {/* FAB + Composer */}
+      {isAuthenticated && (
+        <>
+          <button
+            onClick={() => setComposerOpen(true)}
+            className="fixed bottom-6 right-6 z-40 size-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-cq-primary-hover transition-colors flex items-center justify-center"
+            aria-label="New post"
+          >
+            <Plus className="size-6" />
+          </button>
+          <FeedPostComposer
+            isOpen={composerOpen}
+            onClose={() => setComposerOpen(false)}
+          />
+        </>
       )}
     </div>
   );
